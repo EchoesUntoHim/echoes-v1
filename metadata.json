@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Echoes Unto Him | 하나님께 울려퍼지는 예배",
+  "description": "하나님께 울려퍼지는 예배를 위한 AI 기반 음악 및 영상 자동화 솔루션",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
