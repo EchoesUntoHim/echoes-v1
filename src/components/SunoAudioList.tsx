@@ -107,7 +107,7 @@ export const SunoAudioList = ({
 
     // Sync to Cloud whenever tracks change
     useEffect(() => {
-        if (user && tracks.length > 0) {
+        if (user) {
             const syncToCloud = async () => {
                 try {
                     const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
@@ -126,9 +126,7 @@ export const SunoAudioList = ({
         }
         
         // Always save to localStorage immediately
-        if (tracks.length > 0) {
-            localStorage.setItem('suno_json_data', JSON.stringify(tracks));
-        }
+        localStorage.setItem('suno_json_data', JSON.stringify(tracks));
     }, [tracks, user]);
 
     const syncTracks = async (newTracks: SunoTrack[]) => {
