@@ -762,17 +762,24 @@ export default function App() {
       await saveAudioToDB(dataUrl);
       await saveVoiceToDB('workspace_audio', dataUrl, file.name);
 
-      // Extract title from filename
-      const fileName = file.name.replace(/\.[^/.]+$/, "");
-      const [kTitle, eTitle] = fileName.includes('_') ? fileName.split('_') : [fileName, ''];
+      // Extract title from filename and detect target
+      let rawTitle = file.name.replace(/\.[^/.]+$/, "");
+      let target: '대중음악' | 'CCM' = workflow.params.target || '대중음악';
+      
+      if (rawTitle.includes('[CCM]')) target = 'CCM';
+      else if (rawTitle.includes('[대중음악]')) target = '대중음악';
+      
+      const cleanTitle = rawTitle.replace(/\[.*?\]/g, '').trim();
+      const [kTitle, eTitle] = cleanTitle.includes('_') ? cleanTitle.split('_') : [cleanTitle, ''];
 
       setWorkflow(prev => ({
         ...prev,
         params: {
           ...prev.params,
-          title: fileName,
-          koreanTitle: kTitle || prev.params.koreanTitle,
-          englishTitle: eTitle || prev.params.englishTitle
+          target: target,
+          title: cleanTitle,
+          koreanTitle: kTitle.trim() || prev.params.koreanTitle,
+          englishTitle: eTitle.trim() || prev.params.englishTitle
         },
         results: {
           ...prev.results,
@@ -781,7 +788,7 @@ export default function App() {
             size: file.size,
             type: file.type
           },
-          title: fileName
+          title: cleanTitle
         }
       }));
 
@@ -2397,7 +2404,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.6</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.7</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2427,7 +2434,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.6</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.7</span>
           </div>
         </div>
 
