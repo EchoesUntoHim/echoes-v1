@@ -118,6 +118,17 @@ import { uploadImageToStorage } from './firebase';
 // --- Main App ---
 
 export default function App() {
+  // --- Data Migration for Rebranding (Vibeflow -> EchoesUntoHim) (Synchronous) ---
+  const migrationKeys = ['view', 'activeTab', 'logs', 'shortsCount', 'audioName', 'videoLyrics', 'englishVideoLyrics', 'shortsHighlights', 'platforms', 'workflow'];
+  migrationKeys.forEach(key => {
+    const oldKey = `vibeflow_${key}`;
+    const newKey = `echoesuntohim_${key}`;
+    const oldData = localStorage.getItem(oldKey);
+    if (oldData && !localStorage.getItem(newKey)) {
+      localStorage.setItem(newKey, oldData);
+    }
+  });
+
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'app'>(() => (localStorage.getItem('echoesuntohim_view') as any) || 'landing');
   const [activeTab, setActiveTab] = useState<Step>(() => (localStorage.getItem('echoesuntohim_activeTab') as any) || 'lyrics');
