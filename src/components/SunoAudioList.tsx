@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RefreshCw, Play, Pause, ChevronRight, Music, Save, AlertCircle, Trash2, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { RefreshCw, Play, Pause, ChevronRight, Music, Save, AlertCircle, Trash2, SkipBack, SkipForward, Volume2, Download } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { Terminal } from './Terminal';
 import { db } from '../firebase';
@@ -322,6 +322,42 @@ export const SunoAudioList = ({
             addLog(`❌ 데이터를 분석하는데 실패했습니다. 텍스트를 정확히 복사했는지 확인해주세요. (에러: ${error.message})`);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDownload = async (track: SunoTrack) => {
+        try {
+            addLog(`📥 [${track.title}] 음원 다운로드 준비 중...`);
+            
+            // Use proxy logic to bypass CORS
+            let finalAudioUrl = track.audio_url;
+            // Support all suno cdn domains (cdn1, cdn2, cdn3, etc.)
+            const cdnMatch = finalAudioUrl.match(/https:\/\/(cdn\d+)\.suno\.ai/);
+            if (cdnMatch) {
+                const cdnKey = cdnMatch[1]; // e.g. "cdn1"
+                finalAudioUrl = finalAudioUrl.replace(`https://${cdnKey}.suno.ai`, `/suno-${cdnKey}`);
+            }
+
+            const response = await fetch(finalAudioUrl);
+            if (!response.ok) throw new Error("파일을 불러오지 못했습니다.");
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            // Clean filename: remove invalid characters
+            const safeTitle = (track.title || 'untitled').replace(/[/\\?%*:|"<>]/g, '-');
+            link.download = `${safeTitle}.mp3`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            addLog(`✅ 다운로드 완료: ${safeTitle}.mp3`);
+        } catch (error) {
+            console.error("Download error:", error);
+            addLog("❌ 다운로드 중 오류가 발생했습니다. (프록시 확인 필요)");
         }
     };
 
@@ -684,15 +720,24 @@ export const SunoAudioList = ({
                                     <h2 className="text-xl font-black text-white px-4 truncate" title={selectedTrack.title}>{selectedTrack.title || 'Untitled'}</h2>
                                 </div>
 
-                                <button
-                                    onClick={() => sendToWorkspace(selectedTrack)}
-                                    disabled={isAnalyzing}
-                                    className="w-full bg-primary hover:bg-primary/80 text-background font-black py-4 rounded-xl mb-6 shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.5)] transition-all flex justify-center items-center gap-2 hover:-translate-y-1 disabled:opacity-50"
-                                >
-                                    {isAnalyzing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
-                                    {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'} 
-                                    {!isAnalyzing && <ChevronRight className="w-5 h-5" />}
-                                </button>
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => sendToWorkspace(selectedTrack)}
+                                        disabled={isAnalyzing}
+                                        className="flex-1 bg-primary hover:bg-primary/80 text-background font-black py-4 rounded-xl shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.5)] transition-all flex justify-center items-center gap-2 hover:-translate-y-1 disabled:opacity-50"
+                                    >
+                                        {isAnalyzing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
+                                        {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'} 
+                                        {!isAnalyzing && <ChevronRight className="w-5 h-5" />}
+                                    </button>
+                                    <button
+                                        onClick={() => handleDownload(selectedTrack)}
+                                        className="px-6 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all flex items-center justify-center border border-white/10 hover:border-white/20 group"
+                                        title="음원 다운로드"
+                                    >
+                                        <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </div>
 
                                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 bg-black/20 rounded-xl p-4 border border-white/5">
                                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 pb-2 border-b border-white/10">Lyrics</h4>
@@ -750,6 +795,13 @@ export const SunoAudioList = ({
                                     {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                                 </button>
                                 <button className="text-gray-500 hover:text-white transition-colors"><SkipForward className="w-4 h-4 fill-current" /></button>
+                                <button 
+                                    onClick={() => handleDownload(playingTrack)}
+                                    className="text-gray-500 hover:text-primary transition-colors ml-2"
+                                    title="현재 곡 다운로드"
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
                             </div>
                             
                             <div className="w-full flex items-center gap-3 text-[10px] text-gray-400 font-mono">
