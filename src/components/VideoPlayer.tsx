@@ -13,6 +13,7 @@ interface VideoPlayerProps {
   audioSrc: string | null;
   lyrics: string;
   englishLyrics?: string;
+  timedLyrics?: any[];
   type: 'main' | 'tiktok' | string;
   startTime?: number;
   duration?: number;
@@ -35,6 +36,7 @@ export const VideoPlayer = forwardRef(({
   audioSrc, 
   lyrics, 
   englishLyrics = "",
+  timedLyrics = [],
   type, 
   startTime = 0, 
   duration, 
@@ -66,6 +68,29 @@ export const VideoPlayer = forwardRef(({
   }));
   
   const parsedLyrics = useMemo(() => {
+    // 1. Prioritize structured timedLyrics if provided
+    if (timedLyrics && timedLyrics.length > 0) {
+      const korLines: string[] = [];
+      const engLines: string[] = [];
+      const pairs: { kor: string; eng: string }[] = [];
+      
+      timedLyrics.forEach(item => {
+        if (item.kor) korLines.push(item.kor);
+        if (item.eng) engLines.push(item.eng);
+        pairs.push({ kor: item.kor || '', eng: item.eng || '' });
+      });
+
+      return { 
+        flat: [...korLines, ...engLines], 
+        pairs, 
+        timedLines: timedLyrics.map(item => ({
+          time: item.time,
+          kor: item.kor || '',
+          eng: item.eng || ''
+        }))
+      };
+    }
+
     if (!lyrics && !englishLyrics) return { flat: [], pairs: [], timedLines: [] };
     
     const timeRegex = /\[(\d{2}):(\d{2})\]/;
@@ -125,7 +150,7 @@ export const VideoPlayer = forwardRef(({
     }
     
     return { flat, pairs, timedLines };
-  }, [lyrics, englishLyrics]);
+  }, [lyrics, englishLyrics, timedLyrics]);
 
   useEffect(() => {
     if (audioRef.current && !isPlaying) {

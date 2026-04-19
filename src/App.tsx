@@ -613,17 +613,23 @@ export default function App() {
         2. **가사 구조화 (가장 중요)**: 
            - 가사는 반드시 한 줄씩 띄어쓰기를 적용하여 읽기 좋게 구성해줘.
            - 한글 가사 또한 한 줄로 뭉치지 않게, 사람이 부르는 단위(구절)로 줄바꿈을 철저히 해줘.
-           - 절대 여러 문장을 한 줄에 붙여 쓰지 마. (예: "안녕 친구야 만나서 반가워" -> "안녕 친구야\n만나서 반가워")
            - 각 섹션(예: [Verse 1]) 시작 전에 한 줄을 띄워줘.
         3. 각 섹션의 시작점에 반드시 [00:00] [Intro] 와 같은 형식으로 태그를 달아줘.
-        4. **줄바꿈 일치 (매우 중요)**: 한국어 가사와 영어 가사의 줄 수가 반드시 일치해야 해. 예를 들어 [Verse 1]이 한국어 4줄이면 영어도 반드시 4줄이어야 비디오 자막 싱크가 맞아.
+        4. **자막 싱크 데이터 (필수)**: 
+           - 모든 가사 줄에 대해 정확한 시작 시간을 초(second) 단위로 파악하여 `timedLyrics` 배열에 담아줘.
+           - `kor`와 `eng`는 반드시 1:1 매칭되어야 해.
         5. 곡의 BPM, Key(조), 전반적인 에너지 레벨(0~100)을 추정해줘.
         6. 반드시 아래 JSON 형식으로만 답변해줘. 다른 텍스트는 포함하지 마.
 
         [응답 형식 JSON]
         {
-          "lyrics": "[00:00] [Intro]\\n가사 첫 번째 줄\\n가사 두 번째 줄\\n\\n[00:15] [Verse 1]\\n가사 세 번째 줄...",
-          "englishLyrics": "[00:00] [Intro]\\nEnglish Line 1\\nEnglish Line 2\\n\\n[00:15] [Verse 1]\\nEnglish Line 3...",
+          "lyrics": "[00:00] [Intro]\\n가사 첫 번째 줄\\n가사 두 번째 줄...",
+          "englishLyrics": "[00:00] [Intro]\\nEnglish Line 1\\nEnglish Line 2...",
+          "timedLyrics": [
+            { "time": 0, "section": "Intro", "kor": "", "eng": "" },
+            { "time": 15, "section": "Verse 1", "kor": "문밖의 소란을 내려놓고", "eng": "Leaving the noise outside" },
+            { "time": 17, "section": "Verse 1", "kor": "정결한 마음으로 주 앞에 섭니다", "eng": "With a pure heart, I stand before You" }
+          ],
           "bpm": 120,
           "key": "C Major",
           "energy": 80
@@ -691,6 +697,7 @@ export default function App() {
             ...prev.results,
             lyrics: result.lyrics,
             englishLyrics: result.englishLyrics,
+            timedLyrics: result.timedLyrics || [],
             shortsHighlights: highlights.length > 0 ? highlights : prev.results.shortsHighlights,
             audioAnalysis: {
               bpm: result.bpm,
@@ -2423,7 +2430,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.8</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.9</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2453,7 +2460,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.8</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.9</span>
           </div>
         </div>
 
@@ -2599,6 +2606,7 @@ export default function App() {
               setVideoLyrics={setVideoLyrics}
               englishVideoLyrics={englishVideoLyrics}
               setEnglishVideoLyrics={setEnglishVideoLyrics}
+              timedLyrics={workflow.results.timedLyrics}
               isVideoRendering={isVideoRendering}
               startVideoRender={startVideoRender}
               handleDownloadAll={handleDownloadAll}

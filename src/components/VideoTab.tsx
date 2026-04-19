@@ -23,6 +23,7 @@ interface VideoTabProps {
   setVideoLyrics: React.Dispatch<React.SetStateAction<string>>;
   englishVideoLyrics: string;
   setEnglishVideoLyrics: React.Dispatch<React.SetStateAction<string>>;
+  timedLyrics?: any[];
   isVideoRendering: boolean;
   startVideoRender: () => void;
   handleDownloadAll: () => void;
@@ -53,6 +54,7 @@ export const VideoTab = ({
   setVideoLyrics,
   englishVideoLyrics,
   setEnglishVideoLyrics,
+  timedLyrics,
   isVideoRendering,
   startVideoRender,
   handleDownloadAll,
@@ -280,6 +282,7 @@ export const VideoTab = ({
               audioSrc={uploadedAudio} 
               lyrics={videoLyrics} 
               englishLyrics={englishVideoLyrics}
+              timedLyrics={timedLyrics}
               type="main" 
               label="Main"
               title={workflow.results.title}
@@ -322,6 +325,7 @@ export const VideoTab = ({
               audioSrc={uploadedAudio} 
               lyrics={videoLyrics} 
               englishLyrics={englishVideoLyrics}
+              timedLyrics={timedLyrics}
               type="tiktok" 
               label="TikTok"
               title={workflow.results.title}
