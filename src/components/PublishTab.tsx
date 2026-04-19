@@ -358,6 +358,12 @@ export const PublishTab = ({
                 <span className="text-primary font-bold">10:00 / 14:00 / 21:00</span>
               </div>
             </div>
+
+            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-[8px] text-primary/80 leading-tight">
+                * 고화질(HD) 인코딩 및 저작권 검토 시간을 고려하여 피크 타임 1-2시간 전 업로드를 권장합니다.
+              </p>
+            </div>
           </div>
         </GlassCard>
       </motion.div>
