@@ -308,62 +308,79 @@ export const PublishTab = ({
         </div>
       </GlassCard>
 
-      {/* Draggable Optimal Time Info Card */}
+      {/* Draggable Optimal Time Info Card - Detailed version */}
       <motion.div 
         drag
-        dragConstraints={{ left: 0, right: 300, top: -500, bottom: 0 }}
+        dragConstraints={{ left: -500, right: 20, top: -600, bottom: 20 }}
         initial={{ x: 20, y: -20 }}
         className="fixed bottom-10 right-10 z-[100] cursor-move"
       >
-        <GlassCard className="w-64 p-4 border-primary/30 bg-primary/10 backdrop-blur-xl shadow-2xl relative group overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[11px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
-              <Zap className="w-3 h-3" /> 업로드 최적 시간 가이드
+        <GlassCard className="w-80 p-5 border-primary/30 bg-[#1A1F26]/90 backdrop-blur-2xl shadow-2xl relative group overflow-hidden max-h-[500px] flex flex-col">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
+          <div className="flex items-center justify-between mb-4 shrink-0">
+            <h4 className="text-[12px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
+              <Zap className="w-4 h-4" /> 2026 업로드 최적화 전략
             </h4>
-            <Info className="w-3 h-3 text-primary/50" />
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <Info className="w-3.5 h-3.5 text-primary/50" />
+            </div>
           </div>
           
-          <div className="space-y-2">
-            <div className="p-2 bg-black/40 rounded-lg border border-white/5 space-y-2">
-              <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1">
-                <span className="text-[9px] text-primary font-bold">평일 (월~금)</span>
-                <span className="text-[8px] text-gray-400">Target Time</span>
-              </div>
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-white">롱폼 (Long)</span>
-                <span className="text-primary font-bold">17:00 - 18:00</span>
-              </div>
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-white">숏츠 (Shorts)</span>
-                <span className="text-primary font-bold">08:00 / 12:00 / 20:00</span>
-              </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+            {/* Daily Detailed Schedule */}
+            <div className="space-y-3">
+              {[
+                { day: '월요일 (Mon)', long: '06:00 - 07:00', shorts: '19:00 - 21:00', note: '한 주를 시작하는 새벽 묵상 공략' },
+                { day: '화요일 (Tue)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '일상 속 잔잔한 위로와 휴식' },
+                { day: '수요일 (Wed)', long: '16:00 - 18:00', shorts: '19:00 - 21:00', note: '삼일 밤 기도회 전후 영적 충전' },
+                { day: '목요일 (Thu)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '주말을 기다리는 감성 음악' },
+                { day: '금요일 (Fri)', long: '17:00 - 18:00', shorts: '20:00 - 22:00', note: '금요 철야 및 감성 클릭률 최고조' },
+                { day: '토요일 (Sat)', long: '10:00 - 13:00', shorts: '11:00 / 14:00 / 21:00', note: '주말 오전의 여유로운 묵상' },
+                { day: '일요일 (Sun)', long: '08:00 - 10:00', shorts: '19:00 - 21:00', note: '예배 이동 시간 찬양 수요 폭발' },
+              ].map((item, idx) => (
+                <div key={idx} className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 group hover:border-primary/30 transition-all">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-primary uppercase">{item.day}</span>
+                    <span className="text-[8px] text-gray-500 italic">{item.note}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-gray-500 uppercase font-bold">Long-form</span>
+                      <span className="text-[10px] text-white font-black">{item.long}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 border-l border-white/10 pl-2">
+                      <span className="text-[8px] text-gray-500 uppercase font-bold">Shorts</span>
+                      <span className="text-[10px] text-white font-black">{item.shorts}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="p-2 bg-black/40 rounded-lg border border-white/5 space-y-2">
-              <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1">
-                <span className="text-[9px] text-primary font-bold">주말 (토~일)</span>
-                <span className="text-[8px] text-gray-400">Target Time</span>
-              </div>
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-white">롱폼 (토/일)</span>
-                <span className="text-primary font-bold">14:00 / 16:00</span>
-              </div>
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-primary font-bold italic">주일 CCM</span>
-                <span className="text-white font-bold">06:00 - 07:00</span>
-              </div>
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-white">숏츠 (공통)</span>
-                <span className="text-primary font-bold">10:00 / 14:00 / 21:00</span>
+            {/* 3. Optimization Strategy */}
+            <div className="p-3 bg-primary/10 rounded-xl border border-primary/20 space-y-2">
+              <h5 className="text-[10px] font-black text-primary uppercase flex items-center gap-1.5">
+                <Zap className="w-3 h-3" /> 2026 알고리즘 필살기
+              </h5>
+              <div className="space-y-2 text-[9px] leading-relaxed">
+                <p className="text-gray-300">
+                  <span className="text-white font-bold">1. "2-3시간 선행 업로드":</span> 인덱싱을 위해 피크 타임 2-3시간 전 예약 게시.
+                </p>
+                <p className="text-gray-300">
+                  <span className="text-white font-bold">2. "고화질 처리 시간":</span> 4K는 최소 5시간 전 비공개 업로드 필수.
+                </p>
+                <p className="text-gray-300">
+                  <span className="text-white font-bold">3. "시즌 특수성":</span> 절기 2주 전부터 콘텐츠 업로드로 상단 선점.
+                </p>
               </div>
             </div>
-
-            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-              <p className="text-[8px] text-primary/80 leading-tight">
-                * 고화질(HD) 인코딩 및 저작권 검토 시간을 고려하여 피크 타임 1-2시간 전 업로드를 권장합니다.
-              </p>
-            </div>
+          </div>
+          
+          <div className="mt-4 pt-3 border-t border-white/5 shrink-0">
+            <p className="text-[8px] text-gray-500 italic text-center">
+              * 드래그하여 위치 이동이 가능합니다.
+            </p>
           </div>
         </GlassCard>
       </motion.div>

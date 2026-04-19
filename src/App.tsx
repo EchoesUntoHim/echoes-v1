@@ -1010,7 +1010,7 @@ export default function App() {
         Response Format (JSON):
         {
           "title": "클릭을 유발하는 제목",
-          "description": "상세 설명",
+          "description": "영상에 대한 감성적이고 상세한 설명과 함께, 하단에 관련 해시태그 3-5개를 반드시 포함해주세요. (예: #CCM #찬양 #감성음악)",
           "tags": "태그1, 태그2, 태그3"
         }
       `;
