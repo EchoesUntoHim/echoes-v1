@@ -122,7 +122,7 @@ export const SettingsPage = ({
   
   // Platform Keys State
   const [platformKeys, setPlatformKeys] = useState(() => {
-    const saved = localStorage.getItem('vibeflow_platform_keys');
+    const saved = localStorage.getItem('echoesuntohim_platform_keys');
     try {
       return saved ? JSON.parse(saved) : {
         tiktok: { clientKey: '', clientSecret: '' },
@@ -143,7 +143,7 @@ export const SettingsPage = ({
   const savePlatformKeys = (platform: keyof typeof platformKeys, keys: any) => {
     const newKeys = { ...platformKeys, [platform]: keys };
     setPlatformKeys(newKeys);
-    localStorage.setItem('vibeflow_platform_keys', JSON.stringify(newKeys));
+    localStorage.setItem('echoesuntohim_platform_keys', JSON.stringify(newKeys));
     
     // Auto-connect if keys are provided
     if (Object.values(keys).every(v => v !== '')) {

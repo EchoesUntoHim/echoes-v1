@@ -308,6 +308,47 @@ export const PublishTab = ({
         </div>
       </GlassCard>
 
+      {/* Draggable Optimal Time Info Card */}
+      <motion.div 
+        drag
+        dragConstraints={{ left: 0, right: 300, top: -500, bottom: 0 }}
+        initial={{ x: 20, y: -20 }}
+        className="fixed bottom-10 right-10 z-[100] cursor-move"
+      >
+        <GlassCard className="w-64 p-4 border-primary/30 bg-primary/10 backdrop-blur-xl shadow-2xl relative group overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[11px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
+              <Zap className="w-3 h-3" /> 업로드 최적 시간 가이드
+            </h4>
+            <Info className="w-3 h-3 text-primary/50" />
+          </div>
+          
+          <div className="space-y-3">
+            <div className="p-2.5 bg-black/40 rounded-lg border border-white/5">
+              <p className="text-[9px] text-gray-500 font-bold mb-1">CCM (워십/찬양)</p>
+              <div className="flex justify-between items-end">
+                <span className="text-xs font-black text-white">주일 오전 06:00 - 07:00</span>
+                <span className="text-[8px] text-primary/70">1-2h Before Peak</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-black/40 rounded-lg border border-white/5">
+              <p className="text-[9px] text-gray-500 font-bold mb-1">대중음악 (K-POP/Indie)</p>
+              <div className="flex justify-between items-end">
+                <span className="text-xs font-black text-white">평일 오후 17:00 - 18:00</span>
+                <span className="text-[8px] text-primary/70">1-2h Before Peak</span>
+              </div>
+            </div>
+
+            <p className="text-[8px] text-gray-500 italic leading-tight">
+              * 마우스를 드래그하여 위치를 옮길 수 있습니다.<br/>
+              * 예약 업로드 시 위 시간을 활용해 보세요.
+            </p>
+          </div>
+        </GlassCard>
+      </motion.div>
+
       <Terminal logs={logs} />
 
       {/* Guide Modal */}
