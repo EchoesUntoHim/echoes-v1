@@ -474,6 +474,130 @@ export const LyricsTab = ({
             </GlassCard>
           </div>
 
+          {/* Timed Lyrics Editor Section */}
+          {workflow.results.timedLyrics && workflow.results.timedLyrics.length > 0 && (
+            <GlassCard className="border-secondary/30 bg-secondary/5">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-secondary/20 rounded-lg">
+                    <Music className="w-5 h-5 text-secondary" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-white uppercase tracking-tight">정밀 자막 싱크 (Timed Lyrics)</h3>
+                    <p className="text-xs text-gray-400">이미지 하이라이트처럼 각 줄마다 개별 시간을 설정할 수 있습니다.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                   <button 
+                    onClick={() => {
+                      const text = workflow.results.timedLyrics.map((item: any) => `[${formatTime(item.time)}] ${item.kor}`).join('\n');
+                      copyToClipboard(text);
+                    }}
+                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg text-xs font-bold transition-all border border-white/10"
+                  >
+                    싱크 데이터 복사
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                {workflow.results.timedLyrics.map((item: any, idx: number) => (
+                  <div key={idx} className="flex gap-3 items-start bg-black/30 p-3 rounded-xl border border-white/5 hover:border-secondary/30 transition-all group">
+                    <div className="w-24 shrink-0">
+                      <div className="text-[10px] font-bold text-secondary mb-1 uppercase opacity-60">시간</div>
+                      <input 
+                        type="text"
+                        value={formatTime(item.time)}
+                        onChange={(e) => {
+                          const newTime = parseTime(e.target.value);
+                          const newList = [...workflow.results.timedLyrics];
+                          newList[idx] = { ...newList[idx], time: newTime };
+                          setWorkflow((prev: any) => ({
+                            ...prev,
+                            results: { ...prev.results, timedLyrics: newList }
+                          }));
+                        }}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white text-center font-mono focus:border-secondary outline-none"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <div className="text-[10px] font-bold text-gray-500 mb-1 uppercase opacity-60">한글 가사</div>
+                          <input 
+                            type="text"
+                            value={item.kor}
+                            onChange={(e) => {
+                              const newList = [...workflow.results.timedLyrics];
+                              newList[idx] = { ...newList[idx], kor: e.target.value };
+                              setWorkflow((prev: any) => ({
+                                ...prev,
+                                results: { ...prev.results, timedLyrics: newList }
+                              }));
+                            }}
+                            className="w-full bg-transparent border-b border-white/5 focus:border-secondary/50 outline-none text-sm text-white py-1 transition-all"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[10px] font-bold text-gray-500 mb-1 uppercase opacity-60">영어 번역</div>
+                          <input 
+                            type="text"
+                            value={item.eng}
+                            onChange={(e) => {
+                              const newList = [...workflow.results.timedLyrics];
+                              newList[idx] = { ...newList[idx], eng: e.target.value };
+                              setWorkflow((prev: any) => ({
+                                ...prev,
+                                results: { ...prev.results, timedLyrics: newList }
+                              }));
+                            }}
+                            className="w-full bg-transparent border-b border-white/5 focus:border-secondary/50 outline-none text-sm text-gray-400 py-1 transition-all"
+                          />
+                        </div>
+                      </div>
+                      {item.section && (
+                         <div className="inline-block px-2 py-0.5 bg-secondary/10 text-secondary text-[10px] font-bold rounded uppercase">
+                           {item.section}
+                         </div>
+                      )}
+                    </div>
+                    <div className="self-center opacity-0 group-hover:opacity-100 transition-opacity">
+                       <button 
+                        onClick={() => {
+                          const newList = workflow.results.timedLyrics.filter((_: any, i: number) => i !== idx);
+                          setWorkflow((prev: any) => ({
+                            ...prev,
+                            results: { ...prev.results, timedLyrics: newList }
+                          }));
+                        }}
+                        className="p-1.5 text-red-400/50 hover:text-red-400 transition-colors"
+                        title="삭제"
+                       >
+                         <RefreshCw className="w-3 h-3 rotate-45" />
+                       </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 flex justify-center">
+                <button 
+                  onClick={() => {
+                    const lastTime = workflow.results.timedLyrics[workflow.results.timedLyrics.length - 1]?.time || 0;
+                    const newList = [...workflow.results.timedLyrics, { time: lastTime + 5, kor: '', eng: '' }];
+                    setWorkflow((prev: any) => ({
+                      ...prev,
+                      results: { ...prev.results, timedLyrics: newList }
+                    }));
+                  }}
+                  className="px-4 py-2 bg-secondary/10 hover:bg-secondary/20 text-secondary rounded-xl text-xs font-bold transition-all border border-secondary/20"
+                >
+                  + 가사 줄 추가
+                </button>
+              </div>
+            </GlassCard>
+          )}
+
           <div className="flex justify-center">
             <button onClick={() => handleTabChange('music')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
               다음 단계: 음악 생성 <ChevronRight className="w-5 h-5" />
