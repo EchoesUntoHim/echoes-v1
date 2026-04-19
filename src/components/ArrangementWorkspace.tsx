@@ -617,7 +617,7 @@ export const ArrangementWorkspace = ({
     // =========================================================================
     const handleArrange = async (mode: 'full' | 'vocal_only' = 'full') => {
         // 🚨 과금 방지용 테스트 모드 스위치 (true: 가짜 테스트, false: 진짜 과금) 🚨
-        const IS_TEST_MODE = true;
+        const IS_TEST_MODE = false;
 
         if (IS_TEST_MODE) {
             addLog("🛑 [무료 테스트 모드] 과금 없이 로직 및 Firebase 연동만 2초간 테스트합니다.");
@@ -684,7 +684,16 @@ export const ArrangementWorkspace = ({
                     addLog("⚠️ [경고] 원곡의 용량이 너무 큽니다! 구글 API 제한에 걸릴 수 있으니 짧은 mp3로 테스트하세요.");
                 }
 
-                const safeMimeType = getInlineMimeForUploadedFile(uploadedFile);
+                let safeMimeType = getInlineMimeForUploadedFile(uploadedFile);
+                const isLyria = (musicEngine || "lyria-3-pro-preview").toLowerCase().includes('lyria');
+
+                if (isLyria && safeMimeType.includes('wav')) {
+                    addLog("❌ Lyria 엔진은 WAV 형식의 원곡을 지원하지 않습니다. MP3 또는 M4A 형식으로 업로드해주세요.");
+                    setIsProcessing(false);
+                    return;
+                }
+
+                safeMimeType = safeMimeType && safeMimeType !== 'application/octet-stream' ? safeMimeType : 'audio/mp3';
                 requestParts.push({
                     inlineData: {
                         data: audioData,
@@ -696,12 +705,26 @@ export const ArrangementWorkspace = ({
             // 3. 목소리 레퍼런스 첨부
             if (voiceReference) {
                 addLog("📤 목소리 레퍼런스 데이터를 전송 중...");
-                const comma = voiceReference.indexOf(',');
-                const data = comma >= 0 ? voiceReference.slice(comma + 1) : '';
+                const [header, data] = voiceReference.split(',');
+                let mimeType = header.match(/:(.*?);/)?.[1] || "audio/wav";
+                const isLyria = (musicEngine || "lyria-3-pro-preview").toLowerCase().includes('lyria');
+
+                if (isLyria && mimeType.includes('wav')) {
+                    addLog("❌ Lyria 엔진은 WAV 형식의 음성을 지원하지 않습니다. MP3 또는 M4A 형식으로 업로드해주세요.");
+                    setIsProcessing(false);
+                    return;
+                }
+
+                if (mimeType.includes('s16le') || mimeType.includes('wav')) {
+                    mimeType = 'audio/wav';
+                } else if (mimeType.includes('mpeg') || mimeType.includes('mp3')) {
+                    mimeType = 'audio/mp3';
+                }
+
                 requestParts.push({
                     inlineData: {
                         data: data,
-                        mimeType: 'audio/mp3' // 호환성을 위해 mp3 통일
+                        mimeType: mimeType
                     }
                 });
             }

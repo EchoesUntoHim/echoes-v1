@@ -57,6 +57,7 @@ export interface TitleSettings {
 export interface BlogSettings {
   style: string;
   youtubeLink: string;
+  targets?: { naver: boolean; tistory: boolean; google: boolean; };
   imageTexts?: Record<string, string>;
   targetAudience?: string;
   blogPerspective?: string;
@@ -179,11 +180,22 @@ export interface WorkflowState {
       tags: string;
       rawContent?: string;
     };
+    tistoryBlogPost?: {
+      title: string;
+      content: string;
+      tags: string;
+      rawContent?: string;
+    };
     googleBlogPost?: {
       title: string;
       content: string;
       tags: string;
       rawContent?: string;
+    };
+    youtubeMetadata?: {
+      title: string;
+      description: string;
+      tags: string;
     };
     blogTitle?: string; // Added for compatibility
   };

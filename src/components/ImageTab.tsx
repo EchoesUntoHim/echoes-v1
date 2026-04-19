@@ -91,7 +91,7 @@ export const ImageTab = ({
           </div>
           <div className="text-right">
             <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">분석 엔진</span>
-            <p className="text-xs font-mono text-primary">Gemini 1.5 Flash</p>
+            <p className="text-xs font-mono text-primary">Gemini 3.1 Flash Lite</p>
           </div>
         </div>
       </header>
@@ -303,8 +303,16 @@ export const ImageTab = ({
                 <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-1">
                   <Music className="w-6 h-6 text-primary" />
                 </div>
-                <p className="font-bold text-sm text-white">{workflow.results.audioFile.name}</p>
-                <p className="text-[10px] text-gray-500">{(workflow.results.audioFile.size / 1024 / 1024).toFixed(2)} MB • 분석 완료</p>
+                <p className="font-bold text-sm text-white">
+                  {workflow.results.audioFile instanceof File 
+                    ? workflow.results.audioFile.name 
+                    : (workflow.results.title || 'Suno Audio')}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  {workflow.results.audioFile instanceof File 
+                    ? `${(workflow.results.audioFile.size / 1024 / 1024).toFixed(2)} MB` 
+                    : 'Suno Audio'} • 분석 완료
+                </p>
               </div>
             ) : (
               <div className="text-center space-y-2">

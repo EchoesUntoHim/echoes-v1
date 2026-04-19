@@ -238,7 +238,7 @@ export const MusicGenerator = ({
       const currentKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
       const ai = new GoogleGenAI({ apiKey: currentKey });
       
-      const contents: any[] = [
+      const parts: any[] = [
         { text: `
           [SONG TITLE]
           ${musicParams.title}
@@ -275,20 +275,22 @@ export const MusicGenerator = ({
         const [header, data] = voiceReference.split(',');
         let mimeType = header.match(/:(.*?);/)?.[1] || "audio/wav";
         
-        // --- 수정된 부분: Lyria 모델 s16le 에러 방지용 강제 변환 ---
-        mimeType = mimeType.split(';')[0];
         const isLyria = musicEngine?.toLowerCase().includes('lyria');
 
-        if (isLyria) {
-          mimeType = 'audio/mpeg'; // Lyria는 WAV를 s16le로 오인해 거부하므로 mpeg로 속임
-        } else if (mimeType.includes('s16le') || mimeType.includes('wav')) {
+        if (isLyria && mimeType.includes('wav')) {
+          addLog("❌ Lyria 엔진은 WAV 형식의 음성을 지원하지 않습니다. MP3 또는 M4A 형식으로 업로드해주세요.");
+          setIsGenerating(false);
+          return;
+        }
+
+        if (mimeType.includes('s16le') || mimeType.includes('wav')) {
           mimeType = 'audio/wav';
         } else if (mimeType.includes('mpeg') || mimeType.includes('mp3')) {
           mimeType = 'audio/mp3';
         }
         // ----------------------------------------------------
 
-        contents.push({
+        parts.push({
           inlineData: {
             data: data,
             mimeType: mimeType
@@ -296,6 +298,8 @@ export const MusicGenerator = ({
         });
         addLog("🎙️ 업로드된 목소리 레퍼런스를 반영하여 생성합니다.");
       }
+
+      const contents = [{ role: "user", parts }];
 
       const isLyria = musicEngine?.toLowerCase().includes('lyria');
       
@@ -309,7 +313,8 @@ export const MusicGenerator = ({
           model: musicEngine,
           contents: contents,
           config: {
-            responseModalities: [Modality.AUDIO],
+            responseModalities: ["AUDIO"],
+            temperature: 0.7
           } as any
         } as any);
 
@@ -334,6 +339,9 @@ export const MusicGenerator = ({
         const response = await ai.models.generateContent({
           model: musicEngine,
           contents: contents,
+          config: {
+            temperature: 0.7
+          }
         } as any);
 
         const parts = response.candidates?.[0]?.content?.parts;

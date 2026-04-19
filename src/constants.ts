@@ -25,8 +25,6 @@ export const AI_ENGINES = [
   { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemma-4-31b-it', label: 'Gemma 4 31B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemini-2.5-computer-use-preview-10-2025', label: 'Gemini 2.5 Computer Use (자동화용)', type: 'paid' },
-  { value: 'gemini-robotics-er-1.5-preview', label: 'Gemini Robotics ER 1.5 (특수목적)', type: 'paid' },
-  { value: 'gemini-robotics-er-1.6-preview', label: 'Gemini Robotics ER 1.6 (특수목적)', type: 'paid' },
   { value: 'gemini-3.1-pro-preview-customtools', label: 'Gemini 3.1 Pro Custom Tools (가사/음원분석용)', type: 'paid' }
 ];
 

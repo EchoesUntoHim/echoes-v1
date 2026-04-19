@@ -51,7 +51,7 @@ import { ImageTab } from './components/ImageTab';
 import { VideoTab } from './components/VideoTab';
 import { PublishTab } from './components/PublishTab';
 import { BlogTab } from './components/BlogTab';
-import { MusicGenerator } from './components/MusicGenerator';
+import { SunoAudioList } from './components/SunoAudioList';
 import { ArrangementWorkspace } from './components/ArrangementWorkspace';
 import { VideoSettingsPanel } from './components/VideoSettingsPanel';
 import { VideoPreviewCard } from './components/VideoPreviewCard';
@@ -97,7 +97,10 @@ import {
   loadAudioFromDB, 
   clearAudioFromDB,
   saveVoiceToDB,
-  loadVoiceFromDB
+  loadVoiceFromDB,
+  saveMediaToDB,
+  loadMediaFromDB,
+  clearMediaFromDB
 } from './utils/db';
 import { auth, signInWithGoogle, logout, db, handleFirestoreError, OperationType, syncUserProfile } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -475,16 +478,7 @@ export default function App() {
 
   const addLog = (msg: string) => setLogs(prev => [...prev, msg].slice(-20));
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => setUploadedImage(e.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const analyzeAudioComprehensively = async (file: File, options?: { skipSync?: boolean }) => {
+  const analyzeAudioComprehensively = async (file: File, options?: { skipSync?: boolean, referenceLyrics?: string }) => {
     const currentApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
     if (!currentApiKey) {
       if (!options?.skipSync) setIsApiKeyModalOpen(true);
@@ -492,6 +486,9 @@ export default function App() {
     }
 
     addLog(`🔍 [${aiEngine}] 엔진을 사용하여 음원 분석을 시작합니다...`);
+    if (options?.referenceLyrics) {
+      addLog(`📝 원본 가사 정보가 있습니다. 싱크 정확도를 높입니다.`);
+    }
     addLog("ℹ️ 가사 추출, 구조 분석, BPM/Key 파악을 위해 1~2분 정도 소요됩니다.");
     
     if (!options?.skipSync) {
@@ -527,6 +524,7 @@ export default function App() {
       
       const prompt = `
         이 오디오 파일을 분석하여 전체 가사를 한국어와 영어로 추출해줘. 
+        ${options?.referenceLyrics ? `\n[참고 가사 (원본)]: \n${options.referenceLyrics}\n\n위 가사 내용을 바탕으로 오디오의 실제 소리를 듣고 정확한 타임스탬프를 매겨줘. 가사 텍스트는 원본 가사를 최대한 존중해서 작성해줘.` : ''}
         
         [지시사항]
         1. 곡의 구조(Intro, Verse, Chorus, Bridge, Outro 등)를 정확히 파악하여 타임스탬프와 함께 정리해줘.
@@ -997,7 +995,7 @@ export default function App() {
       setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, blog: 50 } }));
 
       // Build JSON Schema dynamically based on targets
-      const propertiesSchema = {
+      const propertiesSchema: any = {
         imageTexts: { type: 'OBJECT', additionalProperties: { type: 'STRING' } }
       };
       
@@ -1079,7 +1077,7 @@ export default function App() {
         return finalContent;
       };
 
-      const resultsToUpdate = {};
+      const resultsToUpdate: any = {};
       
       if (targets.naver && parsed.naver) {
         resultsToUpdate.naverBlogPost = {
@@ -1213,7 +1211,8 @@ export default function App() {
 
         Guidelines:
         1. Song Titles (CRITICAL): Generate 5 different, highly creative and genre-appropriate titles.
-           - Format: [Korean Title]_[English Title] (e.g., "제목_Title")
+           - Format: [TargetTag][Korean Title]_[English Title] (e.g., "[CCM]제목_Title")
+           - TargetTag MUST be "[CCM]" if Target Audience is CCM, or "[대중음악]" if Target Audience is 대중음악.
            - If CCM: Focus on keywords like 'Grace', 'Light', 'Path', 'Eternal', 'Voice', 'Stillness'. The titles should feel warm and sacred.
            - If Pop: Focus on keywords like 'Memory', 'City', 'Echo', 'Colors', 'Blue', 'Distance'. The titles should feel trendy and cinematic.
            - CRITICAL: Titles MUST NOT be literal translations. The English title should capture the "vibe" and "emotion" of the Korean title poetically.
@@ -2288,7 +2287,7 @@ export default function App() {
 
         <nav className="flex-1 flex flex-col gap-2">
           <SidebarItem icon={TypeIcon} label="가사 & 프롬프트" active={activeTab === 'lyrics'} onClick={() => handleTabChange('lyrics')} />
-          <SidebarItem icon={Music} label="음악 생성" active={activeTab === 'music'} onClick={() => handleTabChange('music')} />
+          <SidebarItem icon={Music} label="음원 리스트" active={activeTab === 'music'} onClick={() => handleTabChange('music')} />
           <SidebarItem icon={ImageIcon} label="이미지 생성" active={activeTab === 'image'} onClick={() => handleTabChange('image')} />
           <SidebarItem icon={Video} label="영상 렌더링" active={activeTab === 'video'} onClick={() => handleTabChange('video')} />
           <SidebarItem icon={Send} label="업로드 준비" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
@@ -2361,21 +2360,15 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }} 
               className="max-w-6xl mx-auto"
             >
-              <MusicGenerator 
-                apiKey={apiKey} 
-                addLog={addLog} 
+              <SunoAudioList 
                 workflow={workflow} 
                 setWorkflow={setWorkflow} 
-                musicEngine={musicEngine}
-                setMusicEngine={setMusicEngine}
-                voiceReference={voiceReference}
-                setVoiceReference={setVoiceReference}
-                voiceRefName={voiceRefName}
-                setVoiceRefName={setVoiceRefName}
-                logs={logs}
-                availableModels={availableModels}
-                fetchAvailableModels={fetchAvailableModels}
-                resetSubsequentSteps={resetSubsequentSteps}
+                addLog={addLog} 
+                logs={logs} 
+                apiKey={apiKey}
+                aiEngine={aiEngine}
+                analyzeAudioComprehensively={analyzeAudioComprehensively}
+                user={user}
               />
               <div className="flex justify-center mt-8">
                 <button onClick={() => handleTabChange('image')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">

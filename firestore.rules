@@ -1,0 +1,106 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == "sandokebi00@gmail.com" && isVerified())
+      );
+    }
+    
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Validation Blueprints ---
+
+    function isValidUser(data) {
+      let requiredFields = ['email', 'role', 'createdAt', 'updatedAt'];
+      return data.keys().hasAll(requiredFields) && data.keys().size() == requiredFields.size() + (data.keys().hasAny(['displayName', 'photoURL']) ? data.keys().size() - requiredFields.size() : 0)
+        && data.email is string && data.email.size() <= 256
+        && data.role in ['user', 'admin']
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidTrack(data) {
+      return data.uid == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.url is string && data.url.matches('^https://firebasestorage\\.googleapis\\.com/.*')
+        && data.createdAt == request.time;
+    }
+
+    function isValidBlogPost(data) {
+      return data.uid == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 300
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 500000
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidArrangedTrack(data) {
+      return data.uid == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.url is string && data.url.matches('^https://firebasestorage\\.googleapis\\.com/.*')
+        && data.createdAt == request.time;
+    }
+
+    // --- Match Blocks ---
+
+    // Public/Admin list of Admins
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Managed via Console
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isVerified() && isValidUser(incoming()) && incoming().role == 'user';
+      allow update: if (isOwner(userId) || isAdmin()) && (
+        // Only allow updating non-protected fields or Admin override
+        isAdmin() || (incoming().role == existing().role && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time)
+      );
+    }
+
+    match /tracks/{trackId} {
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(trackId) && isValidTrack(incoming());
+      allow update: if isVerified() && (isOwner(existing().uid) || isAdmin()) && isValidTrack(incoming()) && (
+        incoming().uid == existing().uid && incoming().createdAt == existing().createdAt
+      );
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
+    }
+
+    match /blogPosts/{postId} {
+      allow list: if true; // Blog is public
+      allow get: if true;
+      allow create: if isVerified() && isValidId(postId) && isValidBlogPost(incoming());
+      allow update: if isVerified() && (isOwner(existing().uid) || isAdmin()) && isValidBlogPost(incoming()) && (
+        incoming().uid == existing().uid && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time
+      );
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
+    }
+
+    match /arranged_tracks/{trackId} {
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(trackId) && isValidArrangedTrack(incoming());
+      allow update: if isVerified() && (isOwner(existing().uid) || isAdmin()) && isValidArrangedTrack(incoming()) && (
+        incoming().uid == existing().uid && incoming().createdAt == existing().createdAt
+      );
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
+    }
+  }
+}
+
