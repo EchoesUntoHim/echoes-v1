@@ -833,6 +833,7 @@ export default function App() {
   };
 
   const handleDownloadAll = async () => {
+    setIsVideoRendering(true);
     addLog("📥 모든 영상 다운로드를 시작합니다 (순차적으로 진행됩니다)...");
     
     if (mainVideoRef.current) {
@@ -857,6 +858,7 @@ export default function App() {
     }
     
     addLog("✅ 모든 영상 다운로드 요청이 완료되었습니다.");
+    setIsVideoRendering(false);
   };
 
   const resetSubsequentSteps = (fromStep: Step) => {

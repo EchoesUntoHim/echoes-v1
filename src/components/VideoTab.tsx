@@ -249,26 +249,27 @@ export const VideoTab = ({
           <GlassCard className="space-y-4">
             <div className="flex flex-col justify-center items-center p-6 bg-white/5 rounded-2xl border border-white/10">
               <Zap className="w-12 h-12 text-primary mb-4" />
-              <p className="text-center text-sm text-gray-400">서버 비용 없이 내 컴퓨터에서 직접 렌더링합니다.</p>
-              {workflow.progress.video === 100 ? (
-                <button 
-                  onClick={handleDownloadAll}
-                  className="w-full bg-green-500 text-white py-4 rounded-xl font-black mt-6 shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                >
-                  <Download className="w-6 h-6" />
-                  모든 영상 다운로드 (메인 + 틱톡 + 숏츠)
-                </button>
-              ) : (
-                <button 
-                  onClick={startVideoRender}
-                  disabled={isVideoRendering || !uploadedAudio || workflow.results.images.length === 0}
-                  className="w-full bg-primary text-background py-4 rounded-xl font-black mt-6 hover:neon-glow-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isVideoRendering ? `렌더링 중... ${workflow.progress.video}%` : '영상 렌더링 시작'}
-                </button>
-              )}
+              <p className="text-center text-sm text-gray-400">서버 비용 없이 내 컴퓨터에서 직접 렌더링하여 다운로드합니다.</p>
+              <button 
+                onClick={handleDownloadAll}
+                disabled={isVideoRendering || !uploadedAudio || workflow.results.images.length === 0}
+                className="w-full bg-primary text-background py-5 rounded-2xl font-black mt-6 shadow-xl hover:neon-glow-primary transition-all flex items-center justify-center gap-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isVideoRendering ? (
+                  <>
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                    영상 제작 및 다운로드 중...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-6 h-6" />
+                    모든 영상 한꺼번에 다운로드 (메인 + 틱톡 + 숏츠)
+                  </>
+                )}
+              </button>
             </div>
-            {workflow.progress.video > 0 && <ProgressBar progress={workflow.progress.video} />}
+            {isVideoRendering && <ProgressBar progress={workflow.progress.video || 50} />}
+
           </GlassCard>
         </div>
 
