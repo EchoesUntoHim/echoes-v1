@@ -1148,7 +1148,7 @@ export default function App() {
           ${targets.tistory ? '"tistory": { "title": "...", "content": "HTML 내용", "tags": "태그" },' : ''}
           ${targets.google ? '"google": { "title": "...", "content": "HTML 내용", "tags": "태그" },' : ''}
           "imageTexts": {
-            "이미지라벨": "이미지 위에 들어갈 문구"
+            ${processedImages.map(img => `"${img.label}": "이 이미지가 위치한 단락의 '소제목(챕터 제목)' 또는 해당 단락의 가장 핵심적인 문장을 그대로 사용 (본문과 무관한 문구 금지)"`).join(',\n            ')}
           }
         }
       `;
