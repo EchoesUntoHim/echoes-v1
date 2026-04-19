@@ -601,7 +601,7 @@ export default function App() {
       if (safeMimeType.includes('s16le') || safeMimeType.includes('wav')) {
         safeMimeType = 'audio/wav';
       } else if (safeMimeType.includes('mpeg') || safeMimeType.includes('mp3')) {
-        safeMimeType = 'audio/mp3';
+        safeMimeType = 'audio/mpeg';
       }
       
       const prompt = `
@@ -634,24 +634,41 @@ export default function App() {
 
       const response = await genAI.models.generateContent({
         model: aiEngine || 'gemini-3.1-flash-lite-preview',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: safeMimeType,
-                data: audioBase64
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: safeMimeType,
+                  data: audioBase64
+                }
               }
-            },
-            { text: prompt }
-          ]
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: "application/json"
         }
       });
 
       setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, audioAnalysis: 80 } }));
 
-      // Get the extracted string output using the .text property
+      // Get the extracted string output
       const responseText = response.text || "";
-      const cleanedText = responseText.replace(/```json\n?|\n?```/g, "").trim();
+      
+      // Robust JSON extraction: Find the first '{' and last '}'
+      let cleanedText = responseText;
+      const startIdx = responseText.indexOf('{');
+      const endIdx = responseText.lastIndexOf('}');
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        cleanedText = responseText.substring(startIdx, endIdx + 1);
+      } else {
+        cleanedText = responseText.replace(/```json\n?|\n?```/g, "").trim();
+      }
+
       const result = JSON.parse(cleanedText);
       
       // Parse timestamps for highlights
@@ -2394,7 +2411,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.3</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.4</span>
           </div>
         </div>
 

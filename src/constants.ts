@@ -5,10 +5,6 @@ export const AI_ENGINES = [
   { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (가사/음원분석용)', type: 'paid' },
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (가사/음원분석용)', type: 'free' },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (가사/음원분석용)', type: 'paid' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-2.0-flash-001', label: 'Gemini 2.0 Flash (001) (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite (001) (가사/음원분석용)', type: 'free' },
   { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (가사/음원분석용)', type: 'free' },
   { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview (가사/음원분석용)', type: 'free' },
   { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview (가사/음원분석용)', type: 'paid' },
@@ -36,7 +32,7 @@ export const IMAGE_ENGINES = [
 ];
 
 export const MUSIC_ENGINES = [
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (검증됨)', type: 'free' },
+  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (검증됨)', type: 'free' },
   { value: 'lyria-3-pro-preview', label: 'Lyria 3 Pro (음악생성용)', type: 'paid' },
   { value: 'lyria-3-clip-preview', label: 'Lyria 3 Clip (음악생성용)', type: 'free' },
   { value: 'google-magenta-free', label: 'Google Magenta (음악생성용)', type: 'free' }

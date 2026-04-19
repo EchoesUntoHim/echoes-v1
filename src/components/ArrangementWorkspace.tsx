@@ -361,7 +361,7 @@ export const ArrangementWorkspace = ({
         ${workflow.results.lyrics}`;
 
                 const response = await genAI.models.generateContent({
-                    model: aiEngine || "gemini-flash-latest",
+                    model: aiEngine || "gemini-3.1-flash-lite-preview",
                     contents: prompt
                 });
 

@@ -224,8 +224,17 @@ export const SunoAudioList = ({
             const text = response.text;
             if (!text) throw new Error("AI 응답이 없습니다.");
             
-            // Clean JSON
-            const cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+            // Clean JSON: More robust extraction to handle conversational text
+            let cleanedText = text;
+            const startIdx = text.indexOf('{');
+            const endIdx = text.lastIndexOf('}');
+            
+            if (startIdx !== -1 && endIdx !== -1) {
+                cleanedText = text.substring(startIdx, endIdx + 1);
+            } else {
+                cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+            }
+            
             const analysis = JSON.parse(cleanedText);
             
             addLog(`✅ 분석 완료: [${analysis.finalTitle}]`);
@@ -331,8 +340,9 @@ export const SunoAudioList = ({
         try {
             // 1. Fetch audio via proxy to bypass CORS
             let proxyUrl = track.audio_url;
-            if (proxyUrl.includes('cdn1.suno.ai')) {
-                proxyUrl = proxyUrl.replace('https://cdn1.suno.ai', '/suno-cdn');
+            if (proxyUrl.includes('.suno.ai')) {
+                // Handle all cdn1, cdn2, etc. via the configured proxy
+                proxyUrl = proxyUrl.replace(/https:\/\/[^/]+\.suno\.ai/, '/suno-cdn');
             } else if (proxyUrl.includes('audiopipe.suno.ai')) {
                 proxyUrl = proxyUrl.replace('https://audiopipe.suno.ai', '/suno-pipe');
             }
@@ -342,12 +352,12 @@ export const SunoAudioList = ({
             
             const blob = await response.blob();
             // Use clean title for the file name
-            const file = new File([blob], `${cleanTitle}.mp3`, { type: "audio/mp3" });
+            const file = new File([blob], `${cleanTitle}.mp3`, { type: "audio/mpeg" });
 
             // 2. Call the comprehensive analyzer (Gemini)
             // This will handle lyrics, translation, and timestamps!
             // Pass the original lyrics (prompt) to improve sync accuracy
-            await analyzeAudioComprehensively(file);
+            await analyzeAudioComprehensively(file, { referenceLyrics: track.metadata?.prompt });
             
             // 3. Post-process: Set the correct target and cleaned titles
             const [kTitle, eTitle] = cleanTitle.includes('_') ? cleanTitle.split('_') : [cleanTitle, ''];
