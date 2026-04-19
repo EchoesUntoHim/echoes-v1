@@ -546,7 +546,14 @@ export const SunoAudioList = ({
                                 </motion.div>
                             ))}
                         </AnimatePresence>
-                        
+
+                        {tracks.length > 0 && (
+                            <div className="py-6 mt-4 border-t border-white/5 text-center">
+                                <p className="text-xs text-primary/60 font-mono tracking-widest uppercase">
+                                    Total {tracks.length} Tracks Syncing...
+                                </p>
+                            </div>
+                        )}
                         {tracks.length === 0 && !isLoading && (
                             <div className="py-20 text-center text-gray-500">
                                 <Music className="w-12 h-12 mx-auto mb-3 opacity-30" />
