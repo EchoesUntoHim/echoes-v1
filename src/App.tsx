@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { 
-  Music, 
-  Image as ImageIcon, 
-  Video, 
-  Send, 
-  LayoutDashboard, 
-  CreditCard, 
+import {
+  Music,
+  Image as ImageIcon,
+  Video,
+  Send,
+  LayoutDashboard,
+  CreditCard,
   Settings,
   ChevronRight,
   Play,
@@ -58,7 +58,7 @@ import { VideoPreviewCard } from './components/VideoPreviewCard';
 import { MetadataCard } from './components/MetadataCard';
 import { StepCard } from './components/StepCard';
 import { TimeInput, formatTime, parseTime } from './components/TimeInput';
-import { 
+import {
   AI_ENGINES,
   IMAGE_ENGINES,
   MUSIC_ENGINES,
@@ -73,28 +73,28 @@ import {
   INSTRUMENTS,
   ART_STYLES,
   CAMERA_VIEWS,
-  CAMERA_ANGLE_OPTIONS, 
-  TIME_OF_DAY_OPTIONS, 
-  LIGHTING_ATMOSPHERES, 
-  COLOR_GRADES, 
-  COMPOSITIONS, 
-  DEPTH_OF_FIELDS, 
-  WEATHERS, 
-  SUBJECT_DETAILS, 
-  BACKGROUND_TYPES, 
-  IMAGE_STYLES, 
-  BLOG_STYLES, 
-  TITLE_EFFECTS, 
-  KOREAN_FONTS, 
+  CAMERA_ANGLE_OPTIONS,
+  TIME_OF_DAY_OPTIONS,
+  LIGHTING_ATMOSPHERES,
+  COLOR_GRADES,
+  COMPOSITIONS,
+  DEPTH_OF_FIELDS,
+  WEATHERS,
+  SUBJECT_DETAILS,
+  BACKGROUND_TYPES,
+  IMAGE_STYLES,
+  BLOG_STYLES,
+  TITLE_EFFECTS,
+  KOREAN_FONTS,
   ENGLISH_FONTS,
   VOCAL_OPTIONS
 } from './constants';
 import { cn } from './lib/utils';
 import { WorkflowState, Step, Target, Tempo, VocalType, MusicParams, TitlePosition, TitleEffect, ImageType, TitleSettings, createDefaultSettings } from './types';
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { 
-  saveAudioToDB, 
-  loadAudioFromDB, 
+import {
+  saveAudioToDB,
+  loadAudioFromDB,
   clearAudioFromDB,
   saveVoiceToDB,
   loadVoiceFromDB,
@@ -152,7 +152,7 @@ export default function App() {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [videoLyrics, setVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_videoLyrics') || "");
   const [englishVideoLyrics, setEnglishVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_englishVideoLyrics') || "");
-  const [shortsHighlights, setShortsHighlights] = useState<{start: number, duration: number}[]>(() => {
+  const [shortsHighlights, setShortsHighlights] = useState<{ start: number, duration: number }[]>(() => {
     const saved = localStorage.getItem('echoesuntohim_shortsHighlights');
     try {
       const parsed = saved ? JSON.parse(saved) : null;
@@ -252,7 +252,7 @@ export default function App() {
 
   const handlePlatformLoginConfirm = () => {
     if (!pendingPlatform) return;
-    
+
     const key = pendingPlatform;
     if (platforms[key as keyof typeof platforms] === 'connected') {
       setPlatforms(prev => ({ ...prev, [key]: 'disconnected' }));
@@ -274,7 +274,7 @@ export default function App() {
   useEffect(() => {
     const currentUid = user ? user.uid : 'guest';
     if (loadedUidRef.current === currentUid) return;
-    
+
     // Reset loaded state when user context changes to prevent overwriting cloud data
     setIsTracksLoaded(false);
 
@@ -289,7 +289,7 @@ export default function App() {
               setSunoTracks(parsed);
               addLog(`⚡ 로컬 캐시에서 ${parsed.length}곡을 즉시 불러왔습니다.`);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (user) {
@@ -325,12 +325,12 @@ export default function App() {
 
     // CRITICAL: Block sync until loading for the current user is complete
     if (!isTracksLoaded) return;
-    
+
     if (user) {
       const syncToCloud = async () => {
         try {
           const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
-          await setDoc(userRef, { 
+          await setDoc(userRef, {
             tracks: sunoTracks,
             updatedAt: serverTimestamp()
           }, { merge: true });
@@ -431,7 +431,7 @@ export default function App() {
       // Restore Images & Videos from IndexedDB (Cross-refresh persistence)
       const savedImages = await loadMediaFromDB('workflow_images');
       const savedVideos = await loadMediaFromDB('workflow_videos');
-      
+
       if (savedImages || savedVideos) {
         setWorkflow(prev => ({
           ...prev,
@@ -468,7 +468,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('echoesuntohim_englishVideoLyrics', englishVideoLyrics); }, [englishVideoLyrics]);
   useEffect(() => { localStorage.setItem('echoesuntohim_shortsHighlights', JSON.stringify(shortsHighlights)); }, [shortsHighlights]);
   useEffect(() => { localStorage.setItem('echoesuntohim_platforms', JSON.stringify(platforms)); }, [platforms]);
-  
+
   useEffect(() => {
     try {
       localStorage.setItem('echoesuntohim_workflow', JSON.stringify(workflow));
@@ -477,16 +477,16 @@ export default function App() {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         console.warn("LocalStorage full, saving workflow without images");
         try {
-          const strippedWorkflow = { 
-            ...workflow, 
-            results: { 
-              ...workflow.results, 
+          const strippedWorkflow = {
+            ...workflow,
+            results: {
+              ...workflow.results,
               images: [],
               blogPost: workflow.results.blogPost ? {
                 ...workflow.results.blogPost,
                 content: '블로그 본문이 너무 길어 임시 저장되지 않았습니다. (이미지 포함)'
               } : undefined
-            } 
+            }
           };
           localStorage.setItem('echoesuntohim_workflow', JSON.stringify(strippedWorkflow));
         } catch (fallbackError) {
@@ -531,7 +531,7 @@ export default function App() {
 
     const updateBlogImages = async () => {
       let finalContent = rawContent;
-      
+
       const finalProcessedImages = await Promise.all(workflow.results.images.map(async (img) => {
         const text = workflow.blogSettings?.imageTexts?.[img.label] || workflow.results.title || '제목 없음';
         const processedUrl = await processImageForBlog(img.url, text);
@@ -583,18 +583,18 @@ export default function App() {
       addLog(`📝 원본 가사 정보가 있습니다. 싱크 정확도를 높입니다.`);
     }
     addLog("ℹ️ 가사 추출, 구조 분석, BPM/Key 파악을 위해 1~2분 정도 소요됩니다.");
-    
+
     if (!options?.skipSync) {
-      setWorkflow(prev => ({ 
-        ...prev, 
+      setWorkflow(prev => ({
+        ...prev,
         results: { ...prev.results, lyrics: "음원 파일을 분석하고 있습니다...", englishLyrics: "Analyzing audio track..." },
-        progress: { ...prev.progress, audioAnalysis: 10 } 
+        progress: { ...prev.progress, audioAnalysis: 10 }
       }));
     }
 
     try {
       const genAI = new GoogleGenAI({ apiKey: currentApiKey });
-      
+
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => {
@@ -608,13 +608,13 @@ export default function App() {
 
       let safeMimeType = file.type || 'audio/wav';
       safeMimeType = safeMimeType.split(';')[0]; // codecs 파라미터 등 제거
-      
+
       if (safeMimeType.includes('s16le') || safeMimeType.includes('wav')) {
         safeMimeType = 'audio/wav';
       } else if (safeMimeType.includes('mpeg') || safeMimeType.includes('mp3')) {
         safeMimeType = 'audio/mpeg';
       }
-      
+
       const prompt = `
         이 오디오 파일을 분석하여 전체 가사를 한국어와 영어로 추출해줘. 
         ${options?.referenceLyrics ? `\n[참고 가사 (원본)]: \n${options.referenceLyrics}\n\n위 가사 내용을 바탕으로 오디오의 실제 소리를 듣고 정확한 타임스탬프를 매겨줘. 가사 텍스트는 원본 가사를 최대한 존중해서 작성해줘.` : ''}
@@ -677,12 +677,12 @@ export default function App() {
 
       // Get the extracted string output
       const responseText = response.text || "";
-      
+
       // Robust JSON extraction: Find the first '{' and last '}'
       let cleanedText = responseText;
       const startIdx = responseText.indexOf('{');
       const endIdx = responseText.lastIndexOf('}');
-      
+
       if (startIdx !== -1 && endIdx !== -1) {
         cleanedText = responseText.substring(startIdx, endIdx + 1);
       } else {
@@ -690,7 +690,7 @@ export default function App() {
       }
 
       const result = JSON.parse(cleanedText);
-      
+
       // Parse timestamps for highlights
       const timestampRegex = /\[(\d{2}):(\d{2})\]\s*\[(.*?)\]/g;
       let match;
@@ -731,9 +731,9 @@ export default function App() {
         setSunoTracks(prev => prev.map(t => {
           // Match by title (which was set just before analysis in SunoAudioList)
           if (t.title === workflow.params.title || t.id === workflow.results.trackId) {
-            return { 
-              ...t, 
-              lyrics: result.lyrics, 
+            return {
+              ...t,
+              lyrics: result.lyrics,
               englishLyrics: result.englishLyrics,
               audioAnalysis: {
                 bpm: result.bpm,
@@ -748,7 +748,7 @@ export default function App() {
       }
 
       addLog(`✅ 음원 분석 완료: 가사 및 곡 구조(${result.key}, ${result.bpm}BPM)를 성공적으로 추출했습니다.`);
-      
+
       // Update highlights if analysis provided them (legacy check kept for safety)
       if (highlights.length > 0) {
         setShortsHighlights(highlights.map(h => ({ start: h.start, duration: h.duration })));
@@ -776,7 +776,7 @@ export default function App() {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      
+
       const dataUrl = await base64Promise;
       setUploadedAudio(dataUrl);
       setUploadedAudioName(file.name);
@@ -786,10 +786,10 @@ export default function App() {
       // Extract title from filename and detect target
       let rawTitle = file.name.replace(/\.[^/.]+$/, "");
       let target: '대중음악' | 'CCM' = workflow.params.target || '대중음악';
-      
+
       if (rawTitle.includes('[CCM]')) target = 'CCM';
       else if (rawTitle.includes('[대중음악]')) target = '대중음악';
-      
+
       const cleanTitle = rawTitle.replace(/\[.*?\]/g, '').trim();
       const [kTitle, eTitle] = cleanTitle.includes('_') ? cleanTitle.split('_') : [cleanTitle, ''];
 
@@ -846,20 +846,20 @@ export default function App() {
   const handleDownloadAll = async () => {
     setIsVideoRendering(true);
     addLog("📥 모든 영상 다운로드를 시작합니다 (순차적으로 진행됩니다)...");
-    
+
     if (mainVideoRef.current) {
       addLog("메인 영상 다운로드 중...");
       mainVideoRef.current.download();
       // Wait a bit to avoid browser blocking multiple downloads
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    
+
     if (tiktokVideoRef.current) {
       addLog("틱톡 영상 다운로드 중...");
       tiktokVideoRef.current.download();
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    
+
     for (let i = 0; i < shortsCount; i++) {
       if (shortsVideoRefs.current[i]) {
         addLog(`숏츠 #${i + 1} 다운로드 중...`);
@@ -867,7 +867,7 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
-    
+
     addLog("✅ 모든 영상 다운로드 요청이 완료되었습니다.");
     setIsVideoRendering(false);
   };
@@ -877,14 +877,14 @@ export default function App() {
     setWorkflow(prev => {
       const newProgress = { ...prev.progress };
       const newResults = { ...prev.results };
-      
+
       const steps: Step[] = ['lyrics', 'music', 'image', 'video', 'publish', 'blog'];
       const fromIndex = steps.indexOf(fromStep);
-      
+
       for (let i = fromIndex + 1; i < steps.length; i++) {
         const step = steps[i];
         newProgress[step as keyof typeof newProgress] = 0;
-        
+
         if (step === 'music') {
           newResults.audioFile = undefined;
           newResults.sunoPrompt = '';
@@ -904,7 +904,7 @@ export default function App() {
           newResults.youtubeMetadata = undefined;
         }
       }
-      
+
       return { ...prev, progress: newProgress, results: newResults };
     });
   };
@@ -914,12 +914,12 @@ export default function App() {
     setIsVideoRendering(true);
     addLog("실제 영상 렌더링 서버와 통신해야 합니다. (TODO: 백엔드 렌더링 API 연동 필요)");
     setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, video: 0 } }));
-    
+
     // TODO: 백엔드의 렌더링 진행 상황 API를 폴링하여 프로그레스 및 결과를 업데이트해야 합니다.
     // 현재는 더미 시뮬레이션을 제거하였으므로 자동으로 완료되지 않습니다.
   };
 
-  const [availableModels, setAvailableModels] = useState<{value: string, label: string, type?: string}[]>(AI_ENGINES);
+  const [availableModels, setAvailableModels] = useState<{ value: string, label: string, type?: string }[]>(AI_ENGINES);
 
   const fetchAvailableModels = async () => {
     const currentApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
@@ -947,7 +947,7 @@ export default function App() {
           const val = m.name.replace('models/', '');
           const known = AI_ENGINES.find(e => e.value === val);
           let label = known ? known.label : (m.displayName || val);
-          
+
           // Append purpose if not already in label
           if (!label.includes('용)')) {
             if (val.includes('image')) label += ' (이미지생성용)';
@@ -962,13 +962,13 @@ export default function App() {
           };
         });
       setAvailableModels(models);
-      
+
       if (!models.some((m: any) => m.value === aiEngine) && models.length > 0) {
         const defaultModel = models.find((m: any) => m.value === 'gemini-3.1-flash-lite-preview') || models[0];
         setAiEngine(defaultModel.value);
         localStorage.setItem('ai_engine', defaultModel.value);
       }
-      
+
       addLog(`✅ 총 ${models.length}개의 사용 가능한 모델을 불러왔습니다.`);
     } catch (error: any) {
       console.error(error);
@@ -976,7 +976,7 @@ export default function App() {
     }
   };
 
-  
+
   const generateYoutubeMetadata = async () => {
     const currentApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
     if (!currentApiKey) {
@@ -985,13 +985,13 @@ export default function App() {
     }
     addLog("유튜브 업로드용 메타데이터(제목, 설명, 태그) 생성을 시작합니다...");
     setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, youtube: 10 } }));
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
       const model = aiEngine;
 
       const isCCM = workflow.params.target === 'CCM';
-      const persona = isCCM 
+      const persona = isCCM
         ? "당신은 기독교 문화 콘텐츠 전문가이자 은혜로운 예배 영상을 전문으로 하는 최정상급 유튜버입니다."
         : "당신은 100만 명의 구독자를 보유한 최정상급 음악 유튜버이자 K-Pop/Pop 트렌드 전문가입니다.";
 
@@ -1047,7 +1047,7 @@ export default function App() {
         console.error('Youtube JSON Parse Error:', text);
         throw new Error('AI 응답 형식이 올바르지 않습니다.');
       }
-      
+
       setWorkflow(prev => ({
         ...prev,
         progress: { ...prev.progress, youtube: 100 },
@@ -1070,10 +1070,10 @@ export default function App() {
       setIsApiKeyModalOpen(true);
       return;
     }
-    
+
     const targets = workflow.blogSettings?.targets || { naver: true, tistory: false, google: false };
     const activeTargets = Object.entries(targets).filter(([_, isActive]) => isActive).map(([key]) => key);
-    
+
     if (activeTargets.length === 0) {
       addLog('❌ 선택된 블로그 플랫폼이 없습니다.');
       return;
@@ -1081,37 +1081,24 @@ export default function App() {
 
     addLog(`블로그 포스팅 생성을 시작합니다... (${activeTargets.join(', ')})`);
     setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, blog: 10 } }));
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
       const model = aiEngine;
       const processedImages = workflow.results.images.filter(img => img.url);
 
       const isCCM = workflow.params.target === 'CCM';
-      const genreContext = isCCM 
+      const genreContext = isCCM
         ? "이 곡은 CCM(Contemporary Christian Music)이므로, 독자들에게 영적인 깊이와 은혜, 위로를 전달하는 데 집중하세요. 문체는 경건하면서도 따뜻해야 합니다."
         : "이 곡은 대중음악이므로, 독자들에게 트렌디한 감성과 공감, 음악적 세련미를 전달하는 데 집중하세요. 문체는 감각적이고 세련되어야 합니다.";
 
-      const naverPersona = `
-        [포스팅: 네이버 블로그]
-        네이버 블로그 독자(20~40대)를 타겟으로 감성적이고 트렌디하게 작성하세요.
-        ${genreContext}
-        이모지와 구분선을 적극 활용하고, 부드러운 구어체('~해요', '~입니다')를 사용하세요.
-      `;
+      const userStyle = workflow.blogSettings?.style || '감성적이고 따뜻한 블로그';
+      const userPerspective = workflow.blogSettings?.blogPerspective || '소개자 관점';
+      const userAudience = workflow.blogSettings?.targetAudience || '모든 음악 애호가';
 
-      const tistoryPersona = `
-        [포스팅: 티스토리]
-        IT/전문 지식에 관심이 많은 독자(20~30대)를 타겟으로 정보성과 감성을 균형있게 섞어 작성하세요.
-        ${genreContext}
-        마크다운 스타일의 깔끔한 구조, 전문적인 용어와 함께 약간의 감성을 더한 문체('~합니다', '~다')를 사용하세요.
-      `;
-
-      const googlePersona = `
-        [포스팅: 구글 블로그(SEO)]
-        검색 엔진 최적화(SEO)를 고려하여 명확한 H1~H3 구조와 핵심 요약을 제공하세요.
-        ${genreContext}
-        객관적이고 신뢰감 있는 문체로 음악적 기법과 가사를 심도 있게 분석하세요.
-      `;
+      const naverPersona = `[네이버 블로그] 화자: ${userPerspective}, 스타일: ${userStyle}. 네이버 검색 노출을 위해 키워드 전략을 세우고 다정한 문체와 이모지를 활용해 풍성하게 작성하세요.`;
+      const tistoryPersona = `[티스토리] 화자: ${userPerspective}, 스타일: ${userStyle}. 깔끔하고 전문적인 레이아웃으로 정보 전달력을 높여 분석적으로 작성하세요.`;
+      const googlePersona = `[구글 블로거] 화자: ${userPerspective}, 스타일: ${userStyle}. 구글 SEO에 최적화된 구조(H1~H3)와 객관적인 글로벌 문체로 작성하세요.`;
 
       const prompt = `
         [SYSTEM ROLE]
@@ -1159,9 +1146,9 @@ export default function App() {
       const propertiesSchema: any = {
         imageTexts: { type: 'OBJECT', additionalProperties: { type: 'STRING' } }
       };
-      
+
       const requiredFields = ['imageTexts'];
-      
+
       const blogSchema = {
         type: 'OBJECT',
         properties: {
@@ -1202,7 +1189,7 @@ export default function App() {
         console.error('Blog JSON Parse Error:', text);
         throw new Error('AI 응답 형식이 올바르지 않습니다.');
       }
-      
+
       let currentImageTexts = { ...(workflow.blogSettings?.imageTexts || {}) };
       if (parsed.imageTexts) {
         currentImageTexts = { ...parsed.imageTexts, ...currentImageTexts };
@@ -1215,35 +1202,35 @@ export default function App() {
         }));
       }
 
-        const processContent = async (rawContent) => {
-          if (!rawContent) return '';
-          let finalContent = rawContent;
-          
-          for (const img of workflow.results.images) {
-            const placeholder = `{{IMAGE:${img.label}}}`;
-            const textToUse = currentImageTexts[img.label] || workflow.results.title || '은혜로운 찬양';
-            
-            const imgTag = `
+      const processContent = async (rawContent) => {
+        if (!rawContent) return '';
+        let finalContent = rawContent;
+
+        for (const img of workflow.results.images) {
+          const placeholder = `{{IMAGE:${img.label}}}`;
+          const textToUse = currentImageTexts[img.label] || workflow.results.title || '은혜로운 찬양';
+
+          const imgTag = `
               <div style="position: relative; width: 100%; max-width: 600px; aspect-ratio: 16/9; margin: 40px auto; border-radius: 18px; overflow: hidden; box-shadow: 0 15px 45px rgba(0,0,0,0.4); background: #000; border: 1px solid rgba(255,255,255,0.15);">
                 <img src="${img.url}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
                 <div style="position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.6)); display: flex; align-items: center; justify-content: center; padding: 25px; text-align: center;">
                   <span style="color: white; font-size: 26px; font-weight: 900; text-shadow: 2px 2px 10px rgba(0,0,0,1); line-height: 1.4; font-family: 'Noto Sans KR', sans-serif;">${textToUse}</span>
                 </div>
               </div>`;
-            
-            if (typeof finalContent === 'string') {
-              if (finalContent.includes(placeholder)) {
-                finalContent = finalContent.split(placeholder).join(imgTag);
-              } else {
-                finalContent += `\n${imgTag}\n`;
-              }
+
+          if (typeof finalContent === 'string') {
+            if (finalContent.includes(placeholder)) {
+              finalContent = finalContent.split(placeholder).join(imgTag);
+            } else {
+              finalContent += `\n${imgTag}\n`;
             }
           }
-          return finalContent;
-        };
+        }
+        return finalContent;
+      };
 
       const resultsToUpdate: any = {};
-      
+
       if (targets.naver && parsed.naver) {
         resultsToUpdate.naverBlogPost = {
           title: parsed.naver.title,
@@ -1252,7 +1239,7 @@ export default function App() {
           tags: parsed.naver.tags
         };
       }
-      
+
       if (targets.tistory && parsed.tistory) {
         resultsToUpdate.tistoryBlogPost = {
           title: parsed.tistory.title,
@@ -1261,7 +1248,7 @@ export default function App() {
           tags: parsed.tistory.tags
         };
       }
-      
+
       if (targets.google && parsed.google) {
         resultsToUpdate.googleBlogPost = {
           title: parsed.google.title,
@@ -1270,7 +1257,7 @@ export default function App() {
           tags: parsed.google.tags
         };
       }
-      
+
       // Fallback for general blogPost reference
       if (targets.naver && parsed.naver) resultsToUpdate.blogPost = resultsToUpdate.naverBlogPost;
       else if (targets.tistory && parsed.tistory) resultsToUpdate.blogPost = resultsToUpdate.tistoryBlogPost;
@@ -1307,7 +1294,7 @@ export default function App() {
           handleFirestoreError(error, OperationType.CREATE, 'blogPosts');
         }
       }
-      
+
       addLog('✅ 블로그 포스팅 생성이 완료되었습니다.');
     } catch (error) {
       console.error('Blog Generation Error:', error);
@@ -1326,7 +1313,7 @@ export default function App() {
       addLog("⚠️ 오류: 주제(Topic) 또는 사용자 입력 내용을 작성해주세요.");
       return;
     }
-    
+
     addLog(`[${workflow.params.target} - ${workflow.params.subGenre}] 가사 및 프롬프트 생성 시작...`);
     if (workflow.params.userInput) {
       addLog(`사용자 입력 내용 감지: "${workflow.params.userInput.substring(0, 50)}..." 내용을 최우선으로 반영합니다.`);
@@ -1343,7 +1330,7 @@ export default function App() {
       const model = aiEngine;
 
       const isCCM = workflow.params.target === 'CCM';
-      
+
       const ccmPersona = `
         You are a profound CCM (Contemporary Christian Music) songwriter and worship leader with 30 years of experience. 
         Your lyrics are deeply rooted in spiritual grace, divine love, and biblical metaphors without being preachy or clichè. 
@@ -1426,11 +1413,11 @@ export default function App() {
       if (!responseText) {
         throw new Error("AI가 유효한 가사를 생성하지 못했습니다.");
       }
-      
+
       // Strip markdown code block if present
       const cleanedText = responseText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
       const result = JSON.parse(cleanedText);
-      
+
       // Always use the first suggested title as the new default
       const suggestedTitles = result.titles || ["제목_없음"];
       const finalTitle = suggestedTitles[0];
@@ -1455,8 +1442,8 @@ export default function App() {
 
       setWorkflow(prev => ({
         ...prev,
-        params: { 
-          ...prev.params, 
+        params: {
+          ...prev.params,
           title: finalTitle,
           koreanTitle: kTitle || prev.params.koreanTitle,
           englishTitle: eTitle || prev.params.englishTitle
@@ -1490,7 +1477,7 @@ export default function App() {
       addLog("⚠️ 오류: 먼저 가사를 생성해주세요.");
       return;
     }
-    
+
     addLog(`[${musicEngine}] 음악 생성 프롬프트만 재생성 중... (가사 유지)`);
     if (workflow.params.userInput) {
       addLog(`사용자 입력 내용 감지: "${workflow.params.userInput.substring(0, 50)}..." 내용을 반영합니다.`);
@@ -1547,10 +1534,10 @@ export default function App() {
       if (!responseText) {
         throw new Error("AI가 유효한 프롬프트를 생성하지 못했습니다.");
       }
-      
+
       const cleanedText = responseText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
       const result = JSON.parse(cleanedText);
-      
+
       addLog(`✅ 프롬프트 재생성 완료`);
 
       setWorkflow(prev => ({
@@ -1581,14 +1568,14 @@ export default function App() {
     addLog("Gemini AI를 통한 가사 및 분위기 분석 기반 이미지 프롬프트 생성 중...");
     addLog(`사용 엔진 - 이미지 프롬프트 생성: ${aiEngine}`);
     resetSubsequentSteps('image');
-    setWorkflow(prev => ({ 
-      ...prev, 
+    setWorkflow(prev => ({
+      ...prev,
       progress: { ...prev.progress, image: 10 }
     }));
 
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
-      
+
       // 1. Generate optimized prompts for each platform
       const promptGen = `
         당신은 30년차 전문 화가이자 카메라 감독입니다. 곡의 느낌과 분위기를 완벽하게 파악하여 최고의 시각적 작품을 만들어냅니다. 특히 CCM과 대중음악의 미묘한 감성 차이를 누구보다 잘 이해하고 있습니다.
@@ -1659,7 +1646,7 @@ export default function App() {
       if (!responseText) {
         throw new Error("AI가 유효한 프롬프트를 생성하지 못했습니다.");
       }
-      
+
       let prompts;
       try {
         const cleanedText = responseText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
@@ -1692,7 +1679,7 @@ export default function App() {
         if (part?.inlineData?.data) {
           return `data:image/png;base64,${part.inlineData.data}`;
         }
-        
+
         // Check for safety filter
         if (response.candidates?.[0]?.finishReason === 'SAFETY') {
           throw new Error("안전 필터에 의해 이미지 생성이 차단되었습니다. 프롬프트를 수정하거나 다시 시도해주세요.");
@@ -1703,7 +1690,7 @@ export default function App() {
       };
 
       addLog("🎨 AI 고효율 이미지 엔진 가동 중 (최적화 모드)...");
-      
+
       // Don't clear all images if we are just adding/updating
       // But for a full fresh generation, we might want to keep what we have until new ones arrive
       const generatedImages: any[] = [];
@@ -1711,7 +1698,7 @@ export default function App() {
       const generateAndSave = async (prompt: string, aspectRatio: "16:9" | "9:16", index: number, label: string, type: 'horizontal' | 'vertical', typeKey: 'main' | 'tiktok' | 'shorts') => {
         try {
           const base64Url = await generateSingleImage(prompt, aspectRatio, index);
-          
+
           // 1. Update UI immediately with base64 data for instant feedback
           const tempImage = { url: base64Url, type, label, prompt };
           setWorkflow(prev => ({
@@ -1729,12 +1716,12 @@ export default function App() {
           // 2. Upload to Firebase Storage in the background
           addLog(`📤 [${label}] 이미지를 클라우드 저장소에 업로드 중...`);
           const storageUrl = await uploadImageToStorage(base64Url);
-          const finalUrl = storageUrl || base64Url; 
+          const finalUrl = storageUrl || base64Url;
 
           // 3. Update with permanent storage URL
           const newImage = { url: finalUrl, type, label, prompt };
           generatedImages.push(newImage);
-          
+
           setWorkflow(prev => ({
             ...prev,
             results: {
@@ -1748,7 +1735,7 @@ export default function App() {
           return false;
         }
       };
-      
+
       // Generate Main Image
       addLog("메인 이미지 생성 중...");
       await generateAndSave(prompts.mainPrompt, "16:9", 0, '메인', 'horizontal', 'main');
@@ -1771,7 +1758,7 @@ export default function App() {
         }
         setIsShortsGenerating(false);
       }
-      
+
       // After all images are generated, save them to the track history in sunoTracks
       if (generatedImages.length > 0 && workflow.params.title) {
         setSunoTracks(prev => prev.map(t => {
@@ -1791,13 +1778,13 @@ export default function App() {
 
     } catch (error: any) {
       console.error("Image Generation Error:", error);
-      
+
       let errorMessage = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
-      
+
       // Handle Quota Exceeded (429)
-      const isQuotaError = 
-        errorMessage.includes('RESOURCE_EXHAUSTED') || 
-        error.status === 'RESOURCE_EXHAUSTED' || 
+      const isQuotaError =
+        errorMessage.includes('RESOURCE_EXHAUSTED') ||
+        error.status === 'RESOURCE_EXHAUSTED' ||
         (error.error && error.error.status === 'RESOURCE_EXHAUSTED') ||
         (typeof error === 'string' && error.includes('RESOURCE_EXHAUSTED'));
 
@@ -1806,7 +1793,7 @@ export default function App() {
       } else {
         addLog(`❌ 오류: ${errorMessage}`);
       }
-      
+
       setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, image: 0 } }));
     }
   };
@@ -1817,7 +1804,7 @@ export default function App() {
       setIsApiKeyModalOpen(true);
       return;
     }
-    
+
     const targetImage = workflow.results.images[indexToRegenerate];
     if (!targetImage || !targetImage.prompt) {
       addLog("⚠️ 오류: 재생성할 이미지의 프롬프트 정보를 찾을 수 없습니다.");
@@ -1825,11 +1812,11 @@ export default function App() {
     }
 
     addLog(`[${imageEngine}] ${targetImage.label} 이미지 개별 재생성 중...`);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
       const aspectRatio = targetImage.type === 'horizontal' ? "16:9" : "9:16";
-      
+
       const response = await ai.models.generateContent({
         model: imageEngine,
         contents: { parts: [{ text: targetImage.prompt }] },
@@ -1843,7 +1830,7 @@ export default function App() {
       const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
       if (part?.inlineData?.data) {
         const base64Url = `data:image/png;base64,${part.inlineData.data}`;
-        
+
         // 1. Update UI immediately for instant feedback
         setWorkflow(prev => {
           const newImages = [...prev.results.images];
@@ -1883,7 +1870,7 @@ export default function App() {
       setIsApiKeyModalOpen(true);
       return;
     }
-    
+
     if (shortsCount === 0) {
       addLog("⚠️ 오류: 숏츠 개수가 0개로 설정되어 있습니다.");
       return;
@@ -1891,10 +1878,10 @@ export default function App() {
 
     addLog(`[${imageEngine}] 숏츠 이미지 전체 재생성 중... (설정된 개수: ${shortsCount}개)`);
     setIsShortsGenerating(true);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
-      
+
       const promptGen = `
         당신은 전문적인 비주얼 디렉터입니다. 아래의 가사와 곡 정보를 분석하여, 
         곡의 감정과 서사를 가장 잘 표현할 수 있는 이미지 생성 프롬프트를 작성하세요.
@@ -1949,7 +1936,7 @@ export default function App() {
 
       const responseText = promptResponse.text;
       if (!responseText) throw new Error("AI가 유효한 프롬프트를 생성하지 못했습니다.");
-      
+
       const cleanedText = responseText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
       const prompts = JSON.parse(cleanedText);
 
@@ -1987,7 +1974,7 @@ export default function App() {
           }));
         }
       }
-      
+
       addLog(`✅ 숏츠 이미지 재생성 완료`);
       setIsShortsGenerating(false);
 
@@ -2014,7 +2001,7 @@ export default function App() {
     if (!file) return;
 
     addLog(`[${type}] 이미지 업로드 중: ${file.name}`);
-    
+
     const reader = new FileReader();
     reader.onload = () => {
       const url = reader.result as string;
@@ -2035,7 +2022,7 @@ export default function App() {
           },
           results: {
             ...prev.results,
-            images: index > -1 
+            images: index > -1
               ? existingImages.map((img, i) => i === index ? newImg : img)
               : [...existingImages, newImg]
           }
@@ -2056,12 +2043,12 @@ export default function App() {
     if (!img || !img.prompt) return;
 
     addLog(`[${img.label}] 이미지 개별 재생성 중...`);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
 
       const aspectRatio = img.type === 'horizontal' ? "16:9" : "9:16";
-      
+
       let newUrl = "";
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-image-preview',
@@ -2094,11 +2081,11 @@ export default function App() {
 
     } catch (error: any) {
       console.error("Regenerate Error:", error);
-      
+
       const errorMessage = error instanceof Error ? error.message : "알 수 없는 오류";
-      const isQuotaError = 
-        errorMessage.includes('RESOURCE_EXHAUSTED') || 
-        error.status === 'RESOURCE_EXHAUSTED' || 
+      const isQuotaError =
+        errorMessage.includes('RESOURCE_EXHAUSTED') ||
+        error.status === 'RESOURCE_EXHAUSTED' ||
         (error.error && error.error.status === 'RESOURCE_EXHAUSTED') ||
         (typeof error === 'string' && error.includes('RESOURCE_EXHAUSTED'));
 
@@ -2147,20 +2134,20 @@ export default function App() {
 
       let x = canvas.width / 2 + (xOffset * (canvas.width / 100));
       let y = canvas.height / 2 + (yOffset * (canvas.height / 100));
-      
+
       if (settings.titlePosition === 'top') y = canvas.height * 0.2 + (yOffset * (canvas.height / 100));
       if (settings.titlePosition === 'bottom') y = canvas.height * 0.8 + (yOffset * (canvas.height / 100));
-      
+
       // Effects setup
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       const applyEffect = (text: string, tx: number, ty: number, size: number, color: string) => {
         ctx.save();
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
-        
+
         if (settings.titleEffect === 'shadow') {
           ctx.shadowColor = 'rgba(0,0,0,0.8)';
           ctx.shadowBlur = 15;
@@ -2207,7 +2194,7 @@ export default function App() {
           ctx.lineWidth = size * 0.1;
           ctx.strokeText(text, tx, ty);
         }
-        
+
         ctx.fillStyle = color;
         ctx.fillText(text, tx, ty);
         ctx.restore();
@@ -2229,11 +2216,11 @@ export default function App() {
       const baseName = uploadedAudioName ? uploadedAudioName.replace(/\.[^/.]+$/, "") : (workflow.params.title || "제목 없음");
       const fileName = `${baseName} ${img.label}.png`;
       const dataUrl = canvas.toDataURL('image/png');
-      
+
       const link = document.createElement('a');
       link.href = dataUrl;
       link.download = fileName;
-      
+
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (isMobile) {
         // Mobile fallback: open in new tab if direct click fails or is blocked
@@ -2243,7 +2230,7 @@ export default function App() {
         link.click();
         document.body.removeChild(link);
       }
-      
+
       addLog(`✅ [${img.label}] 다운로드 완료`);
     } catch (e) {
       console.error("Download Error:", e);
@@ -2255,7 +2242,7 @@ export default function App() {
     addLog("가사 레이어 합성 및 페이드 애니메이션 최적화 시작...");
 
     addLog("실제 렌더링 서버 연동 대기중... (TODO: 실제 백엔드 렌더링 파이프라인 호출)");
-    
+
     // TODO: 실제 서버에 렌더링 작업을 요청하고 결과를 받아와야 합니다.
     // (더미 타이머 및 하드코딩된 결과물 삭제 완료)
   };
@@ -2287,7 +2274,7 @@ export default function App() {
         ctx.shadowBlur = 15;
         ctx.shadowOffsetX = 4;
         ctx.shadowOffsetY = 4;
-        
+
         const safeText = typeof text === 'string' ? text : String(text || '');
         const lines = safeText.split('\n');
         const lineHeight = 80;
@@ -2338,12 +2325,12 @@ export default function App() {
       ctx.font = 'bold 60px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       // Handle multiline text
       const lines = text.split('\n');
       const lineHeight = 80;
       const startY = (canvas.height / 2) - ((lines.length - 1) * lineHeight) / 2;
-      
+
       lines.forEach((line, i) => {
         // Add text shadow for better readability
         ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
@@ -2358,11 +2345,11 @@ export default function App() {
       const blogIndex = label.includes('main') ? '1' : label.includes('tiktok') ? '2' : label.split('_')[1] || '3';
       const fileName = `블로그 ${blogIndex}.png`;
       const dataUrl = canvas.toDataURL('image/png');
-      
+
       const link = document.createElement('a');
       link.href = dataUrl;
       link.download = fileName;
-      
+
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (isMobile) {
         window.open(dataUrl, '_blank');
@@ -2371,7 +2358,7 @@ export default function App() {
         link.click();
         document.body.removeChild(link);
       }
-      
+
       addLog(`블로그용 이미지(${label || '원본'})가 다운로드되었습니다.`);
     };
     img.src = imgUrl;
@@ -2417,7 +2404,7 @@ export default function App() {
       const steps: Step[] = ['lyrics', 'image', 'video', 'publish', 'blog'];
       const currentIndex = steps.indexOf(activeTab as Step);
       const nextIndex = steps.indexOf(tab as Step);
-      
+
       if (nextIndex > currentIndex) {
         setWorkflow(prev => ({
           ...prev,
@@ -2428,7 +2415,7 @@ export default function App() {
         }));
       }
     }
-    
+
     setActiveTab(tab);
     setIsMobileMenuOpen(false);
   };
@@ -2441,7 +2428,7 @@ export default function App() {
     <div className="flex h-screen bg-background overflow-hidden flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-background z-30">
-        <div 
+        <div
           className="flex items-center gap-2 cursor-pointer group"
           onClick={() => setView('landing')}
         >
@@ -2460,7 +2447,7 @@ export default function App() {
 
       {/* Mobile Menu Backdrop */}
       {isMobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-10 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
@@ -2471,7 +2458,7 @@ export default function App() {
         "fixed md:static inset-y-0 left-0 z-20 w-64 border-r border-white/5 p-6 flex flex-col gap-8 bg-background transition-transform duration-300 ease-in-out md:translate-x-0",
         isMobileMenuOpen ? "translate-x-0 top-[73px] h-[calc(100vh-73px)]" : "-translate-x-full h-full"
       )}>
-        <div 
+        <div
           className="hidden md:flex items-center gap-2 px-2 cursor-pointer group"
           onClick={() => setView('landing')}
         >
@@ -2484,7 +2471,7 @@ export default function App() {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => setIsResetModalOpen(true)}
           className="mx-2 px-3 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl text-[10px] font-black hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
         >
@@ -2523,7 +2510,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button 
+            <button
               onClick={async () => {
                 try {
                   await signInWithGoogle();
@@ -2545,7 +2532,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-0">
         <AnimatePresence mode="wait">
           {activeTab === 'lyrics' && (
-            <LyricsTab 
+            <LyricsTab
               workflow={workflow}
               setWorkflow={setWorkflow}
               generateLyrics={generateLyrics}
@@ -2564,17 +2551,17 @@ export default function App() {
           )}
 
           {activeTab === 'music' && (
-            <motion.div 
-              key="music" 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
+            <motion.div
+              key="music"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               className="max-w-6xl mx-auto"
             >
-              <SunoAudioList 
-                workflow={workflow} 
-                setWorkflow={setWorkflow} 
-                addLog={addLog} 
-                logs={logs} 
+              <SunoAudioList
+                workflow={workflow}
+                setWorkflow={setWorkflow}
+                addLog={addLog}
+                logs={logs}
                 apiKey={apiKey}
                 aiEngine={aiEngine}
                 analyzeAudioComprehensively={analyzeAudioComprehensively}
@@ -2690,7 +2677,7 @@ export default function App() {
           )}
 
           {activeTab === 'arrangement' && (
-            <ArrangementWorkspace 
+            <ArrangementWorkspace
               workflow={workflow}
               setWorkflow={setWorkflow}
               addLog={addLog}
@@ -2712,8 +2699,8 @@ export default function App() {
           )}
 
           {activeTab === 'settings' && (
-            <SettingsPage 
-              onOpenKeySelection={handleOpenKeySelection} 
+            <SettingsPage
+              onOpenKeySelection={handleOpenKeySelection}
               platforms={platforms}
               togglePlatform={togglePlatform}
               aiEngine={aiEngine}
@@ -2745,14 +2732,14 @@ export default function App() {
       {/* Reset Confirmation Modal */}
       <AnimatePresence>
         {isResetModalOpen && (
-          <motion.div 
+          <motion.div
             key="reset-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -2771,15 +2758,15 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={() => setIsResetModalOpen(false)}
                   className="flex-1 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-all"
                 >
                   취소
                 </button>
-                <button 
+                <button
                   onClick={resetApp}
                   className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
                 >
@@ -2794,26 +2781,26 @@ export default function App() {
       {/* API Key Modal */}
       <AnimatePresence>
         {isApiKeyModalOpen && (
-          <motion.div 
+          <motion.div
             key="api-key-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-[#0A0F16] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl relative"
             >
-              <button 
+              <button
                 onClick={() => setIsApiKeyModalOpen(false)}
                 className="absolute top-4 right-4 text-gray-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
-              
+
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary">
                   <Key className="w-5 h-5" />
@@ -2825,8 +2812,8 @@ export default function App() {
               </div>
 
               <div className="space-y-4">
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="AIzaSy..."
@@ -2835,7 +2822,7 @@ export default function App() {
                 <p className="text-[10px] text-gray-500 leading-relaxed px-1">
                   설정에서 사용할 키를 변경할 수 있으며, 할당량이 재설정되면 무료 생성으로 자동 전환됩니다.
                 </p>
-                <button 
+                <button
                   onClick={() => {
                     localStorage.setItem('gemini_api_key', apiKey);
                     setIsApiKeyModalOpen(false);
@@ -2855,14 +2842,14 @@ export default function App() {
       {/* Platform Login Modal */}
       <AnimatePresence>
         {isPlatformLoginModalOpen && pendingPlatform && (
-          <motion.div 
+          <motion.div
             key="platform-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
           >
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -2884,7 +2871,7 @@ export default function App() {
 
               <div className="space-y-4 mb-8">
                 <p className="text-gray-300 leading-relaxed">
-                  {platforms[pendingPlatform] === 'connected' 
+                  {platforms[pendingPlatform] === 'connected'
                     ? `${pendingPlatform === 'youtube' ? '유튜브' : pendingPlatform === 'tiktok' ? '틱톡' : '인스타그램'} 계정 연동을 해제하시겠습니까?`
                     : `${pendingPlatform === 'youtube' ? '유튜브' : pendingPlatform === 'tiktok' ? '틱톡' : '인스타그램'} 계정으로 로그인하여 EchoesUntoHim에 영상 업로드 및 게시 권한을 허용하시겠습니까?`}
                 </p>
@@ -2895,13 +2882,13 @@ export default function App() {
               </div>
 
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={() => { setIsPlatformLoginModalOpen(false); setPendingPlatform(null); }}
                   className="flex-1 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-white/5 transition-all"
                 >
                   취소
                 </button>
-                <button 
+                <button
                   onClick={handlePlatformLoginConfirm}
                   className="flex-1 px-4 py-3 rounded-xl font-bold bg-primary text-background hover:neon-glow-primary transition-all"
                 >
