@@ -2446,7 +2446,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.2</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.5</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2476,7 +2476,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.2</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.5</span>
           </div>
         </div>
 
