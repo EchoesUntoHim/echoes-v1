@@ -47,6 +47,7 @@ const GUIDES = {
   }
 };
 
+
 interface PublishTabProps {
   workflow: any;
   setWorkflow: React.Dispatch<React.SetStateAction<any>>;
@@ -96,7 +97,7 @@ export const PublishTab = ({
             <span className="text-xs font-bold text-white">{label}</span>
           </div>
           <div className="flex gap-1">
-            {(isYoutube ? ['public', 'private', 'unlisted'] : ['PUBLIC', 'PRIVATE', 'FRIENDS']).map((v) => (
+            {(isYoutube ? ['public', 'private', 'scheduled'] : ['PUBLIC', 'PRIVATE', 'FRIENDS']).map((v) => (
               <button 
                 key={v}
                 onClick={() => setWorkflow((prev: any) => ({ 
@@ -110,13 +111,13 @@ export const PublishTab = ({
                     : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
                 )}
               >
-                {v === 'public' || v === 'PUBLIC' ? '공개' : v === 'private' || v === 'PRIVATE' ? '비공개' : '기타'}
+                {v === 'public' || v === 'PUBLIC' ? '공개' : v === 'private' || v === 'PRIVATE' ? '비공개' : '예약'}
               </button>
             ))}
           </div>
         </div>
 
-        {(workflow.publishSettings?.[visibilityKey] === 'private' || workflow.publishSettings?.[visibilityKey] === 'PRIVATE') && (
+        {(workflow.publishSettings?.[visibilityKey] === 'private' || workflow.publishSettings?.[visibilityKey] === 'PRIVATE' || workflow.publishSettings?.[visibilityKey] === 'scheduled') && (
           <div className="flex items-center gap-2 p-2 bg-black/60 rounded-lg border border-white/10">
             <span className="text-[9px] text-gray-500 shrink-0 font-bold uppercase">Schedule:</span>
             <input 
@@ -129,6 +130,7 @@ export const PublishTab = ({
             />
           </div>
         )}
+
 
         <button 
           onClick={() => alert(`${label} 업로드 API 연동 필요`)}

@@ -1,5 +1,5 @@
 // --- IndexedDB for Large File Persistence ---
-const DB_NAME = 'VibeFlowDB';
+const DB_NAME = 'EchoesUntoHimDB';
 const STORE_NAME = 'mediaStore';
 
 export const initDB = (): Promise<IDBDatabase> => {

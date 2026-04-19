@@ -119,10 +119,10 @@ import { uploadImageToStorage } from './firebase';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<'landing' | 'app'>(() => (localStorage.getItem('vibeflow_view') as any) || 'landing');
-  const [activeTab, setActiveTab] = useState<Step>(() => (localStorage.getItem('vibeflow_activeTab') as any) || 'lyrics');
+  const [view, setView] = useState<'landing' | 'app'>(() => (localStorage.getItem('echoesuntohim_view') as any) || 'landing');
+  const [activeTab, setActiveTab] = useState<Step>(() => (localStorage.getItem('echoesuntohim_activeTab') as any) || 'lyrics');
   const [logs, setLogs] = useState<string[]>(() => {
-    const saved = localStorage.getItem('vibeflow_logs');
+    const saved = localStorage.getItem('echoesuntohim_logs');
     try {
       const parsed = saved ? JSON.parse(saved) : null;
       return Array.isArray(parsed) ? parsed : [];
@@ -130,19 +130,19 @@ export default function App() {
       return [];
     }
   });
-  const [shortsCount, setShortsCount] = useState(() => parseInt(localStorage.getItem('vibeflow_shortsCount') || '3'));
+  const [shortsCount, setShortsCount] = useState(() => parseInt(localStorage.getItem('echoesuntohim_shortsCount') || '3'));
   const mainVideoRef = useRef<any>(null);
   const tiktokVideoRef = useRef<any>(null);
   const shortsVideoRefs = useRef<any[]>([]);
   const [editingImageType, setEditingImageType] = useState<ImageType>('main');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedAudio, setUploadedAudio] = useState<string | null>(null);
-  const [uploadedAudioName, setUploadedAudioName] = useState<string | null>(() => localStorage.getItem('vibeflow_audioName'));
+  const [uploadedAudioName, setUploadedAudioName] = useState<string | null>(() => localStorage.getItem('echoesuntohim_audioName'));
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const [videoLyrics, setVideoLyrics] = useState<string>(() => localStorage.getItem('vibeflow_videoLyrics') || "");
-  const [englishVideoLyrics, setEnglishVideoLyrics] = useState<string>(() => localStorage.getItem('vibeflow_englishVideoLyrics') || "");
+  const [videoLyrics, setVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_videoLyrics') || "");
+  const [englishVideoLyrics, setEnglishVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_englishVideoLyrics') || "");
   const [shortsHighlights, setShortsHighlights] = useState<{start: number, duration: number}[]>(() => {
-    const saved = localStorage.getItem('vibeflow_shortsHighlights');
+    const saved = localStorage.getItem('echoesuntohim_shortsHighlights');
     try {
       const parsed = saved ? JSON.parse(saved) : null;
       return Array.isArray(parsed) ? parsed : [];
@@ -175,7 +175,7 @@ export default function App() {
   const [videoEngine, setVideoEngine] = useState(() => {
     const saved = localStorage.getItem('video_engine');
     const isValid = VIDEO_ENGINES.some(eng => eng.value === saved);
-    return isValid ? saved! : 'vibeflow-v2.1-free';
+    return isValid ? saved! : 'echoesuntohim-v2.1-free';
   });
   const [videoQuality, setVideoQuality] = useState(() => localStorage.getItem('video_quality') || '1080p');
   const [voiceReference, setVoiceReference] = useState<string | null>(null);
@@ -183,7 +183,7 @@ export default function App() {
   const [audioFadeIn, setAudioFadeIn] = useState(() => parseInt(localStorage.getItem('audio_fade_in') || '0'));
   const [audioFadeOut, setAudioFadeOut] = useState(() => parseInt(localStorage.getItem('audio_fade_out') || '0'));
   const [platforms, setPlatforms] = useState(() => {
-    const saved = localStorage.getItem('vibeflow_platforms');
+    const saved = localStorage.getItem('echoesuntohim_platforms');
     try {
       const parsed = saved ? JSON.parse(saved) : null;
       return parsed && typeof parsed === 'object' ? parsed : {
@@ -336,7 +336,7 @@ export default function App() {
   }, [sunoTracks, user, isTracksLoaded]);
 
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
-    const saved = localStorage.getItem('vibeflow_workflow');
+    const saved = localStorage.getItem('echoesuntohim_workflow');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -448,19 +448,19 @@ export default function App() {
     }
   }, [workflow.results.videos]);
 
-  useEffect(() => { localStorage.setItem('vibeflow_view', view); }, [view]);
-  useEffect(() => { localStorage.setItem('vibeflow_activeTab', activeTab); }, [activeTab]);
-  useEffect(() => { localStorage.setItem('vibeflow_logs', JSON.stringify(logs)); }, [logs]);
-  useEffect(() => { localStorage.setItem('vibeflow_shortsCount', shortsCount.toString()); }, [shortsCount]);
-  useEffect(() => { localStorage.setItem('vibeflow_audioName', uploadedAudioName || ''); }, [uploadedAudioName]);
-  useEffect(() => { localStorage.setItem('vibeflow_videoLyrics', videoLyrics); }, [videoLyrics]);
-  useEffect(() => { localStorage.setItem('vibeflow_englishVideoLyrics', englishVideoLyrics); }, [englishVideoLyrics]);
-  useEffect(() => { localStorage.setItem('vibeflow_shortsHighlights', JSON.stringify(shortsHighlights)); }, [shortsHighlights]);
-  useEffect(() => { localStorage.setItem('vibeflow_platforms', JSON.stringify(platforms)); }, [platforms]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_view', view); }, [view]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_activeTab', activeTab); }, [activeTab]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_logs', JSON.stringify(logs)); }, [logs]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_shortsCount', shortsCount.toString()); }, [shortsCount]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_audioName', uploadedAudioName || ''); }, [uploadedAudioName]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_videoLyrics', videoLyrics); }, [videoLyrics]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_englishVideoLyrics', englishVideoLyrics); }, [englishVideoLyrics]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_shortsHighlights', JSON.stringify(shortsHighlights)); }, [shortsHighlights]);
+  useEffect(() => { localStorage.setItem('echoesuntohim_platforms', JSON.stringify(platforms)); }, [platforms]);
   
   useEffect(() => {
     try {
-      localStorage.setItem('vibeflow_workflow', JSON.stringify(workflow));
+      localStorage.setItem('echoesuntohim_workflow', JSON.stringify(workflow));
     } catch (e) {
       // If localStorage is full, try to save without images as a fallback
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -477,7 +477,7 @@ export default function App() {
               } : undefined
             } 
           };
-          localStorage.setItem('vibeflow_workflow', JSON.stringify(strippedWorkflow));
+          localStorage.setItem('echoesuntohim_workflow', JSON.stringify(strippedWorkflow));
         } catch (fallbackError) {
           console.error("Fallback save also failed", fallbackError);
         }
@@ -487,7 +487,7 @@ export default function App() {
 
   // Override some defaults for specific platforms if needed (only on first mount if not loaded)
   useEffect(() => {
-    const saved = localStorage.getItem('vibeflow_workflow');
+    const saved = localStorage.getItem('echoesuntohim_workflow');
     if (!saved) {
       setWorkflow(prev => ({
         ...prev,
@@ -2435,7 +2435,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.2.10</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.0</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2465,7 +2465,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.2.10</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.0</span>
           </div>
         </div>
 
@@ -2484,12 +2484,15 @@ export default function App() {
           <SidebarItem icon={Video} label="영상 렌더링" active={activeTab === 'video'} onClick={() => handleTabChange('video')} />
           <SidebarItem icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
           <SidebarItem icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
-          <SidebarItem 
-            icon={Layers} 
-            label="AI 편곡" 
-            active={activeTab === 'arrangement'} 
-            onClick={() => handleTabChange('arrangement')} 
-          />
+          {/* 
+2487:           <SidebarItem 
+2488:             icon={Layers} 
+2489:             label="AI 편곡" 
+2490:             active={activeTab === 'arrangement'} 
+2491:             onClick={() => handleTabChange('arrangement')} 
+2492:           />
+          */}
+
           <div className="mt-4 pt-4 border-t border-white/5">
             <SidebarItem icon={Key} label="API 키 설정" active={false} onClick={() => { setIsApiKeyModalOpen(true); setIsMobileMenuOpen(false); }} />
           </div>
@@ -2868,12 +2871,11 @@ export default function App() {
                 <p className="text-gray-300 leading-relaxed">
                   {platforms[pendingPlatform] === 'connected' 
                     ? `${pendingPlatform === 'youtube' ? '유튜브' : pendingPlatform === 'tiktok' ? '틱톡' : '인스타그램'} 계정 연동을 해제하시겠습니까?`
-                    : `${pendingPlatform === 'youtube' ? '유튜브' : pendingPlatform === 'tiktok' ? '틱톡' : '인스타그램'} 계정으로 로그인하여 Vibeflow에 영상 업로드 및 게시 권한을 허용하시겠습니까?`}
+                    : `${pendingPlatform === 'youtube' ? '유튜브' : pendingPlatform === 'tiktok' ? '틱톡' : '인스타그램'} 계정으로 로그인하여 EchoesUntoHim에 영상 업로드 및 게시 권한을 허용하시겠습니까?`}
                 </p>
                 {platforms[pendingPlatform] === 'disconnected' && (
                   <div className="p-3 bg-white/5 rounded-lg border border-white/5 text-xs text-gray-400">
-                    * 연동 시 Vibeflow에서 제작한 영상을 해당 플랫폼에 직접 업로드할 수 있는 권한을 요청합니다.
-                  </div>
+                    * 연동 시 EchoesUntoHim에서 제작한 영상을 해당 플랫폼에 직접 업로드할 수 있는 권한을 요청합니다.                  </div>
                 )}
               </div>
 

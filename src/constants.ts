@@ -39,7 +39,7 @@ export const MUSIC_ENGINES = [
 ];
 
 export const VIDEO_ENGINES = [
-  { value: 'vibeflow-v2.1-free', label: '로컬 렌더링 (Echoes Unto Him)', type: 'free' },
+  { value: 'echoesuntohim-v2.1-free', label: '로컬 렌더링 (Echoes Unto Him)', type: 'free' },
   { value: 'ffmpeg-cloud', label: 'FFmpeg Cloud (서버 렌더링)', type: 'free' }
 ];
 
