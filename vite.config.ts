@@ -40,6 +40,21 @@ export default defineConfig(({mode}) => {
             });
           }
         },
+        '/suno-cdn1': {
+          target: 'https://cdn1.suno.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/suno-cdn1/, ''),
+        },
+        '/suno-cdn2': {
+          target: 'https://cdn2.suno.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/suno-cdn2/, ''),
+        },
+        '/suno-cdn3': {
+          target: 'https://cdn3.suno.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/suno-cdn3/, ''),
+        },
         '/suno-cdn': {
           target: 'https://cdn1.suno.ai',
           changeOrigin: true,
