@@ -1,5 +1,6 @@
 {
   "projectId": "echoes-b87ee",
+  "firestoreDatabaseId": "echoes",
   "appId": "1:308521651727:web:cff57f689e590d542edd7a",
   "apiKey": "AIzaSyBwu7Hqh-XQPjEOLTjGYJ3hFuo6X0lLxwI",
   "authDomain": "echoes-b87ee.firebaseapp.com",

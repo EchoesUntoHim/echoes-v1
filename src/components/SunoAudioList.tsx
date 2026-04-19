@@ -60,12 +60,16 @@ export const SunoAudioList = ({
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const hasLoadedRef = useRef(false);
 
     // Auto-load tracks from localStorage or Cloud on mount/user change
     useEffect(() => {
         const loadTracks = async () => {
             // Priority 1: Cloud Sync (if logged in)
-            if (user) {
+            if (user && !hasLoadedRef.current) {
+                hasLoadedRef.current = true;
                 try {
                     addLog("☁️ 클라우드에서 곡 목록을 동기화하는 중...");
                     const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
@@ -101,23 +105,35 @@ export const SunoAudioList = ({
         loadTracks();
     }, [user]);
 
-    // Save to Local/Cloud whenever tracks change
-    const syncTracks = async (newTracks: SunoTrack[]) => {
-        // Always save to localStorage
-        localStorage.setItem('suno_json_data', JSON.stringify(newTracks));
-        
-        // Save to Cloud if logged in
-        if (user) {
-            try {
-                const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
-                await setDoc(userRef, { 
-                    tracks: newTracks,
-                    updatedAt: serverTimestamp()
-                }, { merge: true });
-            } catch (error) {
-                console.error("Cloud sync error:", error);
-            }
+    // Sync to Cloud whenever tracks change
+    useEffect(() => {
+        if (user && tracks.length > 0) {
+            const syncToCloud = async () => {
+                try {
+                    const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
+                    await setDoc(userRef, { 
+                        tracks,
+                        updatedAt: serverTimestamp()
+                    }, { merge: true });
+                } catch (error) {
+                    console.error("Cloud sync error:", error);
+                }
+            };
+            
+            // Debounce sync to avoid too many writes
+            const timer = setTimeout(syncToCloud, 2000);
+            return () => clearTimeout(timer);
         }
+        
+        // Always save to localStorage immediately
+        if (tracks.length > 0) {
+            localStorage.setItem('suno_json_data', JSON.stringify(tracks));
+        }
+    }, [tracks, user]);
+
+    const syncTracks = async (newTracks: SunoTrack[]) => {
+        // This function is now legacy, useEffect handles it.
+        // But we keep it for now or remove it if not used.
     };
 
     // Player event listeners
@@ -184,17 +200,48 @@ export const SunoAudioList = ({
         }
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation(); // Prevent row click
-        const newTracks = tracks.filter(t => t.id !== id);
-        setTracks(newTracks);
-        await syncTracks(newTracks);
-        addLog(`🗑️ 곡을 리스트에서 삭제했습니다. (남은 곡: ${newTracks.length}개)`);
-        
-        if (selectedTrackId === id) setSelectedTrackId(null);
-        if (playingTrackId === id) {
-            audioElement?.pause();
-            setPlayingTrackId(null);
+    const handleDelete = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (confirm('이 곡을 목록에서 삭제하시겠습니까?')) {
+            setTracks(prev => prev.filter(t => t.id !== id));
+            addLog("🗑️ 곡이 목록에서 삭제되었습니다.");
+            if (selectedTrackId === id) setSelectedTrackId(null);
+        }
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedIds.size === 0) return;
+        if (confirm(`선택한 ${selectedIds.size}곡을 목록에서 삭제하시겠습니까?`)) {
+            setTracks(prev => prev.filter(t => !selectedIds.has(t.id)));
+            setSelectedIds(new Set());
+            addLog(`🗑️ 선택한 ${selectedIds.size}곡이 삭제되었습니다.`);
+        }
+    };
+
+    const handleClearAll = () => {
+        if (tracks.length === 0) return;
+        if (confirm('정말로 모든 곡 목록을 삭제하시겠습니까? (수노 사이트의 원본은 유지됩니다)')) {
+            setTracks([]);
+            setSelectedIds(new Set());
+            addLog("🗑️ 전체 곡 목록이 초기화되었습니다.");
+        }
+    };
+
+    const toggleSelect = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === tracks.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(tracks.map(t => t.id)));
         }
     };
 
@@ -288,46 +335,38 @@ export const SunoAudioList = ({
 
             const foundArray = findArray(data);
             if (foundArray) data = foundArray;
-
             if (Array.isArray(data)) {
                 const validTracks = data.filter(t => t.audio_url);
+                setJsonInput('');
                 
                 if (replaceExisting) {
                     setTracks(validTracks);
-                    await syncTracks(validTracks);
                     addLog(`🔄 리스트 전체 동기화 완료! (${validTracks.length}곡으로 교체되었습니다.)`);
                 } else {
-                    const currentTracks = [...tracks];
-                    let addedCount = 0;
-                    let updatedCount = 0;
+                    setTracks(prev => {
+                        const updatedTracks = [...prev];
+                        let added = 0;
+                        let updated = 0;
 
-                    validTracks.forEach(track => {
-                        const existingIndex = currentTracks.findIndex(existing => existing.id === track.id);
-                        if (existingIndex !== -1) {
-                            // Update existing track in case title or other metadata changed
-                            currentTracks[existingIndex] = { ...currentTracks[existingIndex], ...track };
-                            updatedCount++;
-                        } else {
-                            // Add new track
-                            currentTracks.push(track);
-                            addedCount++;
-                        }
+                        validTracks.forEach(track => {
+                            const existingIndex = updatedTracks.findIndex(t => t.id === track.id);
+                            if (existingIndex !== -1) {
+                                updatedTracks[existingIndex] = { ...updatedTracks[existingIndex], ...track };
+                                updated++;
+                            } else {
+                                updatedTracks.push(track);
+                                added++;
+                            }
+                        });
+                        
+                        addLog(`✅ Suno 데이터 추가 완료! (신규 ${added}곡 추가, 기존 ${updated}곡 업데이트)`);
+                        return updatedTracks;
                     });
-                    
-                    setTracks(currentTracks);
-                    await syncTracks(currentTracks);
-                    
-                    let logMsg = `✅ Suno 데이터 동기화 완료!`;
-                    if (addedCount > 0) logMsg += ` (신규 ${addedCount}곡 추가)`;
-                    if (updatedCount > 0) logMsg += ` (기존 ${updatedCount}곡 정보 업데이트)`;
-                    addLog(logMsg);
                 }
                 
                 if (validTracks.length > 0 && !selectedTrackId) {
                     setSelectedTrackId(validTracks[0].id);
                 }
-                
-                setJsonInput('');
             } else {
                 throw new Error("Suno API 응답 형식이 올바르지 않습니다. (배열 형태가 아님)");
             }
@@ -500,7 +539,32 @@ export const SunoAudioList = ({
                 {/* Left: List View */}
                 <GlassCard className="flex-[3] p-4 flex flex-col max-h-[700px]">
                     <div className="flex justify-between items-center mb-4 px-2">
-                        <h3 className="font-bold text-lg">내 곡 목록 <span className="text-gray-500 text-sm font-normal ml-2">{tracks.length}곡</span></h3>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                type="checkbox" 
+                                checked={tracks.length > 0 && selectedIds.size === tracks.length}
+                                onChange={toggleSelectAll}
+                                className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary"
+                            />
+                            <h3 className="font-bold text-lg">내 곡 목록 <span className="text-gray-500 text-sm font-normal ml-2">{tracks.length}곡</span></h3>
+                        </div>
+                        <div className="flex gap-2">
+                            {selectedIds.size > 0 && (
+                                <button 
+                                    onClick={handleDeleteSelected}
+                                    className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 transition-all flex items-center gap-1"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    선택 삭제 ({selectedIds.size})
+                                </button>
+                            )}
+                            <button 
+                                onClick={handleClearAll}
+                                className="text-xs bg-white/5 hover:bg-white/10 text-gray-400 px-3 py-1.5 rounded-lg border border-white/10 transition-all"
+                            >
+                                전체 삭제
+                            </button>
+                        </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-1">
@@ -514,6 +578,15 @@ export const SunoAudioList = ({
                                     onClick={() => setSelectedTrackId(track.id)}
                                     className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
                                 >
+                                    {/* Checkbox */}
+                                    <input 
+                                        type="checkbox"
+                                        checked={selectedIds.has(track.id)}
+                                        onClick={(e) => toggleSelect(e, track.id)}
+                                        onChange={() => {}} // Controlled by onClick for better event handling
+                                        className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
+                                    />
+
                                     {/* Thumbnail */}
                                     <div 
                                         className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"

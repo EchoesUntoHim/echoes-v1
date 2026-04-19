@@ -67,9 +67,13 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isVerified() && isValidUser(incoming()) && incoming().role == 'user';
       allow update: if (isOwner(userId) || isAdmin()) && (
-        // Only allow updating non-protected fields or Admin override
         isAdmin() || (incoming().role == existing().role && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time)
       );
+
+      // Allow access to sub-collections like settings/sunoTracks
+      match /{allPaths=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
     match /tracks/{trackId} {
