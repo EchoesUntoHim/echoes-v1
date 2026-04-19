@@ -375,7 +375,9 @@ export const VideoTab = ({
                       ref={el => { shortsVideoRefs.current[idx] = el; }}
                       imageSrc={workflow.results.images.find((img: any) => img.label === `숏츠 ${idx + 1}`)?.url} 
                       audioSrc={uploadedAudio} 
-                      lyrics="" 
+                      lyrics={videoLyrics} 
+                      englishLyrics={englishVideoLyrics}
+                      timedLyrics={timedLyrics}
                       type="shorts" 
                       label={`Shorts_${idx + 1}`}
                       startTime={highlight.start}
