@@ -1685,14 +1685,8 @@ export default function App() {
         try {
           const base64Url = await generateSingleImage(prompt, aspectRatio, index);
           
-          // Upload to Firebase Storage for permanent storage
-          addLog(`📤 [${label}] 이미지를 클라우드 저장소에 업로드 중...`);
-          const storageUrl = await uploadImageToStorage(base64Url);
-          const finalUrl = storageUrl || base64Url; // Fallback to base64 if upload fails
-
-          const newImage = { url: finalUrl, type, label, prompt };
-          generatedImages.push(newImage);
-          
+          // 1. Update UI immediately with base64 data for instant feedback
+          const tempImage = { url: base64Url, type, label, prompt };
           setWorkflow(prev => ({
             ...prev,
             imageSettings: {
@@ -1701,7 +1695,24 @@ export default function App() {
             },
             results: {
               ...prev.results,
-              images: [...prev.results.images.filter(img => img.label !== label), newImage]
+              images: [...prev.results.images.filter(img => img.label !== label), tempImage]
+            }
+          }));
+
+          // 2. Upload to Firebase Storage in the background
+          addLog(`📤 [${label}] 이미지를 클라우드 저장소에 업로드 중...`);
+          const storageUrl = await uploadImageToStorage(base64Url);
+          const finalUrl = storageUrl || base64Url; 
+
+          // 3. Update with permanent storage URL
+          const newImage = { url: finalUrl, type, label, prompt };
+          generatedImages.push(newImage);
+          
+          setWorkflow(prev => ({
+            ...prev,
+            results: {
+              ...prev.results,
+              images: prev.results.images.map(img => img.label === label ? newImage : img)
             }
           }));
           return true;
@@ -1806,19 +1817,27 @@ export default function App() {
       if (part?.inlineData?.data) {
         const base64Url = `data:image/png;base64,${part.inlineData.data}`;
         
+        // 1. Update UI immediately for instant feedback
+        setWorkflow(prev => {
+          const newImages = [...prev.results.images];
+          newImages[indexToRegenerate] = { ...newImages[indexToRegenerate], url: base64Url };
+          return {
+            ...prev,
+            results: { ...prev.results, images: newImages }
+          };
+        });
+
         addLog(`📤 클라우드 저장소에 업로드 중...`);
         const storageUrl = await uploadImageToStorage(base64Url);
         const finalUrl = storageUrl || base64Url;
 
+        // 2. Update with permanent URL
         setWorkflow(prev => {
           const newImages = [...prev.results.images];
           newImages[indexToRegenerate] = { ...newImages[indexToRegenerate], url: finalUrl };
           return {
             ...prev,
-            results: {
-              ...prev.results,
-              images: newImages
-            }
+            results: { ...prev.results, images: newImages }
           };
         });
         addLog(`✅ ${targetImage.label} 이미지 재생성 및 클라우드 저장 완료`);
@@ -2404,7 +2423,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.7</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.8</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2434,7 +2453,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.7</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.8</span>
           </div>
         </div>
 
