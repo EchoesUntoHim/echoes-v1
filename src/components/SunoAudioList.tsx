@@ -65,9 +65,6 @@ export const SunoAudioList = ({
     const [duration, setDuration] = useState(0);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-        // But we keep it for now or remove it if not used.
-    };
-
     // Player event listeners
     useEffect(() => {
         if (audioElement) {
@@ -341,9 +338,7 @@ export const SunoAudioList = ({
             // 2. Call the comprehensive analyzer (Gemini)
             // This will handle lyrics, translation, and timestamps!
             // Pass the original lyrics (prompt) to improve sync accuracy
-            await analyzeAudioComprehensively(file, { 
-                referenceLyrics: track.metadata?.prompt 
-            });
+            await analyzeAudioComprehensively(file);
             
             // 3. Post-process: Set the correct target and cleaned titles
             const [kTitle, eTitle] = cleanTitle.includes('_') ? cleanTitle.split('_') : [cleanTitle, ''];

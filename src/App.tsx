@@ -104,7 +104,8 @@ import {
 } from './utils/db';
 import { auth, signInWithGoogle, logout, db, handleFirestoreError, OperationType, syncUserProfile } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { uploadImageToStorage } from './firebase';
 
 // --- Constants & Data ---
 
