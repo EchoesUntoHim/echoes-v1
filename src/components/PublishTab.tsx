@@ -324,38 +324,39 @@ export const PublishTab = ({
             <Info className="w-3 h-3 text-primary/50" />
           </div>
           
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <div className="p-2 bg-black/40 rounded-lg border border-white/5 space-y-2">
               <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1">
-                <span className="text-[9px] text-primary font-bold">요일별 업로드 전략</span>
-                <span className="text-[8px] text-gray-500">1-2h Before Peak</span>
+                <span className="text-[9px] text-primary font-bold">평일 (월~금)</span>
+                <span className="text-[8px] text-gray-400">Target Time</span>
               </div>
-              
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px]">
-                <div className="flex justify-between border-r border-white/5 pr-2">
-                  <span className="text-gray-400">월~금</span>
-                  <span className="text-white font-bold">17:00</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">토요일</span>
-                  <span className="text-white font-bold">14:00</span>
-                </div>
-                <div className="flex justify-between border-r border-white/5 pr-2">
-                  <span className="text-primary font-bold italic">주일(CCM)</span>
-                  <span className="text-white font-bold">06:00</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">주일(일반)</span>
-                  <span className="text-white font-bold">16:00</span>
-                </div>
+              <div className="flex justify-between items-center text-[9px]">
+                <span className="text-white">롱폼 (Long)</span>
+                <span className="text-primary font-bold">17:00 - 18:00</span>
+              </div>
+              <div className="flex justify-between items-center text-[9px]">
+                <span className="text-white">숏츠 (Shorts)</span>
+                <span className="text-primary font-bold">08:00 / 12:00 / 20:00</span>
               </div>
             </div>
 
-            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-              <p className="text-[8px] text-primary/80 leading-tight">
-                * 위 시간은 한국 유튜브 트래픽 기준입니다.<br/>
-                * 매일 꾸준한 업로드가 알고리즘 노출에 유리합니다.
-              </p>
+            <div className="p-2 bg-black/40 rounded-lg border border-white/5 space-y-2">
+              <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1">
+                <span className="text-[9px] text-primary font-bold">주말 (토~일)</span>
+                <span className="text-[8px] text-gray-400">Target Time</span>
+              </div>
+              <div className="flex justify-between items-center text-[9px]">
+                <span className="text-white">롱폼 (토/일)</span>
+                <span className="text-primary font-bold">14:00 / 16:00</span>
+              </div>
+              <div className="flex justify-between items-center text-[9px]">
+                <span className="text-primary font-bold italic">주일 CCM</span>
+                <span className="text-white font-bold">06:00 - 07:00</span>
+              </div>
+              <div className="flex justify-between items-center text-[9px]">
+                <span className="text-white">숏츠 (공통)</span>
+                <span className="text-primary font-bold">10:00 / 14:00 / 21:00</span>
+              </div>
             </div>
           </div>
         </GlassCard>
