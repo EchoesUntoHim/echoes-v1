@@ -133,31 +133,99 @@ export const PublishTab = ({
       </GlassCard>
 
       <div className="grid grid-cols-1 gap-6">
-        <MetadataCard title="업로드 제목" content={workflow.results.metadata?.title || ''} onCopy={copyToClipboard} />
-        <MetadataCard title="본문 및 해시태그" content={workflow.results.metadata?.description || ''} onCopy={copyToClipboard} isTextArea />
-        <MetadataCard title="추천 태그" content={workflow.results.metadata?.tags || ''} onCopy={copyToClipboard} />
+        <MetadataCard title="업로드 제목" content={workflow.results.youtubeMetadata?.title || ''} onCopy={copyToClipboard} />
+        <MetadataCard title="본문 및 해시태그" content={workflow.results.youtubeMetadata?.description || ''} onCopy={copyToClipboard} isTextArea />
+        <MetadataCard title="추천 태그" content={workflow.results.youtubeMetadata?.tags || ''} onCopy={copyToClipboard} />
       </div>
 
-      <GlassCard className="space-y-4 border-primary/20 bg-primary/5">
-        <h3 className="text-lg font-bold border-b border-white/5 pb-4">영상 플랫폼 자동 업로드</h3>
-        <div className="space-y-4">
-          <PlatformToggle 
-            label="틱톡 (TikTok)" 
-            status={platforms.tiktok} 
-            onToggle={() => togglePlatform('tiktok')}
-            description="틱톡 계정을 연동하여 제작된 영상을 앱에서 바로 업로드할 수 있습니다. (설정 페이지에서 연동 가이드를 확인하세요)"
-          />
-        </div>
-        <div className="flex justify-end pt-2">
-          <button 
-            onClick={() => alert('TODO: 실제 영상 플랫폼 자동 업로드 백엔드 API 연동이 필요합니다.')}
-            className="bg-primary text-background px-6 py-2 rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            틱톡에 업로드 실행
-          </button>
-        </div>
-      </GlassCard>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* YouTube Upload Section */}
+        <GlassCard className="space-y-4 border-red-500/20 bg-red-500/5">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <h3 className="text-lg font-bold flex items-center gap-2"><Music className="w-5 h-5 text-red-500" /> 유튜브 (YouTube)</h3>
+            <PlatformToggle 
+              label="" 
+              status={platforms.youtube} 
+              onToggle={() => togglePlatform('youtube')}
+            />
+          </div>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              {(['public', 'private', 'unlisted'] as const).map((v) => (
+                <button 
+                  key={v}
+                  onClick={() => setWorkflow((prev: any) => ({ ...prev, publishSettings: { ...prev.publishSettings, youtubeVisibility: v } }))}
+                  className={cn(
+                    "flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all",
+                    (workflow.publishSettings?.youtubeVisibility || 'public') === v 
+                      ? "bg-red-500 text-white border-red-500" 
+                      : "bg-white/5 border-white/10 text-gray-400"
+                  )}
+                >
+                  {v === 'public' ? '공개' : v === 'private' ? '비공개' : '링크공개'}
+                </button>
+              ))}
+            </div>
+            {workflow.publishSettings?.youtubeVisibility === 'private' && (
+              <div className="flex items-center gap-2 p-2 bg-black/40 rounded-lg border border-white/5">
+                <span className="text-[10px] text-gray-500 shrink-0">예약:</span>
+                <input 
+                  type="datetime-local" 
+                  className="bg-transparent text-xs text-white outline-none w-full"
+                  onChange={(e) => setWorkflow((prev: any) => ({ ...prev, publishSettings: { ...prev.publishSettings, youtubeSchedule: e.target.value } }))}
+                />
+              </div>
+            )}
+            <button 
+              onClick={() => alert('TODO: 유튜브 API 연동 업로드 기능')}
+              className="w-full bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+            >
+              <Upload className="w-4 h-4" />
+              유튜브에 업로드
+            </button>
+          </div>
+        </GlassCard>
+
+        {/* TikTok Upload Section */}
+        <GlassCard className="space-y-4 border-primary/20 bg-primary/5">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <h3 className="text-lg font-bold flex items-center gap-2"><Zap className="w-5 h-5 text-primary" /> 틱톡 (TikTok)</h3>
+            <PlatformToggle 
+              label="" 
+              status={platforms.tiktok} 
+              onToggle={() => togglePlatform('tiktok')}
+            />
+          </div>
+          <div className="space-y-4">
+             <div className="p-3 bg-black/40 rounded-xl border border-white/5 text-[10px] text-gray-400 leading-relaxed">
+              <span className="text-primary font-bold">틱톡 연동 안내:</span> 틱톡 앱에서 'Vibeflow' 권한을 승인해야 직접 업로드가 가능합니다. 설정 탭에서 연동 상태를 확인하세요.
+            </div>
+            <div className="flex gap-2">
+              {(['PUBLIC', 'PRIVATE', 'FRIENDS'] as const).map((v) => (
+                <button 
+                  key={v}
+                  onClick={() => setWorkflow((prev: any) => ({ ...prev, publishSettings: { ...prev.publishSettings, tiktokVisibility: v } }))}
+                  className={cn(
+                    "flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all",
+                    (workflow.publishSettings?.tiktokVisibility || 'PUBLIC') === v 
+                      ? "bg-primary text-background border-primary" 
+                      : "bg-white/5 border-white/10 text-gray-400"
+                  )}
+                >
+                  {v === 'PUBLIC' ? '공개' : v === 'PRIVATE' ? '나만보기' : '친구공개'}
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={() => alert('TODO: 틱톡 API 연동 업로드 기능')}
+              className="w-full bg-primary text-background py-3 rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+            >
+              <Upload className="w-4 h-4" />
+              틱톡에 업로드
+            </button>
+          </div>
+        </GlassCard>
+      </div>
 
       <GlassCard className="bg-primary/5 border-primary/20 p-8 text-center space-y-4">
         <CheckCircle2 className="w-16 h-16 text-primary mx-auto" />

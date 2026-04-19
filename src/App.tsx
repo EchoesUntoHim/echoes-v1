@@ -2482,7 +2482,7 @@ export default function App() {
           <SidebarItem icon={Music} label="음원 리스트" active={activeTab === 'music'} onClick={() => handleTabChange('music')} />
           <SidebarItem icon={ImageIcon} label="이미지 생성" active={activeTab === 'image'} onClick={() => handleTabChange('image')} />
           <SidebarItem icon={Video} label="영상 렌더링" active={activeTab === 'video'} onClick={() => handleTabChange('video')} />
-          <SidebarItem icon={Send} label="업로드 준비" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
+          <SidebarItem icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
           <SidebarItem icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
           <SidebarItem 
             icon={Layers} 
