@@ -254,7 +254,76 @@ export default function App() {
   };
 
   // Lifted Suno Tracks State for global access (History, etc.)
-  const [sunoTracks, setSunoTracks] = useState<SunoTrack[]>([]);
+  const [sunoTracks, setSunoTracks] = useState<any[]>([]);
+  const [isTracksLoaded, setIsTracksLoaded] = useState(false);
+  const tracksLoadedRef = useRef(false);
+
+  // Initial load of Suno tracks from Cloud or LocalStorage
+  useEffect(() => {
+    if (user && !tracksLoadedRef.current) {
+      tracksLoadedRef.current = true;
+      const loadTracks = async () => {
+        try {
+          addLog("☁️ 클라우드에서 곡 목록을 동기화하는 중...");
+          const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
+          const userDoc = await getDoc(userRef);
+          if (userDoc.exists()) {
+            const cloudTracks = userDoc.data().tracks || [];
+            if (cloudTracks.length > 0) {
+              setSunoTracks(cloudTracks);
+              addLog(`✅ 클라우드 동기화 완료: ${cloudTracks.length}곡을 불러왔습니다.`);
+            } else {
+              addLog("ℹ️ 클라우드에 저장된 곡이 없습니다.");
+            }
+          } else {
+            addLog("ℹ️ 클라우드 저장소를 처음 사용합니다. (새 데이터 생성 예정)");
+          }
+        } catch (error) {
+          console.error("Cloud load error:", error);
+          const saved = localStorage.getItem('suno_json_data');
+          if (saved) {
+            setSunoTracks(JSON.parse(saved));
+            addLog("⚠️ 클라우드 연결 실패. 로컬 데이터를 사용합니다.");
+          }
+        } finally {
+          setIsTracksLoaded(true);
+        }
+      };
+      loadTracks();
+    } else if (!user && !tracksLoadedRef.current) {
+      tracksLoadedRef.current = true;
+      const saved = localStorage.getItem('suno_json_data');
+      if (saved) {
+        setSunoTracks(JSON.parse(saved));
+        addLog(`✅ 로컬 저장소에서 ${JSON.parse(saved).length}곡을 불러왔습니다.`);
+      }
+      setIsTracksLoaded(true);
+    }
+  }, [user]);
+
+  // Sync to Cloud whenever tracks change (after initial load)
+  useEffect(() => {
+    if (user && isTracksLoaded) {
+      const syncToCloud = async () => {
+        try {
+          const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
+          await setDoc(userRef, { 
+            tracks: sunoTracks,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+          addLog("☁️ 클라우드 데이터 백업 완료");
+        } catch (error) {
+          console.error("Cloud sync error:", error);
+          addLog("❌ 클라우드 백업 실패");
+        }
+      };
+      const timer = setTimeout(syncToCloud, 2000);
+      return () => clearTimeout(timer);
+    }
+    if (isTracksLoaded) {
+      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
+    }
+  }, [sunoTracks, user, isTracksLoaded]);
 
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
     const saved = localStorage.getItem('vibeflow_workflow');
