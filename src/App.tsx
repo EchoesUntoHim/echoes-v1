@@ -257,54 +257,57 @@ export default function App() {
   // Lifted Suno Tracks State for global access (History, etc.)
   const [sunoTracks, setSunoTracks] = useState<any[]>([]);
   const [isTracksLoaded, setIsTracksLoaded] = useState(false);
-  const tracksLoadedRef = useRef(false);
+  const loadedUidRef = useRef<string | null>(null);
 
   // Initial load of Suno tracks from Cloud or LocalStorage
   useEffect(() => {
-    if (user && !tracksLoadedRef.current) {
-      tracksLoadedRef.current = true;
-      const loadTracks = async () => {
-        try {
+    const currentUid = user ? user.uid : 'guest';
+    if (loadedUidRef.current === currentUid) return;
+    
+    // Reset loaded state when user context changes to prevent overwriting cloud data
+    setIsTracksLoaded(false);
+
+    const loadTracks = async () => {
+      try {
+        if (user) {
           addLog("☁️ 클라우드에서 곡 목록을 동기화하는 중...");
           const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             const cloudTracks = userDoc.data().tracks || [];
-            if (cloudTracks.length > 0) {
-              setSunoTracks(cloudTracks);
-              addLog(`✅ 클라우드 동기화 완료: ${cloudTracks.length}곡을 불러왔습니다.`);
-            } else {
-              addLog("ℹ️ 클라우드에 저장된 곡이 없습니다.");
-            }
+            setSunoTracks(cloudTracks);
+            addLog(`✅ 클라우드 동기화 완료: ${cloudTracks.length}곡을 불러왔습니다.`);
           } else {
             addLog("ℹ️ 클라우드 저장소를 처음 사용합니다. (새 데이터 생성 예정)");
+            // Start fresh for new user to avoid merging guest tracks by mistake
+            setSunoTracks([]); 
           }
-        } catch (error) {
-          console.error("Cloud load error:", error);
+        } else {
           const saved = localStorage.getItem('suno_json_data');
           if (saved) {
-            setSunoTracks(JSON.parse(saved));
-            addLog("⚠️ 클라우드 연결 실패. 로컬 데이터를 사용합니다.");
+            const parsed = JSON.parse(saved);
+            setSunoTracks(parsed);
+            addLog(`✅ 로컬 저장소에서 ${parsed.length}곡을 불러왔습니다.`);
+          } else {
+            setSunoTracks([]);
           }
-        } finally {
-          setIsTracksLoaded(true);
         }
-      };
-      loadTracks();
-    } else if (!user && !tracksLoadedRef.current) {
-      tracksLoadedRef.current = true;
-      const saved = localStorage.getItem('suno_json_data');
-      if (saved) {
-        setSunoTracks(JSON.parse(saved));
-        addLog(`✅ 로컬 저장소에서 ${JSON.parse(saved).length}곡을 불러왔습니다.`);
+      } catch (error) {
+        console.error("Cloud load error:", error);
+        addLog("⚠️ 데이터를 불러오는 중 오류가 발생했습니다.");
+      } finally {
+        loadedUidRef.current = currentUid;
+        setIsTracksLoaded(true);
       }
-      setIsTracksLoaded(true);
-    }
+    };
+    loadTracks();
   }, [user]);
 
   // Sync to Cloud whenever tracks change (after initial load)
   useEffect(() => {
+    // CRITICAL: Block sync until loading for the current user is complete
     if (!isTracksLoaded) return;
+    
     if (user) {
       const syncToCloud = async () => {
         try {
@@ -319,10 +322,12 @@ export default function App() {
           addLog("❌ 클라우드 백업 실패");
         }
       };
-      const timer = setTimeout(syncToCloud, 1500);
+      // 500ms debounce for better responsiveness while maintaining stability
+      const timer = setTimeout(syncToCloud, 500);
       return () => clearTimeout(timer);
+    } else {
+      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
     }
-    localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
   }, [sunoTracks, user, isTracksLoaded]);
 
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
@@ -2384,7 +2389,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.2</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.3</span>
           </div>
         </div>
 

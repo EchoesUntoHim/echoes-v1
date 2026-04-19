@@ -264,8 +264,17 @@ export const SunoAudioList = ({
 
             const foundArray = findArray(data);
             if (foundArray) data = foundArray;
+            
             if (Array.isArray(data)) {
                 const validTracks = data.filter(t => t.audio_url);
+                
+                if (validTracks.length === 0) {
+                    addLog("⚠️ 입력된 데이터에서 유효한 곡 정보를 찾을 수 없습니다. 형식을 확인해주세요.");
+                    setJsonInput('');
+                    setIsLoading(false);
+                    return;
+                }
+
                 setJsonInput('');
                 
                 if (replaceExisting) {
@@ -494,61 +503,131 @@ export const SunoAudioList = ({
                         </div>
                     </div>
                     
-                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-1">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
                         <AnimatePresence>
-                            {[...(tracks || [])].sort((a, b) => {
-                                const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
-                                const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
-                                return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
-                            }).map(track => track && (
-                                <motion.div 
-                                    key={track.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, height: 0, margin: 0, overflow: 'hidden' }}
-                                    onClick={() => setSelectedTrackId(track.id)}
-                                    className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
-                                >
-                                    {/* Checkbox */}
-                                    <input 
-                                        type="checkbox"
-                                        checked={selectedIds.has(track.id)}
-                                        onClick={(e) => toggleSelect(e, track.id)}
-                                        onChange={() => {}} // Controlled by onClick for better event handling
-                                        className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
-                                    />
-
-                                    {/* Thumbnail */}
-                                    <div 
-                                        className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
-                                        onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
-                                    >
-                                        {track.image_url ? (
-                                            <img src={track.image_url} alt="cover" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 text-gray-600" /></div>
-                                        )}
-                                        <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${playingTrackId === track.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                            {playingTrackId === track.id && isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
+                            {/* CCM Group */}
+                            {(() => {
+                                const ccmTracks = tracks.filter(t => t.title?.includes('[CCM]')).sort((a, b) => {
+                                    const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+                                    const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+                                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+                                });
+                                
+                                if (ccmTracks.length === 0) return null;
+                                
+                                return (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
+                                            <span className="text-[10px] font-black bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 uppercase tracking-widest">CCM</span>
+                                            <div className="h-[1px] flex-1 bg-gradient-to-r from-primary/30 to-transparent" />
                                         </div>
+                                        {ccmTracks.map(track => (
+                                            <motion.div 
+                                                key={track.id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, height: 0, margin: 0, overflow: 'hidden' }}
+                                                onClick={() => setSelectedTrackId(track.id)}
+                                                className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
+                                            >
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(track.id)}
+                                                    onClick={(e) => toggleSelect(e, track.id)}
+                                                    onChange={() => {}}
+                                                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
+                                                />
+                                                <div 
+                                                    className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
+                                                    onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
+                                                >
+                                                    {track.image_url ? (
+                                                        <img src={track.image_url} alt="cover" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 text-gray-600" /></div>
+                                                    )}
+                                                    <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${playingTrackId === track.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                        {playingTrackId === track.id && isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => handleDelete(e, track.id)}
+                                                    className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                                                    title="목록에서 삭제"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </motion.div>
+                                        ))}
                                     </div>
+                                );
+                            })()}
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
-                                        <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
+                            {/* POP Group */}
+                            {(() => {
+                                const popTracks = tracks.filter(t => !t.title?.includes('[CCM]')).sort((a, b) => {
+                                    const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+                                    const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+                                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+                                });
+                                
+                                if (popTracks.length === 0) return null;
+                                
+                                return (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
+                                            <span className="text-[10px] font-black bg-white/10 text-gray-400 px-2 py-0.5 rounded border border-white/10 uppercase tracking-widest">대중음악</span>
+                                            <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+                                        </div>
+                                        {popTracks.map(track => (
+                                            <motion.div 
+                                                key={track.id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, height: 0, margin: 0, overflow: 'hidden' }}
+                                                onClick={() => setSelectedTrackId(track.id)}
+                                                className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
+                                            >
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(track.id)}
+                                                    onClick={(e) => toggleSelect(e, track.id)}
+                                                    onChange={() => {}}
+                                                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
+                                                />
+                                                <div 
+                                                    className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
+                                                    onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
+                                                >
+                                                    {track.image_url ? (
+                                                        <img src={track.image_url} alt="cover" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 text-gray-600" /></div>
+                                                    )}
+                                                    <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${playingTrackId === track.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                        {playingTrackId === track.id && isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => handleDelete(e, track.id)}
+                                                    className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                                                    title="목록에서 삭제"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </motion.div>
+                                        ))}
                                     </div>
-
-                                    {/* Delete Button */}
-                                    <button 
-                                        onClick={(e) => handleDelete(e, track.id)}
-                                        className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                                        title="목록에서 삭제"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </motion.div>
-                            ))}
+                                );
+                            })()}
                         </AnimatePresence>
 
                         {tracks.length > 0 && (
