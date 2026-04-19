@@ -475,15 +475,15 @@ export const ImageTab = ({
         </div>
       )}
       {/* Image History List */}
-      {sunoTracks.some(t => t.generatedImages && t.generatedImages.length > 0) && (
+      {(sunoTracks || []).some(t => t && t.generatedImages && t.generatedImages.length > 0) && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <RefreshCw className="w-3 h-3 text-primary/50" />
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">이미지 생성 기록 (최근 작업)</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {sunoTracks
-              .filter(t => t.generatedImages && t.generatedImages.length > 0)
+            {(sunoTracks || [])
+              .filter(t => t && t.generatedImages && t.generatedImages.length > 0)
               .map((track, idx) => (
                 <button
                   key={idx}

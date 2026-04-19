@@ -501,11 +501,11 @@ export const SunoAudioList = ({
                     
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-1">
                         <AnimatePresence>
-                            {[...tracks].sort((a, b) => {
-                                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                                return dateB - dateA;
-                            }).map(track => (
+                            {[...(tracks || [])].sort((a, b) => {
+                                const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
+                                const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
+                                return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+                            }).map(track => track && (
                                 <motion.div 
                                     key={track.id}
                                     initial={{ opacity: 0, y: 10 }}
