@@ -1215,28 +1215,32 @@ export default function App() {
         }));
       }
 
-      const processContent = async (rawContent) => {
-        if (!rawContent) return '';
-        let finalContent = rawContent;
-        const finalProcessedImages = await Promise.all(workflow.results.images.map(async (img) => {
-          const text = currentImageTexts[img.label] || workflow.results.title || '제목 없음';
-          const processedUrl = await processImageForBlog(img.url, text);
-          return { ...img, blogUrl: processedUrl };
-        }));
-
-        for (const img of finalProcessedImages) {
-          const placeholder = `{{IMAGE:${img.label}}}`;
-          const imgTag = `<img src="${img.blogUrl}" alt="${img.label}" style="max-width: 100%; border-radius: 12px; margin: 25px 0; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1);">`;
-          if (typeof finalContent === 'string') {
-            if (finalContent.includes(placeholder)) {
-              finalContent = finalContent.split(placeholder).join(imgTag);
-            } else {
-              finalContent += `\n<div style="text-align: center; margin-top: 30px;">${imgTag}</div>\n`;
+        const processContent = async (rawContent) => {
+          if (!rawContent) return '';
+          let finalContent = rawContent;
+          
+          for (const img of workflow.results.images) {
+            const placeholder = `{{IMAGE:${img.label}}}`;
+            const textToUse = currentImageTexts[img.label] || workflow.results.title || '은혜로운 찬양';
+            
+            const imgTag = `
+              <div style="position: relative; width: 100%; max-width: 600px; aspect-ratio: 16/9; margin: 40px auto; border-radius: 18px; overflow: hidden; box-shadow: 0 15px 45px rgba(0,0,0,0.4); background: #000; border: 1px solid rgba(255,255,255,0.15);">
+                <img src="${img.url}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+                <div style="position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.6)); display: flex; align-items: center; justify-content: center; padding: 25px; text-align: center;">
+                  <span style="color: white; font-size: 26px; font-weight: 900; text-shadow: 2px 2px 10px rgba(0,0,0,1); line-height: 1.4; font-family: 'Noto Sans KR', sans-serif;">${textToUse}</span>
+                </div>
+              </div>`;
+            
+            if (typeof finalContent === 'string') {
+              if (finalContent.includes(placeholder)) {
+                finalContent = finalContent.split(placeholder).join(imgTag);
+              } else {
+                finalContent += `\n${imgTag}\n`;
+              }
             }
           }
-        }
-        return finalContent;
-      };
+          return finalContent;
+        };
 
       const resultsToUpdate: any = {};
       
