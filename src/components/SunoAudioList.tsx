@@ -501,7 +501,7 @@ export const SunoAudioList = ({
                     
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-1">
                         <AnimatePresence>
-                            {tracks.map(track => (
+                            {[...tracks].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(track => (
                                 <motion.div 
                                     key={track.id}
                                     initial={{ opacity: 0, y: 10 }}
