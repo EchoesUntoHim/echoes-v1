@@ -304,7 +304,8 @@ export default function App() {
 
   // Sync to Cloud whenever tracks change (after initial load)
   useEffect(() => {
-    if (user && isTracksLoaded) {
+    if (!isTracksLoaded) return;
+    if (user) {
       const syncToCloud = async () => {
         try {
           const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
@@ -318,12 +319,10 @@ export default function App() {
           addLog("❌ 클라우드 백업 실패");
         }
       };
-      const timer = setTimeout(syncToCloud, 2000);
+      const timer = setTimeout(syncToCloud, 1500);
       return () => clearTimeout(timer);
     }
-    if (isTracksLoaded) {
-      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
-    }
+    localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
   }, [sunoTracks, user, isTracksLoaded]);
 
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
