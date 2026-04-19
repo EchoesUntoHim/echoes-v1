@@ -20,7 +20,8 @@ export const LandingPage = ({ onStart }: LandingPageProps) => {
       >
         <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-4">
           <Zap className="w-4 h-4 text-primary" fill="currentColor" />
-          <span className="text-sm font-bold text-primary tracking-tight">차세대 AI 콘텐츠 자동화 엔진</span>
+          <span className="text-sm font-bold text-primary tracking-tight text-right">차세대 AI 콘텐츠 자동화 엔진</span>
+          <span className="ml-2 text-[10px] font-black text-primary/40 border-l border-primary/20 pl-2">v1.4.5</span>
         </div>
         
         <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-white">
