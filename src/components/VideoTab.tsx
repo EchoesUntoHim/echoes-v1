@@ -258,12 +258,12 @@ export const VideoTab = ({
                 {isVideoRendering ? (
                   <>
                     <RefreshCw className="w-6 h-6 animate-spin" />
-                    영상 제작 및 다운로드 중...
+                    제작 및 다운로드 중...
                   </>
                 ) : (
                   <>
                     <Download className="w-6 h-6" />
-                    모든 영상 한꺼번에 다운로드 (메인 + 틱톡 + 숏츠)
+                    전체 다운로드
                   </>
                 )}
               </button>
