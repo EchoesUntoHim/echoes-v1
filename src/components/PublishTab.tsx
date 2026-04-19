@@ -324,27 +324,39 @@ export const PublishTab = ({
             <Info className="w-3 h-3 text-primary/50" />
           </div>
           
-          <div className="space-y-3">
-            <div className="p-2.5 bg-black/40 rounded-lg border border-white/5">
-              <p className="text-[9px] text-gray-500 font-bold mb-1">CCM (워십/찬양)</p>
-              <div className="flex justify-between items-end">
-                <span className="text-xs font-black text-white">주일 오전 06:00 - 07:00</span>
-                <span className="text-[8px] text-primary/70">1-2h Before Peak</span>
+          <div className="space-y-2.5">
+            <div className="p-2 bg-black/40 rounded-lg border border-white/5 space-y-2">
+              <div className="flex justify-between items-center border-b border-white/5 pb-1 mb-1">
+                <span className="text-[9px] text-primary font-bold">요일별 업로드 전략</span>
+                <span className="text-[8px] text-gray-500">1-2h Before Peak</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px]">
+                <div className="flex justify-between border-r border-white/5 pr-2">
+                  <span className="text-gray-400">월~금</span>
+                  <span className="text-white font-bold">17:00</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">토요일</span>
+                  <span className="text-white font-bold">14:00</span>
+                </div>
+                <div className="flex justify-between border-r border-white/5 pr-2">
+                  <span className="text-primary font-bold italic">주일(CCM)</span>
+                  <span className="text-white font-bold">06:00</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">주일(일반)</span>
+                  <span className="text-white font-bold">16:00</span>
+                </div>
               </div>
             </div>
 
-            <div className="p-2.5 bg-black/40 rounded-lg border border-white/5">
-              <p className="text-[9px] text-gray-500 font-bold mb-1">대중음악 (K-POP/Indie)</p>
-              <div className="flex justify-between items-end">
-                <span className="text-xs font-black text-white">평일 오후 17:00 - 18:00</span>
-                <span className="text-[8px] text-primary/70">1-2h Before Peak</span>
-              </div>
+            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-[8px] text-primary/80 leading-tight">
+                * 위 시간은 한국 유튜브 트래픽 기준입니다.<br/>
+                * 매일 꾸준한 업로드가 알고리즘 노출에 유리합니다.
+              </p>
             </div>
-
-            <p className="text-[8px] text-gray-500 italic leading-tight">
-              * 마우스를 드래그하여 위치를 옮길 수 있습니다.<br/>
-              * 예약 업로드 시 위 시간을 활용해 보세요.
-            </p>
           </div>
         </GlassCard>
       </motion.div>
