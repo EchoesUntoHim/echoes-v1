@@ -149,6 +149,7 @@ export interface WorkflowState {
     suggestedTitles?: string[];
     lyrics?: string;
     englishLyrics?: string;
+    timedLyrics?: { time: number; kor: string; eng: string; section?: string }[];
     shortsHighlights?: { start: number; duration: number; label?: string }[];
     lyricsArray?: { start: number; end: number; text: string }[]; // Added for compatibility
     interpretation?: string;

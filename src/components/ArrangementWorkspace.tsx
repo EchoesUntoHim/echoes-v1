@@ -87,7 +87,7 @@ interface ArrangementWorkspaceProps {
     musicEngine: string;
     setMusicEngine: (engine: string) => void;
     handleGlobalAudioUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    analyzeAudioComprehensively: (file: File, options?: { skipSync?: boolean }) => Promise<any>;
+    analyzeAudioComprehensively: (file: File, options?: { skipSync?: boolean; referenceLyrics?: string }) => Promise<any>;
     logs: string[];
     availableModels?: { value: string, label: string, type?: string }[];
     fetchAvailableModels?: () => void;

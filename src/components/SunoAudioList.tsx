@@ -32,7 +32,7 @@ interface SunoAudioListProps {
     logs: string[];
     apiKey: string;
     aiEngine: string;
-    analyzeAudioComprehensively: (file: File) => Promise<any>;
+    analyzeAudioComprehensively: (file: File, options?: { skipSync?: boolean; referenceLyrics?: string }) => Promise<any>;
     user: User | null;
     tracks: SunoTrack[];
     setTracks: React.Dispatch<React.SetStateAction<SunoTrack[]>>;
