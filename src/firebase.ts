@@ -66,19 +66,34 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Background Audio Upload using Firebase Storage
 export const uploadAudioToStorageSafe = async (blob: Blob, pathPrefix: string = 'music'): Promise<string | null> => {
   const user = auth.currentUser;
-  if (!user) return null; // Fallback to local url if not logged in
+  if (!user) return null; 
   
   try {
     const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.m4a`;
     const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
-    
-    // Attempt upload
     await uploadBytesResumable(storageRef, blob);
-    const downloadUrl = await getDownloadURL(storageRef);
-    return downloadUrl;
+    return await getDownloadURL(storageRef);
   } catch (error) {
     console.error("Firebase Storage Upload Error:", error);
-    return null; // Return null to fallback to local parsing
+    return null;
+  }
+};
+
+// Background Image Upload from URL to Firebase Storage
+export const uploadImageToStorage = async (imageUrl: string, pathPrefix: string = 'images'): Promise<string | null> => {
+  const user = auth.currentUser;
+  if (!user) return null;
+
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+    const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
+    await uploadBytesResumable(storageRef, blob);
+    return await getDownloadURL(storageRef);
+  } catch (error) {
+    console.error("Firebase Image Upload Error:", error);
+    return null;
   }
 };
 

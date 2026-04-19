@@ -1545,8 +1545,14 @@ export default function App() {
 
       const generateAndSave = async (prompt: string, aspectRatio: "16:9" | "9:16", index: number, label: string, type: 'horizontal' | 'vertical', typeKey: 'main' | 'tiktok' | 'shorts') => {
         try {
-          const url = await generateSingleImage(prompt, aspectRatio, index);
-          const newImage = { url, type, label, prompt };
+          const base64Url = await generateSingleImage(prompt, aspectRatio, index);
+          
+          // Upload to Firebase Storage for permanent storage
+          addLog(`📤 [${label}] 이미지를 클라우드 저장소에 업로드 중...`);
+          const storageUrl = await uploadImageToStorage(base64Url);
+          const finalUrl = storageUrl || base64Url; // Fallback to base64 if upload fails
+
+          const newImage = { url: finalUrl, type, label, prompt };
           generatedImages.push(newImage);
           
           setWorkflow(prev => ({
@@ -1650,11 +1656,15 @@ export default function App() {
 
       const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
       if (part?.inlineData?.data) {
-        const newUrl = `data:image/png;base64,${part.inlineData.data}`;
+        const base64Url = `data:image/png;base64,${part.inlineData.data}`;
         
+        addLog(`📤 클라우드 저장소에 업로드 중...`);
+        const storageUrl = await uploadImageToStorage(base64Url);
+        const finalUrl = storageUrl || base64Url;
+
         setWorkflow(prev => {
           const newImages = [...prev.results.images];
-          newImages[indexToRegenerate] = { ...newImages[indexToRegenerate], url: newUrl };
+          newImages[indexToRegenerate] = { ...newImages[indexToRegenerate], url: finalUrl };
           return {
             ...prev,
             results: {
@@ -1663,7 +1673,7 @@ export default function App() {
             }
           };
         });
-        addLog(`✅ ${targetImage.label} 이미지 재생성 완료`);
+        addLog(`✅ ${targetImage.label} 이미지 재생성 및 클라우드 저장 완료`);
       } else {
         throw new Error("이미지 데이터 생성 실패");
       }
@@ -2273,7 +2283,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.0.1</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.1.1</span>
           </div>
         </div>
 
