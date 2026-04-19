@@ -960,8 +960,13 @@ export default function App() {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
       const model = aiEngine;
 
+      const isCCM = workflow.params.target === 'CCM';
+      const persona = isCCM 
+        ? "당신은 기독교 문화 콘텐츠 전문가이자 은혜로운 예배 영상을 전문으로 하는 최정상급 유튜버입니다."
+        : "당신은 100만 명의 구독자를 보유한 최정상급 음악 유튜버이자 K-Pop/Pop 트렌드 전문가입니다.";
+
       const prompt = `
-        당신은 100만 명의 구독자와 팔로워를 보유한 최정상급 유튜버이자 쇼츠 전문가입니다.
+        ${persona}
         다음 곡 정보를 바탕으로 유튜브 업로드에 최적화된 메타데이터를 생성해주세요.
         
         [곡 정보]
@@ -1052,21 +1057,29 @@ export default function App() {
       const model = aiEngine;
       const processedImages = workflow.results.images.filter(img => img.url);
 
+      const isCCM = workflow.params.target === 'CCM';
+      const genreContext = isCCM 
+        ? "이 곡은 CCM(Contemporary Christian Music)이므로, 독자들에게 영적인 깊이와 은혜, 위로를 전달하는 데 집중하세요. 문체는 경건하면서도 따뜻해야 합니다."
+        : "이 곡은 대중음악이므로, 독자들에게 트렌디한 감성과 공감, 음악적 세련미를 전달하는 데 집중하세요. 문체는 감각적이고 세련되어야 합니다.";
+
       const naverPersona = `
         [포스팅: 네이버 블로그]
         네이버 블로그 독자(20~40대)를 타겟으로 감성적이고 트렌디하게 작성하세요.
+        ${genreContext}
         이모지와 구분선을 적극 활용하고, 부드러운 구어체('~해요', '~입니다')를 사용하세요.
       `;
 
       const tistoryPersona = `
         [포스팅: 티스토리]
         IT/전문 지식에 관심이 많은 독자(20~30대)를 타겟으로 정보성과 감성을 균형있게 섞어 작성하세요.
+        ${genreContext}
         마크다운 스타일의 깔끔한 구조, 전문적인 용어와 함께 약간의 감성을 더한 문체('~합니다', '~다')를 사용하세요.
       `;
 
       const googlePersona = `
         [포스팅: 구글 블로그(SEO)]
         검색 엔진 최적화(SEO)를 고려하여 명확한 H1~H3 구조와 핵심 요약을 제공하세요.
+        ${genreContext}
         객관적이고 신뢰감 있는 문체로 음악적 기법과 가사를 심도 있게 분석하세요.
       `;
 
@@ -2384,7 +2397,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.5</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v2.2.6</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2414,7 +2427,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.5</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.6</span>
           </div>
         </div>
 
