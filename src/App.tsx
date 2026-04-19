@@ -2645,6 +2645,7 @@ export default function App() {
               logs={logs}
               availableModels={availableModels}
               fetchAvailableModels={fetchAvailableModels}
+              shortsCount={shortsCount}
             />
           )}
 
