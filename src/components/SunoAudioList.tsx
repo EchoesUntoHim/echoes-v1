@@ -344,11 +344,17 @@ export const SunoAudioList = ({
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             
+            // MIME 타입에 따라 확장자 결정 (기본값 mp3)
+            let extension = 'mp3';
+            if (blob.type.includes('wav')) extension = 'wav';
+            else if (blob.type.includes('mpeg')) extension = 'mp3';
+            else if (blob.type.includes('audio/x-m4a')) extension = 'm4a';
+            
             const link = document.createElement('a');
             link.href = url;
             // Clean filename: remove invalid characters
             const safeTitle = (track.title || 'untitled').replace(/[/\\?%*:|"<>]/g, '-');
-            link.download = `${safeTitle}.mp3`;
+            link.download = `${safeTitle}.${extension}`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

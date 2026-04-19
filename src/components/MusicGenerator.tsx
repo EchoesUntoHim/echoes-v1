@@ -420,6 +420,39 @@ export const MusicGenerator = ({
     }
   };
 
+  const handleDownload = async (track: GeneratedTrack) => {
+    try {
+      addLog(`📥 [${track.title}] 다운로드 시작...`);
+      
+      const response = await fetch(track.url);
+      if (!response.ok) throw new Error("파일을 불러오지 못했습니다.");
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Detect extension from MIME type or URL
+      let extension = 'wav'; 
+      if (blob.type.includes('mpeg') || blob.type.includes('mp3')) extension = 'mp3';
+      else if (blob.type.includes('wav')) extension = 'wav';
+      else if (track.url.toLowerCase().includes('.mp3')) extension = 'mp3';
+      else if (track.url.toLowerCase().includes('.wav')) extension = 'wav';
+      
+      const link = document.createElement('a');
+      link.href = url;
+      const safeTitle = (track.title || 'untitled').replace(/[/\\?%*:|"<>]/g, '-');
+      link.download = `${safeTitle}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      addLog(`✅ 다운로드 완료: ${safeTitle}.${extension}`);
+    } catch (error) {
+      console.error("Download error:", error);
+      addLog("❌ 다운로드 중 오류가 발생했습니다.");
+    }
+  };
+
   const deleteTrack = async (id: string) => {
     if (user) {
       try {
@@ -798,14 +831,13 @@ export const MusicGenerator = ({
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span className="hidden sm:block">{new Date(track.timestamp).toLocaleDateString()}</span>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <a 
-                          href={track.url} 
-                          download={`${track.title}.wav`}
-                          onClick={(e) => e.stopPropagation()}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDownload(track); }}
                           className="p-2 hover:text-white transition-colors"
+                          title="다운로드"
                         >
                           <Download className="w-4 h-4" />
-                        </a>
+                        </button>
                         <button 
                           onClick={(e) => { e.stopPropagation(); deleteTrack(track.id); }}
                           className="p-2 hover:text-red-400 transition-colors"
