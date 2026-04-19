@@ -73,7 +73,7 @@ export const ImageTab = ({
 }: ImageTabProps) => {
   const handleLoadFromHistory = (track: any) => {
     if (track.generatedImages && track.generatedImages.length > 0) {
-      addLog(`📂 [${track.title}] 곡의 기존 이미지들을 불러옵니다.`);
+      addLog(`📂 [${track.title}] 곡의 기록(이미지/가사/분석)을 불러옵니다.`);
       setWorkflow(prev => ({
         ...prev,
         params: {
@@ -84,7 +84,10 @@ export const ImageTab = ({
         },
         results: {
           ...prev.results,
-          images: track.generatedImages
+          images: track.generatedImages,
+          lyrics: track.lyrics || prev.results.lyrics,
+          englishLyrics: track.englishLyrics || prev.results.englishLyrics,
+          audioAnalysis: track.audioAnalysis || prev.results.audioAnalysis
         }
       }));
     }
