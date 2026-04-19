@@ -45,6 +45,8 @@ interface ImageTabProps {
   logs: string[];
   imageEngine: string;
   setImageEngine: (engine: string) => void;
+  sunoTracks: any[];
+  setSunoTracks: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 export const ImageTab = ({
@@ -65,8 +67,28 @@ export const ImageTab = ({
   createDefaultSettings,
   logs,
   imageEngine,
-  setImageEngine
+  setImageEngine,
+  sunoTracks,
+  setSunoTracks
 }: ImageTabProps) => {
+  const handleLoadFromHistory = (track: any) => {
+    if (track.generatedImages && track.generatedImages.length > 0) {
+      addLog(`📂 [${track.title}] 곡의 기존 이미지들을 불러옵니다.`);
+      setWorkflow(prev => ({
+        ...prev,
+        params: {
+          ...prev.params,
+          title: track.title,
+          koreanTitle: track.title.split('_')[0] || track.title,
+          englishTitle: track.title.split('_')[1] || ''
+        },
+        results: {
+          ...prev.results,
+          images: track.generatedImages
+        }
+      }));
+    }
+  };
   return (
     <motion.div key="image" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
@@ -452,6 +474,33 @@ export const ImageTab = ({
           </div>
         </div>
       )}
+      {/* Image History List */}
+      {sunoTracks.some(t => t.generatedImages && t.generatedImages.length > 0) && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <RefreshCw className="w-3 h-3 text-primary/50" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">이미지 생성 기록 (최근 작업)</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sunoTracks
+              .filter(t => t.generatedImages && t.generatedImages.length > 0)
+              .map((track, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleLoadFromHistory(track)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
+                >
+                  <div className="w-6 h-6 rounded-md overflow-hidden bg-black/40">
+                    <img src={track.generatedImages[0].url} alt="" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  {track.title}
+                </button>
+              ))
+            }
+          </div>
+        </div>
+      )}
+
       <Terminal logs={logs} />
     </motion.div>
   );

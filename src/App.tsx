@@ -253,6 +253,9 @@ export default function App() {
     setPendingPlatform(null);
   };
 
+  // Lifted Suno Tracks State for global access (History, etc.)
+  const [sunoTracks, setSunoTracks] = useState<SunoTrack[]>([]);
+
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
     const saved = localStorage.getItem('vibeflow_workflow');
     if (saved) {
@@ -1595,6 +1598,16 @@ export default function App() {
         }
         setIsShortsGenerating(false);
       }
+      
+      // After all images are generated, save them to the track history in sunoTracks
+      if (generatedImages.length > 0 && workflow.params.title) {
+        setSunoTracks(prev => prev.map(t => {
+          if (t.title === workflow.params.title) {
+            return { ...t, generatedImages };
+          }
+          return t;
+        }));
+      }
 
       setWorkflow(prev => ({
         ...prev,
@@ -2283,7 +2296,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.1.1</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v2.2.0</span>
           </div>
         </div>
 
@@ -2379,6 +2392,8 @@ export default function App() {
                 aiEngine={aiEngine}
                 analyzeAudioComprehensively={analyzeAudioComprehensively}
                 user={user}
+                tracks={sunoTracks}
+                setTracks={setSunoTracks}
               />
               <div className="flex justify-center mt-8">
                 <button onClick={() => handleTabChange('image')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
@@ -2408,6 +2423,8 @@ export default function App() {
               logs={logs}
               imageEngine={imageEngine}
               setImageEngine={setImageEngine}
+              sunoTracks={sunoTracks}
+              setSunoTracks={setSunoTracks}
             />
           )}
 

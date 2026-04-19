@@ -34,6 +34,8 @@ interface SunoAudioListProps {
     aiEngine: string;
     analyzeAudioComprehensively: (file: File) => Promise<any>;
     user: User | null;
+    tracks: SunoTrack[];
+    setTracks: React.Dispatch<React.SetStateAction<SunoTrack[]>>;
 }
 
 export const SunoAudioList = ({ 
@@ -44,10 +46,11 @@ export const SunoAudioList = ({
     apiKey, 
     aiEngine,
     analyzeAudioComprehensively,
-    user
+    user,
+    tracks,
+    setTracks
 }: SunoAudioListProps) => {
     const [jsonInput, setJsonInput] = useState('');
-    const [tracks, setTracks] = useState<SunoTrack[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     
