@@ -269,27 +269,29 @@ export default function App() {
 
     const loadTracks = async () => {
       try {
+        // Load from LocalStorage first for instant UI
+        const localSaved = localStorage.getItem('suno_json_data');
+        if (localSaved) {
+          try {
+            const parsed = JSON.parse(localSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSunoTracks(parsed);
+              addLog(`⚡ 로컬 캐시에서 ${parsed.length}곡을 즉시 불러왔습니다.`);
+            }
+          } catch (e) {}
+        }
+
         if (user) {
-          addLog("☁️ 클라우드에서 곡 목록을 동기화하는 중...");
+          addLog("☁️ 클라우드에서 최신 목록을 가져오는 중...");
           const userRef = doc(db, 'users', user.uid, 'settings', 'sunoTracks');
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             const cloudTracks = userDoc.data().tracks || [];
-            setSunoTracks(cloudTracks);
-            addLog(`✅ 클라우드 동기화 완료: ${cloudTracks.length}곡을 불러왔습니다.`);
-          } else {
-            addLog("ℹ️ 클라우드 저장소를 처음 사용합니다. (새 데이터 생성 예정)");
-            // Start fresh for new user to avoid merging guest tracks by mistake
-            setSunoTracks([]); 
-          }
-        } else {
-          const saved = localStorage.getItem('suno_json_data');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            setSunoTracks(parsed);
-            addLog(`✅ 로컬 저장소에서 ${parsed.length}곡을 불러왔습니다.`);
-          } else {
-            setSunoTracks([]);
+            // Merge or replace? For now, if cloud has data, it's the source of truth
+            if (cloudTracks.length > 0) {
+              setSunoTracks(cloudTracks);
+              addLog(`✅ 클라우드 동기화 완료: ${cloudTracks.length}곡`);
+            }
           }
         }
       } catch (error) {
@@ -305,6 +307,11 @@ export default function App() {
 
   // Sync to Cloud whenever tracks change (after initial load)
   useEffect(() => {
+    // ALWAYS save to LocalStorage as a local backup/cache
+    if (sunoTracks.length > 0) {
+      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
+    }
+
     // CRITICAL: Block sync until loading for the current user is complete
     if (!isTracksLoaded) return;
     
@@ -316,17 +323,15 @@ export default function App() {
             tracks: sunoTracks,
             updatedAt: serverTimestamp()
           }, { merge: true });
-          addLog("☁️ 클라우드 데이터 백업 완료");
+          // addLog("☁️ 클라우드 데이터 백업 완료"); // Too noisy
         } catch (error) {
           console.error("Cloud sync error:", error);
-          addLog("❌ 클라우드 백업 실패");
+          // addLog("❌ 클라우드 백업 실패");
         }
       };
-      // 500ms debounce for better responsiveness while maintaining stability
+      // 500ms debounce for better responsiveness
       const timer = setTimeout(syncToCloud, 500);
       return () => clearTimeout(timer);
-    } else {
-      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
     }
   }, [sunoTracks, user, isTracksLoaded]);
 
