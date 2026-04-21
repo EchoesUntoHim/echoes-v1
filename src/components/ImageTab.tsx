@@ -6,22 +6,17 @@ import { CanvasPreview } from './CanvasPreview';
 import { VideoSettingsPanel } from './VideoSettingsPanel';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
-import { 
-  TARGETS, 
-  POP_SUB_GENRES, 
-  CCM_SUB_GENRES, 
-  POP_MOODS, 
-  CCM_MOODS, 
+import {
+  TARGETS,
+  POP_SUB_GENRES,
+  CCM_SUB_GENRES,
+  POP_MOODS,
+  CCM_MOODS,
   ART_STYLES,
   CAMERA_VIEWS,
   TIME_OF_DAY_OPTIONS,
   LIGHTING_ATMOSPHERES,
-  COLOR_GRADES,
-  IMAGE_STYLES,
-  COMPOSITIONS,
-  DEPTH_OF_FIELDS,
   WEATHERS,
-  SUBJECT_DETAILS,
   BACKGROUND_TYPES,
   IMAGE_ENGINES
 } from '../constants';
@@ -134,8 +129,8 @@ export const ImageTab = ({
               }}
               className={cn(
                 "flex-1 py-3 rounded-xl font-bold border transition-all",
-                workflow.params.target === t 
-                  ? "bg-primary text-background border-primary" 
+                workflow.params.target === t
+                  ? "bg-primary text-background border-primary"
                   : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
               )}
             >
@@ -151,7 +146,7 @@ export const ImageTab = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">한글 제목 수정</label>
-              <input 
+              <input
                 type="text"
                 value={workflow.params.koreanTitle || ''}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, koreanTitle: e.target.value } }))}
@@ -160,7 +155,7 @@ export const ImageTab = ({
             </div>
             <div>
               <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">영어 제목 수정</label>
-              <input 
+              <input
                 type="text"
                 value={workflow.params.englishTitle || ''}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, englishTitle: e.target.value } }))}
@@ -177,7 +172,7 @@ export const ImageTab = ({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">화풍 및 장르</label>
-                <select 
+                <select
                   value={workflow.imageParams.artStyle}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, artStyle: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -187,7 +182,7 @@ export const ImageTab = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">구도 및 시점</label>
-                <select 
+                <select
                   value={workflow.imageParams.cameraView}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, cameraView: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -197,7 +192,7 @@ export const ImageTab = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">시간대</label>
-                <select 
+                <select
                   value={workflow.imageParams.timeOfDay}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, timeOfDay: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -207,7 +202,7 @@ export const ImageTab = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">조명 및 대기</label>
-                <select 
+                <select
                   value={workflow.imageParams.lightingAtmosphere}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, lightingAtmosphere: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -215,49 +210,10 @@ export const ImageTab = ({
                   {LIGHTING_ATMOSPHERES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">색감 및 톤</label>
-                <select 
-                  value={workflow.imageParams.colorGrade}
-                  onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, colorGrade: e.target.value } }))}
-                  className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
-                >
-                  {COLOR_GRADES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">이미지 스타일</label>
-                <select 
-                  value={workflow.imageSettings.style}
-                  onChange={(e) => setWorkflow(prev => ({ ...prev, imageSettings: { ...prev.imageSettings, style: e.target.value } }))}
-                  className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
-                >
-                  {IMAGE_STYLES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">구도 구성</label>
-                <select 
-                  value={workflow.imageParams.composition}
-                  onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, composition: e.target.value } }))}
-                  className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
-                >
-                  {COMPOSITIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">피사체 심도</label>
-                <select 
-                  value={workflow.imageParams.depthOfField}
-                  onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, depthOfField: e.target.value } }))}
-                  className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
-                >
-                  {DEPTH_OF_FIELDS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">날씨 및 환경</label>
-                <select 
+                <select
                   value={workflow.imageParams.weather}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, weather: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -266,18 +222,8 @@ export const ImageTab = ({
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">세부 묘사</label>
-                <select 
-                  value={workflow.imageParams.subjectDetail}
-                  onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, subjectDetail: e.target.value } }))}
-                  className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
-                >
-                  {SUBJECT_DETAILS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">배경 유형</label>
-                <select 
+                <select
                   value={workflow.imageParams.backgroundType}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, imageParams: { ...prev.imageParams, backgroundType: e.target.value } }))}
                   className="w-full bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -298,15 +244,15 @@ export const ImageTab = ({
                 <span className="text-[10px] text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full">메인 1개, 틱톡 1개 기본 생성</span>
               </div>
               <div className="flex items-center gap-4">
-                <input 
-                  type="range" min="0" max="5" value={shortsCount} 
+                <input
+                  type="range" min="0" max="5" value={shortsCount}
                   onChange={(e) => setShortsCount(parseInt(e.target.value))}
                   className="flex-1 accent-primary"
                 />
                 <span className="text-xl font-bold text-primary w-8">{shortsCount}</span>
               </div>
               {workflow.results.images.length > 0 && shortsCount > 0 && (
-                <button 
+                <button
                   onClick={regenerateShorts}
                   className="w-full mt-4 py-2 bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
                 >
@@ -317,9 +263,9 @@ export const ImageTab = ({
           </GlassCard>
 
           <GlassCard className="flex flex-col items-center justify-center border-dashed border-2 border-white/10 hover:border-primary/50 transition-colors py-6 relative overflow-hidden group">
-            <input 
-              type="file" 
-              accept="audio/*" 
+            <input
+              type="file"
+              accept="audio/*"
               onChange={handleAudioUpload}
               className="absolute inset-0 opacity-0 cursor-pointer z-10"
             />
@@ -329,13 +275,13 @@ export const ImageTab = ({
                   <Music className="w-6 h-6 text-primary" />
                 </div>
                 <p className="font-bold text-sm text-white">
-                  {workflow.results.audioFile instanceof File 
-                    ? workflow.results.audioFile.name 
+                  {workflow.results.audioFile instanceof File
+                    ? workflow.results.audioFile.name
                     : (workflow.results.title || 'Suno Audio')}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  {workflow.results.audioFile instanceof File 
-                    ? `${(workflow.results.audioFile.size / 1024 / 1024).toFixed(2)} MB` 
+                  {workflow.results.audioFile instanceof File
+                    ? `${(workflow.results.audioFile.size / 1024 / 1024).toFixed(2)} MB`
                     : 'Suno Audio'} • 분석 완료
                 </p>
               </div>
@@ -353,11 +299,11 @@ export const ImageTab = ({
           </GlassCard>
 
           <div className="grid grid-cols-2 gap-3">
-            {['main', 'tiktok', ...Array.from({length: shortsCount}).map((_, i) => `shorts_${i+1}`)].map(type => (
+            {['main', 'tiktok', ...Array.from({ length: shortsCount }).map((_, i) => `shorts_${i + 1}`)].map(type => (
               <div key={type} className="relative group">
-                <input 
-                  type="file" 
-                  accept="image/*" 
+                <input
+                  type="file"
+                  accept="image/*"
                   onChange={(e) => handleSingleImageUpload(type, e)}
                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                 />
@@ -369,7 +315,7 @@ export const ImageTab = ({
             ))}
           </div>
 
-          <button 
+          <button
             onClick={generateImages}
             disabled={(!workflow.results.audioFile && !workflow.results.lyrics) || (workflow.progress.image > 0 && workflow.progress.image < 100)}
             className={cn(
@@ -379,13 +325,13 @@ export const ImageTab = ({
                 : "bg-white/5 text-gray-500 cursor-not-allowed"
             )}
           >
-            {workflow.progress.image > 0 && workflow.progress.image < 100 
-              ? "생성 중..." 
+            {workflow.progress.image > 0 && workflow.progress.image < 100
+              ? "생성 중..."
               : "AI 최적화 이미지 생성"}
           </button>
 
           <div className="flex justify-center">
-            <button 
+            <button
               onClick={() => setIsApiKeyModalOpen(true)}
               className="text-[10px] font-bold text-gray-500 hover:text-primary transition-colors flex items-center gap-1"
             >
@@ -397,41 +343,49 @@ export const ImageTab = ({
 
       {workflow.results.images.length > 0 && (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {workflow.results.images.map((img: any, i: number) => {
-              const typeKey = img.label.includes('메인') ? 'main' : img.label.includes('틱톡') ? 'tiktok' : 'shorts';
-              const settings = workflow.imageSettings[typeKey] || createDefaultSettings();
+          <div className="flex flex-col xl:flex-row gap-8 items-start">
+            {workflow.results.images.filter((img: any) => img && !(img.label || '').includes('숏츠')).map((img: any, i: number) => {
+              const labelStr = img.label || '';
+              const typeKey = labelStr.includes('메인') ? 'main' : labelStr.includes('틱톡') ? 'tiktok' : 'shorts';
+              const settings = (typeKey === 'main' || typeKey === 'tiktok')
+                ? (workflow.imageSettings['main'] || createDefaultSettings())
+                : (workflow.imageSettings['shorts'] || createDefaultSettings());
+              const isVertical = img.type !== 'horizontal';
 
               return (
-                <motion.div 
-                  key={i} 
-                  initial={{ opacity: 0, scale: 0.9 }} 
-                  animate={{ opacity: 1, scale: 1 }} 
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.05 }}
-                  className="space-y-4"
+                  className={cn(
+                    "shrink-0",
+                    isVertical ? "w-full xl:w-[40%]" : "w-full xl:w-[60%]",
+                    isVertical ? "flex flex-col gap-6 items-center" : "space-y-4"
+                  )}
                 >
                   <div className={cn(
-                    "relative rounded-xl overflow-hidden border border-white/10 group @container",
-                    img.type === 'horizontal' ? "aspect-video" : "aspect-[9/16]"
+                    "relative rounded-xl overflow-hidden border border-white/10 group shrink-0",
+                    isVertical ? "aspect-[9/16] w-full" : "aspect-video w-full"
                   )}>
                     <CanvasPreview img={img} settings={settings} params={workflow.params} type={typeKey} />
-                    
+
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
-                      <button 
+                      <button
                         onClick={() => regenerateSpecificImage(i, typeKey)}
                         className="bg-white/20 backdrop-blur-md border border-white/30 p-2 rounded-full hover:bg-white/40 transition-all pointer-events-auto"
                         title="이 이미지만 재생성"
                       >
                         <RefreshCw className="w-4 h-4 text-white" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => downloadImageWithTitle(img)}
                         className="bg-primary/40 backdrop-blur-md border border-primary/30 p-2 rounded-full hover:bg-primary/60 transition-all pointer-events-auto"
                         title="타이틀 포함 다운로드"
                       >
                         <Download className="w-4 h-4 text-white" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => addLog(`[${img.label}] 프롬프트: ${img.prompt}`)}
                         className="bg-white/20 backdrop-blur-md border border-white/30 p-2 rounded-full hover:bg-white/40 transition-all pointer-events-auto"
                         title="프롬프트 보기"
@@ -439,37 +393,103 @@ export const ImageTab = ({
                         <FileText className="w-4 h-4 text-white" />
                       </button>
                     </div>
-                    
+
                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold z-10">
                       {img.label}
                     </div>
                   </div>
 
-                  <VideoSettingsPanel 
-                    type={img.label}
-                    settings={settings}
-                    onChange={(newSettings) => setWorkflow(prev => ({
-                      ...prev,
-                      imageSettings: {
-                        ...prev.imageSettings,
-                        [typeKey]: newSettings
-                      }
-                    }))}
-                    showLyricsControls={false}
-                  />
+                  {typeKey === 'main' && (
+                    <div className={cn("w-full space-y-4 flex flex-col justify-center", isVertical ? "md:w-[50%]" : "")}>
+                      <VideoSettingsPanel
+                        type={img.label}
+                        settings={settings}
+                        onChange={(newSettings) => setWorkflow(prev => ({
+                          ...prev,
+                          imageSettings: {
+                            ...prev.imageSettings,
+                            [typeKey]: newSettings
+                          }
+                        }))}
+                        showLyricsControls={false}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               );
             })}
 
             {isShortsGenerating && Array.from({ length: Math.max(0, shortsCount - workflow.results.images.filter((img: any) => img.label.includes('숏츠')).length) }).map((_, i) => (
               <div key={`generating-${i}`} className="space-y-4">
-                <div className="aspect-[9/16] rounded-xl bg-white/5 border border-dashed border-white/10 flex flex-col items-center justify-center gap-4 animate-pulse">
+                <div className="aspect-[9/16] w-full max-w-[50%] mx-auto rounded-xl bg-white/5 border border-dashed border-white/10 flex flex-col items-center justify-center gap-4 animate-pulse">
                   <RefreshCw className="w-8 h-8 text-primary/40 animate-spin" />
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">숏츠 이미지 생성 중...</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">생성 중...</p>
                 </div>
               </div>
             ))}
           </div>
+
+          {workflow.results.images.some((img: any) => img.label.includes('숏츠')) && (
+            <div className="space-y-4 pt-4 border-t border-white/10">
+              <h4 className="font-bold text-sm text-primary mb-4 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" /> 숏츠 이미지 확인
+              </h4>
+              <div className="flex flex-row flex-nowrap gap-2 w-full items-start">
+                {workflow.results.images.filter((img: any) => img && (img.label || '').includes('숏츠')).map((img: any, i: number) => {
+                  const settings = workflow.imageSettings['shorts'] || createDefaultSettings();
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex-1 min-w-0 flex flex-col gap-2"
+                    >
+                      <div className="relative rounded-xl overflow-hidden border border-white/10 group aspect-[9/16] w-full bg-black/40">
+                        <CanvasPreview img={img} settings={settings} params={workflow.params} type="shorts" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 z-20">
+                          <button
+                            onClick={() => regenerateSpecificImage(workflow.results.images.findIndex((im: any) => im.label === img.label), 'shorts')}
+                            className="bg-white/20 backdrop-blur-md border border-white/30 p-2 rounded-full hover:bg-white/40 transition-all pointer-events-auto"
+                            title="이 이미지만 재생성"
+                          >
+                            <RefreshCw className="w-4 h-4 text-white" />
+                          </button>
+                          <button
+                            onClick={() => downloadImageWithTitle(img)}
+                            className="bg-primary/40 backdrop-blur-md border border-primary/30 p-2 rounded-full hover:bg-primary/60 transition-all pointer-events-auto"
+                            title="타이틀 포함 다운로드"
+                          >
+                            <Download className="w-4 h-4 text-white" />
+                          </button>
+                        </div>
+                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold z-10">
+                          {img.label}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 숏츠용 개별 설정 패널 복구 */}
+          {workflow.results.images.some((img: any) => img.label.includes('숏츠')) && (
+            <div className="mt-8 pt-6 border-t border-white/10">
+              <h4 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest flex items-center gap-2">
+                <RefreshCw className="w-3 h-3" /> 모든 숏츠 공통 타이틀 설정
+              </h4>
+              <VideoSettingsPanel
+                type="shorts"
+                settings={workflow.imageSettings['shorts'] || createDefaultSettings()}
+                onChange={(newSettings) => setWorkflow(prev => ({
+                  ...prev,
+                  imageSettings: { ...prev.imageSettings, shorts: newSettings }
+                }))}
+                showLyricsControls={false}
+              />
+            </div>
+          )}
           <div className="flex justify-center">
             <button onClick={() => handleTabChange('video')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
               다음 단계: 영상 렌더링 <ChevronRight className="w-5 h-5" />
@@ -485,20 +505,21 @@ export const ImageTab = ({
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">이미지 생성 기록 (최근 작업)</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(sunoTracks || [])
+            {Array.from(new Map((sunoTracks || [])
               .filter(t => t && t.generatedImages && t.generatedImages.length > 0)
-              .map((track, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleLoadFromHistory(track)}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
-                >
-                  <div className="w-6 h-6 rounded-md overflow-hidden bg-black/40">
-                    <img src={track.generatedImages[0].url} alt="" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  {track.title}
-                </button>
-              ))
+              .map(t => [t.title, t])
+            ).values()).map((track, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleLoadFromHistory(track)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
+              >
+                <span>{track.title}</span>
+                <span className="text-[10px] text-gray-500 font-normal ml-1">
+                  ({track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()})
+                </span>
+              </button>
+            ))
             }
           </div>
         </div>

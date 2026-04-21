@@ -9,6 +9,7 @@ import { TimeInput } from './TimeInput';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
 import { VIDEO_ENGINES } from '../constants';
+import { createDefaultSettings } from '../types';
 
 interface VideoTabProps {
   workflow: any;
@@ -38,6 +39,8 @@ interface VideoTabProps {
   videoEngine: string;
   setVideoEngine: (engine: string) => void;
   videoQuality: string;
+  audioFadeIn?: number;
+  audioFadeOut?: number;
   logs: string[];
 }
 
@@ -69,8 +72,36 @@ export const VideoTab = ({
   videoEngine,
   setVideoEngine,
   videoQuality,
+  audioFadeIn = 0,
+  audioFadeOut = 0,
   logs
 }: VideoTabProps) => {
+  React.useEffect(() => {
+    // Auto-recovery for missing images from sunoTracks history
+    if ((!workflow.results.images || workflow.results.images.length === 0) && (workflow.params.title || workflow.params.koreanTitle)) {
+      const saved = localStorage.getItem('echoesuntohim_sunoTracks');
+      if (saved) {
+        try {
+          const tracks = JSON.parse(saved);
+          const currentTitle = workflow.params.title || workflow.params.koreanTitle || '';
+          const match = tracks.find((t: any) => t.title === currentTitle && t.generatedImages && t.generatedImages.length > 0);
+          if (match) {
+            setWorkflow((prev: any) => ({
+              ...prev,
+              results: {
+                ...prev.results,
+                images: match.generatedImages
+              }
+            }));
+            addLog(`🔄 이미지 기록에서 데이터를 복구했습니다: ${currentTitle}`);
+          }
+        } catch (e) {
+          console.error("Failed to recover images from history", e);
+        }
+      }
+    }
+  }, [workflow.params.title, workflow.params.koreanTitle, workflow.results.images?.length]);
+
   return (
     <motion.div key="video" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
@@ -97,10 +128,10 @@ export const VideoTab = ({
             <div>
               <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">음악 엔진</span>
               <p className="text-xs font-mono text-secondary">
-                {musicEngine.includes('magenta') ? 'Google Magenta' : 
-                 musicEngine.includes('musiclm') ? 'Google MusicLM' : 
-                 musicEngine.includes('suno') ? 'Suno AI' : 
-                 musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
+                {musicEngine.includes('magenta') ? 'Google Magenta' :
+                  musicEngine.includes('musiclm') ? 'Google MusicLM' :
+                    musicEngine.includes('suno') ? 'Suno AI' :
+                      musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
               </p>
             </div>
             <div>
@@ -111,275 +142,307 @@ export const VideoTab = ({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left: Settings */}
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">한글 제목 수정</label>
-              <input 
-                type="text"
-                value={workflow.params.koreanTitle || ''}
-                onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, koreanTitle: e.target.value } }))}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
-              />
+      <div className="space-y-12">
+        {/* Top: Settings */}
+        <div className="space-y-4 max-w-5xl mx-auto w-full bg-white/5 p-4 rounded-2xl border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+
+              {workflow.results.images.length === 0 && (
+                <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-red-400 shrink-0" />
+                    <span className="text-xs font-bold text-red-300">이미지가 없습니다. 먼저 이미지를 생성해주세요.</span>
+                  </div>
+                  <button
+                    onClick={() => handleTabChange('image')}
+                    className="shrink-0 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 border border-red-500/40 text-red-300 text-[10px] font-black rounded-lg transition-all"
+                  >
+                    ← 이미지 생성으로
+                  </button>
+                </div>
+              )}
+              <GlassCard className="space-y-3 p-4">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <h3 className="text-xs font-bold text-primary flex items-center gap-1 shrink-0"><ImageIcon className="w-3 h-3" /> 1. 이미지 소스</h3>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="text-[10px] text-gray-400">이미지: <span className={workflow.results.images.length > 0 ? "text-primary font-bold" : "text-red-400 font-bold"}>{workflow.results.images.length}</span>장</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 shrink-0">숏츠 개수:</span>
+                      <input
+                        type="range" min="0" max="5" value={shortsCount}
+                        onChange={(e) => setShortsCount(parseInt(e.target.value))}
+                        className="w-20 sm:w-24 accent-primary"
+                      />
+                      <span className="text-xs font-bold text-primary shrink-0">{shortsCount}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {['main', 'tiktok', ...Array.from({ length: shortsCount }).map((_, i) => `shorts_${i + 1}`)].map(type => {
+                    const label = type === 'main' ? '메인' : type === 'tiktok' ? '틱톡' : `숏츠 ${type.split('_')[1]}`;
+                    const normalize = (s: string) => s.replace(/\s/g, '').toLowerCase();
+                    const targetLabel = normalize(label);
+                    // Find newest matching image and prioritize localUrl. Use includes for robustness.
+                    const existingImgMatch = [...(workflow.results.images || [])].reverse().find((img: any) => {
+                      const imgLabel = normalize(img.label || '');
+                      return imgLabel === targetLabel || imgLabel.includes(targetLabel) || targetLabel.includes(imgLabel);
+                    });
+                    const existingImg = existingImgMatch ? { ...existingImgMatch, url: existingImgMatch.localUrl || existingImgMatch.url } : null;
+
+                    return (
+                      <div key={type} className="relative group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSingleImageUpload(type, e)}
+                          className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                        />
+                        <div className={cn(
+                          "w-full aspect-video border rounded-xl transition-all flex flex-col items-center justify-center gap-1 overflow-hidden relative",
+                          existingImg
+                            ? "bg-primary/10 border-primary/30"
+                            : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                        )}>
+                          {existingImg ? (
+                            <>
+                              <img
+                                src={existingImg.url || null}
+                                alt={label}
+                                className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-90 transition-opacity"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 group-hover:bg-black/10 transition-colors">
+                                <div className="bg-primary/80 p-1 rounded-full shadow-lg">
+                                  <CheckCircle2 className="w-3 h-3 text-white" />
+                                </div>
+                                <span className="text-[9px] font-black text-white drop-shadow-md bg-black/40 px-1.5 py-0.5 rounded">{label}</span>
+                              </div>
+                              {existingImg.prompt === '사용자 직접 업로드' && (
+                                <div className="absolute top-1 right-1 bg-secondary/80 text-[8px] px-1 rounded text-white">UP</div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mb-1 text-gray-500" />
+                              <span className="text-[9px] font-bold text-gray-500">{label} 업로드</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </GlassCard>
+
+              <GlassCard className="space-y-3 p-4">
+                <h3 className="text-xs font-bold text-primary flex items-center gap-1"><Music className="w-3 h-3" /> 2. 오디오 소스</h3>
+                <div>
+                  <label className="block w-full cursor-pointer bg-black/40 border border-white/10 border-dashed rounded-lg p-3 text-center hover:bg-white/10 transition-colors">
+                    <Upload className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+                    <span className="text-[10px] text-gray-400">
+                      {uploadedAudioName ? `파일: ${uploadedAudioName} (클릭하여 변경)` : '클릭하여 오디오 직접 업로드'}
+                    </span>
+                    <input type="file" accept="audio/*" onChange={handleVideoAudioUpload} className="hidden" />
+                  </label>
+                  {workflow.results.audioFile && (
+                    <p className="text-[10px] text-primary/60 mt-2 text-center">
+                      * 이전 단계의 음원({workflow.results.audioFile.name})이 로드되어 있습니다.
+                    </p>
+                  )}
+                </div>
+              </GlassCard>
+
             </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">영어 제목 수정</label>
-              <input 
-                type="text"
-                value={workflow.params.englishTitle || ''}
-                onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, englishTitle: e.target.value } }))}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
-              />
+
+            <div className="space-y-4">
+              <GlassCard className="space-y-3 p-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-primary flex items-center gap-1"><TypeIcon className="w-3 h-3" /> 3. 가사 입력</h3>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">한글 가사</label>
+                    <textarea
+                      value={videoLyrics}
+                      onChange={(e) => setVideoLyrics(e.target.value)}
+                      className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-primary outline-none overflow-y-auto custom-scrollbar"
+                      placeholder="한글 가사를 입력하세요."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">영어 가사</label>
+                    <textarea
+                      value={englishVideoLyrics}
+                      onChange={(e) => setEnglishVideoLyrics(e.target.value)}
+                      className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-primary outline-none overflow-y-auto custom-scrollbar"
+                      placeholder="영어 가사를 입력하세요."
+                    />
+                  </div>
+                </div>
+                {workflow.results.lyrics && (
+                  <p className="text-[10px] text-gray-500 italic">* 이전 단계에서 생성된 가사가 자동으로 입력되었습니다. 필요시 수정 가능합니다.</p>
+                )}
+              </GlassCard>
+
+              <GlassCard className="space-y-3 p-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">한글 제목 수정</label>
+                    <input
+                      type="text"
+                      value={workflow.params.koreanTitle || ''}
+                      onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, koreanTitle: e.target.value } }))}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">영어 제목 수정</label>
+                    <input
+                      type="text"
+                      value={workflow.params.englishTitle || ''}
+                      onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, englishTitle: e.target.value } }))}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-primary outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col justify-center items-center">
+                  <button
+                    onClick={handleDownloadAll}
+                    disabled={isVideoRendering || !uploadedAudio || workflow.results.images.length === 0}
+                    className="w-full bg-primary text-background py-3 rounded-xl font-black shadow-lg hover:neon-glow-primary transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isVideoRendering ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        제작 및 다운로드 중...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        전체 다운로드
+                      </>
+                    )}
+                  </button>
+                </div>
+                {isVideoRendering && <ProgressBar progress={workflow.progress.video || 50} />}
+
+              </GlassCard>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom: Preview Grid */}
+        <div className="space-y-6 pt-8 border-t border-white/10 w-full">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ImageIcon className="w-6 h-6 text-primary" /> 출력물 확인 및 개별 다운로드</h2>
+          <div className="flex flex-col xl:flex-row gap-8 items-start">
+            <div className="w-full xl:w-[60%] shrink-0">
+              <GlassCard className="space-y-4">
+                <h3 className="font-bold text-primary mb-4">메인 영상 미리보기 (16:9)</h3>
+                <VideoPlayer
+                  ref={mainVideoRef}
+                  key={`main_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.url || 'none'}`}
+                  imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.url}
+                  audioSrc={uploadedAudio}
+                  lyrics={videoLyrics}
+                  englishLyrics={englishVideoLyrics}
+                  timedLyrics={timedLyrics}
+                  type="main"
+                  label="Main"
+                  title={workflow.results.title}
+                  koreanTitle={workflow.params.koreanTitle}
+                  englishTitle={workflow.params.englishTitle}
+                  titleSettings={workflow.imageSettings['main']}
+                  showTitle={workflow.imageSettings['main']?.showTitleOverlay ?? true}
+                  lyricsStartTime={workflow.imageSettings['main']?.lyricsStartTime ?? 0}
+                  lyricsScrollEnd={workflow.imageSettings['main']?.lyricsScrollEnd ?? 50}
+                  lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
+                  addLog={addLog}
+                  originalFileName={uploadedAudioName}
+                  fadeInDuration={audioFadeIn}
+                  fadeOutDuration={audioFadeOut}
+                />
+                {workflow.results.images.length > 0 && (
+                  <div className="space-y-4">
+                    <VideoSettingsPanel
+                      type="main"
+                      settings={workflow.imageSettings['main']}
+                      onChange={(newSettings) => setWorkflow(prev => ({
+                        ...prev,
+                        imageSettings: { ...prev.imageSettings, main: newSettings }
+                      }))}
+                    />
+                    <button
+                      onClick={() => mainVideoRef.current?.download()}
+                      className="w-full py-3 bg-primary text-background rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      메인 영상 다운로드
+                    </button>
+                  </div>
+                )}
+              </GlassCard>
+            </div>
+
+            <div className="w-full xl:w-[40%] shrink-0">
+              <GlassCard className="space-y-4 h-full">
+                <h3 className="font-bold text-primary mb-4 flex items-center gap-2">틱톡 영상 미리보기 (9:16)</h3>
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-full mx-auto shrink-0">
+                    <VideoPlayer
+                      ref={tiktokVideoRef}
+                      key={`tiktok_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.url || 'none'}`}
+                      imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.url}
+                      audioSrc={uploadedAudio}
+                      lyrics={videoLyrics}
+                      englishLyrics={englishVideoLyrics}
+                      timedLyrics={timedLyrics}
+                      type="tiktok"
+                      label="TikTok"
+                      title={workflow.results.title}
+                      koreanTitle={workflow.params.koreanTitle}
+                      englishTitle={workflow.params.englishTitle}
+                      titleSettings={workflow.imageSettings['main']}
+                      showTitle={workflow.imageSettings['main']?.showTitleOverlay ?? true}
+                      lyricsStartTime={workflow.imageSettings['main']?.lyricsStartTime ?? 0}
+                      lyricsScrollEnd={workflow.imageSettings['main']?.lyricsScrollEnd ?? 50}
+                      lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
+                      addLog={addLog}
+                      originalFileName={uploadedAudioName}
+                    />
+                  </div>
+                  <button
+                    onClick={() => tiktokVideoRef.current?.download()}
+                    className="w-full py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    틱톡 영상 다운로드
+                  </button>
+                </div>
+              </GlassCard>
             </div>
           </div>
 
-          <GlassCard className="space-y-4">
-            <div className="flex flex-wrap justify-between items-center gap-2">
-              <h3 className="font-bold text-primary flex items-center gap-2 shrink-0"><ImageIcon className="w-4 h-4" /> 1. 이미지 소스</h3>
-              <div className="flex flex-wrap items-center gap-4">
-                <span className="text-[10px] text-gray-400">이미지: <span className="text-primary font-bold">{workflow.results.images.length}</span>장</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 shrink-0">숏츠 개수:</span>
-                  <input 
-                    type="range" min="0" max="5" value={shortsCount} 
-                    onChange={(e) => setShortsCount(parseInt(e.target.value))}
-                    className="w-20 sm:w-24 accent-primary"
-                  />
-                  <span className="text-xs font-bold text-primary shrink-0">{shortsCount}</span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {['main', 'tiktok', ...Array.from({length: shortsCount}).map((_, i) => `shorts_${i+1}`)].map(type => {
-                const label = type === 'main' ? '메인' : type === 'tiktok' ? '틱톡' : `숏츠 ${type.split('_')[1]}`;
-                const existingImg = workflow.results.images.find((img: any) => img.label === label);
-                
+          <GlassCard className="space-y-4 xl:col-span-2">
+              <div className="flex flex-row flex-nowrap gap-2 w-full">
+              {Array.from({ length: shortsCount }).map((_, idx) => {
+                const highlight = shortsHighlights[idx] || { start: 0, duration: 30 };
                 return (
-                  <div key={type} className="relative group">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => handleSingleImageUpload(type, e)}
-                      className="absolute inset-0 opacity-0 cursor-pointer z-20"
-                    />
-                    <div className={cn(
-                      "w-full aspect-video border rounded-xl transition-all flex flex-col items-center justify-center gap-1 overflow-hidden relative",
-                      existingImg 
-                        ? "bg-primary/10 border-primary/30" 
-                        : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                    )}>
-                      {existingImg ? (
-                        <>
-                          <img 
-                            src={existingImg.url || null} 
-                            alt={label} 
-                            className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-90 transition-opacity"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 group-hover:bg-black/10 transition-colors">
-                            <div className="bg-primary/80 p-1 rounded-full shadow-lg">
-                              <CheckCircle2 className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-[9px] font-black text-white drop-shadow-md bg-black/40 px-1.5 py-0.5 rounded">{label}</span>
-                          </div>
-                          {existingImg.prompt === '사용자 직접 업로드' && (
-                            <div className="absolute top-1 right-1 bg-secondary/80 text-[8px] px-1 rounded text-white">UP</div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4 mb-1 text-gray-500" />
-                          <span className="text-[9px] font-bold text-gray-500">{label} 업로드</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </GlassCard>
-
-            <GlassCard className="space-y-4">
-              <h3 className="font-bold text-primary flex items-center gap-2"><Music className="w-4 h-4" /> 2. 오디오 소스</h3>
-              <div>
-                <label className="block w-full cursor-pointer bg-white/5 border border-white/10 border-dashed rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
-                  <Upload className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                  <span className="text-sm text-gray-400">
-                    {uploadedAudioName ? `파일: ${uploadedAudioName} (클릭하여 변경)` : '클릭하여 오디오 직접 업로드'}
-                  </span>
-                  <input type="file" accept="audio/*" onChange={handleVideoAudioUpload} className="hidden" />
-                </label>
-                {workflow.results.audioFile && (
-                  <p className="text-[10px] text-primary/60 mt-2 text-center">
-                    * 이전 단계의 음원({workflow.results.audioFile.name})이 로드되어 있습니다.
-                  </p>
-                )}
-              </div>
-            </GlassCard>
-
-          <GlassCard className="space-y-4">
-            <h3 className="font-bold text-primary flex items-center gap-2"><TypeIcon className="w-4 h-4" /> 3. 가사 입력</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">한글 가사</label>
-                <textarea 
-                  value={videoLyrics} 
-                  onChange={(e) => setVideoLyrics(e.target.value)}
-                  className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none overflow-y-auto custom-scrollbar"
-                  placeholder="한글 가사를 입력하세요."
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">영어 가사</label>
-                <textarea 
-                  value={englishVideoLyrics} 
-                  onChange={(e) => setEnglishVideoLyrics(e.target.value)}
-                  className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none overflow-y-auto custom-scrollbar"
-                  placeholder="영어 가사를 입력하세요."
-                />
-              </div>
-            </div>
-            {workflow.results.lyrics && (
-              <p className="text-[10px] text-gray-500 italic">* 이전 단계에서 생성된 가사가 자동으로 입력되었습니다. 필요시 수정 가능합니다.</p>
-            )}
-          </GlassCard>
-
-          <GlassCard className="space-y-4">
-            <div className="flex flex-col justify-center items-center p-6 bg-white/5 rounded-2xl border border-white/10">
-              <Zap className="w-12 h-12 text-primary mb-4" />
-              <p className="text-center text-sm text-gray-400">서버 비용 없이 내 컴퓨터에서 직접 렌더링하여 다운로드합니다.</p>
-              <button 
-                onClick={handleDownloadAll}
-                disabled={isVideoRendering || !uploadedAudio || workflow.results.images.length === 0}
-                className="w-full bg-primary text-background py-5 rounded-2xl font-black mt-6 shadow-xl hover:neon-glow-primary transition-all flex items-center justify-center gap-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isVideoRendering ? (
-                  <>
-                    <RefreshCw className="w-6 h-6 animate-spin" />
-                    제작 및 다운로드 중...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-6 h-6" />
-                    전체 다운로드
-                  </>
-                )}
-              </button>
-            </div>
-            {isVideoRendering && <ProgressBar progress={workflow.progress.video || 50} />}
-
-          </GlassCard>
-        </div>
-
-        {/* Right: Preview */}
-        <div className="space-y-6">
-          <GlassCard className="space-y-4">
-            <h3 className="font-bold text-primary mb-4">메인 영상 미리보기 (16:9)</h3>
-            <VideoPlayer 
-              ref={mainVideoRef}
-              imageSrc={workflow.results.images.find((img: any) => img.label === '메인')?.url} 
-              audioSrc={uploadedAudio} 
-              lyrics={videoLyrics} 
-              englishLyrics={englishVideoLyrics}
-              timedLyrics={timedLyrics}
-              type="main" 
-              label="Main"
-              title={workflow.results.title}
-              koreanTitle={workflow.params.koreanTitle}
-              englishTitle={workflow.params.englishTitle}
-              titleSettings={workflow.imageSettings['main']}
-              showTitle={workflow.imageSettings['main']?.showTitleOverlay ?? true}
-              lyricsStartTime={workflow.imageSettings['main']?.lyricsStartTime ?? 0}
-              lyricsScrollEnd={workflow.imageSettings['main']?.lyricsScrollEnd ?? 50}
-              lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
-              addLog={addLog}
-              originalFileName={uploadedAudioName}
-            />
-            {workflow.results.images.length > 0 && (
-              <div className="space-y-4">
-                <VideoSettingsPanel 
-                  type="main" 
-                  settings={workflow.imageSettings['main']} 
-                  onChange={(newSettings) => setWorkflow(prev => ({
-                    ...prev,
-                    imageSettings: { ...prev.imageSettings, main: newSettings }
-                  }))}
-                />
-                <button 
-                  onClick={() => mainVideoRef.current?.download()}
-                  className="w-full py-3 bg-primary text-background rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  메인 영상 다운로드
-                </button>
-              </div>
-            )}
-          </GlassCard>
-
-          <GlassCard className="space-y-4">
-            <h3 className="font-bold text-primary mb-4">틱톡 영상 미리보기 (9:16)</h3>
-            <VideoPlayer 
-              ref={tiktokVideoRef}
-              imageSrc={workflow.results.images.find((img: any) => img.label === '틱톡')?.url} 
-              audioSrc={uploadedAudio} 
-              lyrics={videoLyrics} 
-              englishLyrics={englishVideoLyrics}
-              timedLyrics={timedLyrics}
-              type="tiktok" 
-              label="TikTok"
-              title={workflow.results.title}
-              koreanTitle={workflow.params.koreanTitle}
-              englishTitle={workflow.params.englishTitle}
-              titleSettings={workflow.imageSettings['tiktok']}
-              showTitle={workflow.imageSettings['tiktok']?.showTitleOverlay ?? true}
-              lyricsStartTime={workflow.imageSettings['tiktok']?.lyricsStartTime ?? 0}
-              lyricsScrollEnd={workflow.imageSettings['tiktok']?.lyricsScrollEnd ?? 50}
-              lyricsFontSize={workflow.imageSettings['tiktok']?.lyricsFontSize ?? 4}
-              addLog={addLog}
-              originalFileName={uploadedAudioName}
-            />
-            {workflow.results.images.length > 0 && (
-              <div className="space-y-4">
-                <VideoSettingsPanel 
-                  type="tiktok" 
-                  settings={workflow.imageSettings['tiktok']} 
-                  onChange={(newSettings) => setWorkflow(prev => ({
-                    ...prev,
-                    imageSettings: { ...prev.imageSettings, tiktok: newSettings }
-                  }))}
-                />
-                <button 
-                  onClick={() => tiktokVideoRef.current?.download()}
-                  className="w-full py-3 bg-primary text-background rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  틱톡 영상 다운로드
-                </button>
-              </div>
-            )}
-          </GlassCard>
-
-          {shortsCount > 0 && shortsHighlights.length > 0 && (
-            <GlassCard className="space-y-4">
-              <h3 className="font-bold text-primary mb-4">숏츠 하이라이트 미리보기 (9:16)</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {shortsHighlights.slice(0, shortsCount).map((highlight, idx) => (
-                  <div key={idx} className="space-y-2 p-3 bg-white/5 rounded-xl border border-white/5">
+                  <div key={idx} className="flex-1 min-w-0 space-y-2 p-2 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex justify-between items-center mb-1">
-                      <div className="text-xs font-bold text-primary">숏츠 #{idx + 1}</div>
-                      <div className="text-[10px] text-gray-500 font-mono">{Math.round(highlight.duration)}초 분량</div>
+                      <div className="text-[10px] font-bold text-primary truncate"># {idx + 1}</div>
+                      <div className="text-[9px] text-gray-500 font-mono">{Math.round(highlight.duration)}s</div>
                     </div>
-                    
-                    <VideoPlayer 
+
+                    <VideoPlayer
                       ref={el => { shortsVideoRefs.current[idx] = el; }}
-                      imageSrc={workflow.results.images.find((img: any) => img.label === `숏츠 ${idx + 1}`)?.url} 
-                      audioSrc={uploadedAudio} 
-                      lyrics={videoLyrics} 
+                      key={`shorts_${idx + 1}_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.url || 'none'}`}
+                      imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.url}
+                      audioSrc={uploadedAudio}
+                      lyrics={videoLyrics}
                       englishLyrics={englishVideoLyrics}
                       timedLyrics={timedLyrics}
-                      type="shorts" 
+                      type="shorts"
                       label={`Shorts_${idx + 1}`}
                       startTime={highlight.start}
                       duration={highlight.duration}
@@ -393,44 +456,46 @@ export const VideoTab = ({
                       lyricsFontSize={workflow.imageSettings['shorts']?.lyricsFontSize ?? 4}
                       addLog={addLog}
                       originalFileName={uploadedAudioName}
+                      fadeInDuration={audioFadeIn}
+                      fadeOutDuration={audioFadeOut}
                     />
 
-                    <div className="flex items-center gap-2 py-2">
-                      <TimeInput 
-                        label="시작" 
-                        value={highlight.start} 
-                        onChange={(val) => handleHighlightChange(idx, 'start', val)} 
+                    <div className="flex flex-col gap-1 py-1">
+                      <TimeInput
+                        label="S"
+                        value={highlight.start}
+                        onChange={(val) => handleHighlightChange(idx, 'start', val)}
                       />
-                      <div className="pt-4 text-gray-600 font-bold">~</div>
-                      <TimeInput 
-                        label="종료" 
-                        value={highlight.start + highlight.duration} 
-                        onChange={(val) => handleHighlightChange(idx, 'end', val)} 
+                      <TimeInput
+                        label="E"
+                        value={highlight.start + highlight.duration}
+                        onChange={(val) => handleHighlightChange(idx, 'end', val)}
                       />
                     </div>
 
-                    <button 
+                    <button
                       onClick={() => shortsVideoRefs.current[idx]?.download()}
-                      className="w-full py-2.5 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all"
+                      className="w-full py-2 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary rounded-lg text-[9px] font-black flex items-center justify-center gap-1 transition-all"
                     >
                       <Download className="w-3 h-3" />
-                      숏츠 #{idx + 1} 다운로드
+                      받기
                     </button>
                   </div>
-                ))}
-              </div>
-              {workflow.results.images.length > 0 && (
-                <VideoSettingsPanel 
-                  type="shorts" 
-                  settings={workflow.imageSettings['shorts']} 
-                  onChange={(newSettings) => setWorkflow(prev => ({
-                    ...prev,
-                    imageSettings: { ...prev.imageSettings, shorts: newSettings }
-                  }))}
-                />
-              )}
-            </GlassCard>
-          )}
+                );
+              })}
+            </div>
+            
+            <div className="mt-6 border-t border-white/5 pt-4">
+              <VideoSettingsPanel 
+                type="shorts" 
+                settings={workflow.imageSettings['shorts'] || createDefaultSettings()} 
+                onChange={(newSettings) => setWorkflow(prev => ({
+                  ...prev,
+                  imageSettings: { ...prev.imageSettings, shorts: newSettings }
+                }))}
+              />
+            </div>
+          </GlassCard>
         </div>
       </div>
 

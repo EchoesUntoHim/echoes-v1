@@ -500,8 +500,10 @@ export const ArrangementWorkspace = ({
 
         setUploadedFile(file);
         addLog(`📁 편곡용 음원 업로드: ${file.name}`);
-        setLocalLyrics("음원 분석 중...");
-        setLocalEnglishLyrics("Analyzing...");
+        setLocalLyrics("가사를 불러오려면 [음원 분석] 버튼을 눌러주세요.");
+        setLocalEnglishLyrics("");
+        // Automatic analysis REMOVED for cost control
+        /*
         const result = await analyzeAudioComprehensively(file, { skipSync: true });
         if (result) {
             setAnalysisResult({
@@ -512,6 +514,7 @@ export const ArrangementWorkspace = ({
             if (result.lyrics) setLocalLyrics(result.lyrics);
             if (result.englishLyrics) setLocalEnglishLyrics(result.englishLyrics);
         }
+        */
     };
 
     const handleTrackUpload = async (inst: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -525,9 +528,11 @@ export const ArrangementWorkspace = ({
             addLog(`📁 멀티트랙 업로드 완료: ${inst} (${file.name})`);
 
             if (inst === '보컬') {
-                addLog("🎤 보컬 트랙 분석을 시작합니다...");
-                setLocalLyrics("보컬 트랙 분석 중...");
-                setLocalEnglishLyrics("Analyzing vocal track...");
+                addLog("🎤 보컬 트랙 업로드 완료. 분석이 필요하면 [분석] 버튼을 눌러주세요.");
+                setLocalLyrics("보컬 분석 대기 중...");
+                setLocalEnglishLyrics("");
+                // Automatic analysis REMOVED for cost control
+                /*
                 const result = await analyzeAudioComprehensively(file, { skipSync: true });
                 if (result) {
                     setAnalysisResult({
@@ -538,6 +543,7 @@ export const ArrangementWorkspace = ({
                     if (result.lyrics) setLocalLyrics(result.lyrics);
                     if (result.englishLyrics) setLocalEnglishLyrics(result.englishLyrics);
                 }
+                */
             }
         }
     };
@@ -556,8 +562,10 @@ export const ArrangementWorkspace = ({
                 }));
 
                 addLog(`🎤 [내 목소리]를 보컬 트랙에 적용했습니다.`);
-                setLocalLyrics("보컬 트랙 분석 중...");
-                setLocalEnglishLyrics("Analyzing vocal track...");
+                setLocalLyrics("분석 대기 중...");
+                setLocalEnglishLyrics("");
+                // Automatic analysis REMOVED for cost control
+                /*
                 const result = await analyzeAudioComprehensively(file, { skipSync: true });
                 if (result) {
                     setAnalysisResult({
@@ -568,6 +576,7 @@ export const ArrangementWorkspace = ({
                     if (result.lyrics) setLocalLyrics(result.lyrics);
                     if (result.englishLyrics) setLocalEnglishLyrics(result.englishLyrics);
                 }
+                */
             } catch (error) {
                 console.error("Error applying voice:", error);
                 addLog("❌ 목소리 적용 중 오류가 발생했습니다.");

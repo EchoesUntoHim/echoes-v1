@@ -256,6 +256,7 @@ export const PublishTab = ({
               </button>
               <PlatformToggle 
                 label="" 
+                description="유튜브 자동 업로드"
                 status={platforms.youtube} 
                 onToggle={() => togglePlatform('youtube')}
               />
@@ -284,6 +285,7 @@ export const PublishTab = ({
               </button>
               <PlatformToggle 
                 label="" 
+                description="틱톡 자동 업로드"
                 status={platforms.tiktok} 
                 onToggle={() => togglePlatform('tiktok')}
               />

@@ -95,7 +95,10 @@ export const ART_STYLES = [
   '유화 (Oil Painting)',
   '사이버펑크 일러스트 (Cyberpunk Art)',
   '연필 소묘 (Pencil Sketch)',
-  '미니멀리즘 벡터 (Minimalist Vector)'
+  '미니멀리즘 벡터 (Minimalist Vector)',
+  '3D 렌더링 (3D Render)',
+  '팝아트 (Pop Art)',
+  '초현실주의 (Surrealism)'
 ];
 
 export const CAMERA_VIEWS = [
@@ -106,7 +109,10 @@ export const CAMERA_VIEWS = [
   '로우앵글 (Low Angle)',
   '버즈아이 (Bird\'s Eye View)',
   '클로즈업 (Close-up)',
-  '와이드 샷 (Wide/Full Body Shot)'
+  '와이드 샷 (Wide/Full Body Shot)',
+  '드론 뷰 (Drone View)',
+  '어안 렌즈 (Fisheye Lens)',
+  '오버더숄더 (Over-the-shoulder)'
 ];
 
 export const CAMERA_ANGLE_OPTIONS = [
@@ -115,7 +121,11 @@ export const CAMERA_ANGLE_OPTIONS = [
   '로우앵글 (Low Angle)',
   '버즈아이 (Bird\'s Eye View)',
   '클로즈업 (Close-up)',
-  '와이드 샷 (Wide/Full Body Shot)'
+  '와이드 샷 (Wide/Full Body Shot)',
+  '드론 뷰 (Drone View)',
+  '어안 렌즈 (Fisheye Lens)',
+  '오버더숄더 (Over-the-shoulder)',
+  '매크로 샷 (Macro Shot)'
 ];
 
 export const TIME_OF_DAY_OPTIONS = [
@@ -144,40 +154,10 @@ export const LIGHTING_ATMOSPHERES = [
   '시네마틱 라이팅 (Cinematic Lighting)',
   '안개 자욱한 (Foggy & Misty)',
   '사이버틱 라이트 (Cyber Light)',
-  '역광 (Backlit)'
-];
-
-export const COLOR_GRADES = [
-  '비비드 컬러 (Vivid & Vibrant)',
-  '파스텔 톤 (Soft Pastel)',
-  '모노크롬 (Monochrome)',
-  '빈티지 필름 (Vintage Film)',
-  '차가운 블루 (Cyber Blue)',
-  '따뜻한 세피아 (Warm Sepia)',
-  '다크 앤 무디 (Dark & Moody)',
-  '하이 키 (High Key)'
-];
-
-export const COMPOSITIONS = [
-  '3분할 법칙 (Rule of Thirds)',
-  '중앙 대칭 (Symmetry)',
-  '황금비 (Golden Ratio)',
-  '리딩 라인 (Leading Lines)',
-  '프레임 인 프레임 (Frame in Frame)',
-  '미니멀리즘 (Minimalist)',
-  '다이내믹 앵글 (Dynamic Angle)',
-  '클로즈업 (Extreme Close-up)'
-];
-
-export const DEPTH_OF_FIELDS = [
-  '얕은 피사체 심도 (Shallow Bokeh)',
-  '깊은 피사체 심도 (Deep Focus)',
-  '부드러운 블러 (Soft Blur)',
-  '선명한 배경 (Sharp Background)',
-  '매크로 포커스 (Macro Focus)',
-  '틸트 시프트 (Tilt Shift)',
-  '시네마틱 포커스 (Cinematic Focus)',
-  '꿈결 같은 블러 (Dreamy Blur)'
+  '역광 (Backlit)',
+  '극적인 조명 (Dramatic Lighting)',
+  '로우 키 조명 (Low Key Lighting)',
+  '신비로운 빛 (Mystical Glow)'
 ];
 
 export const WEATHERS = [
@@ -188,18 +168,10 @@ export const WEATHERS = [
   '안개 (Foggy)',
   '폭풍우 (Stormy)',
   '번개 (Lightning)',
-  '무지개 (Rainbow)'
-];
-
-export const SUBJECT_DETAILS = [
-  '하이퍼 디테일 (Hyper-detailed)',
-  '부드러운 질감 (Soft Texture)',
-  '거친 질감 (Gritty Texture)',
-  '매끄러운 표면 (Smooth Surface)',
-  '복잡한 패턴 (Intricate Patterns)',
-  '단순한 형태 (Simple Shapes)',
-  '유기적인 곡선 (Organic Curves)',
-  '기하학적 구조 (Geometric Structures)'
+  '무지개 (Rainbow)',
+  '눈보라 (Blizzard)',
+  '바람 부는 날 (Windy)',
+  '따사로운 햇살 (Sunny & Warm)'
 ];
 
 export const BACKGROUND_TYPES = [
@@ -210,7 +182,10 @@ export const BACKGROUND_TYPES = [
   '미니멀 스튜디오 (Minimal Studio)',
   '빈티지 실내 (Vintage Interior)',
   '사이버펑크 거리 (Cyberpunk Street)',
-  '평화로운 시골 (Peaceful Countryside)'
+  '평화로운 시골 (Peaceful Countryside)',
+  '우주 공간 (Deep Space)',
+  '화려한 무대 (Stage Light)',
+  '고풍스러운 도서관 (Ancient Library)'
 ];
 
 export const IMAGE_STYLES = [

@@ -83,7 +83,7 @@ export const createDefaultSettings = (): TitleSettings => ({
   lyricsStartTime: 0,
   lyricsScrollEnd: 50,
   lyricsFontSize: 4,
-  lyricsDisplayMode: 'scroll',
+  lyricsDisplayMode: 'fade',
   showTitleOverlay: true
 });
 
@@ -92,11 +92,7 @@ export interface ImageParams {
   cameraView: string;
   timeOfDay: string;
   lightingAtmosphere: string;
-  colorGrade: string;
-  composition: string;
-  depthOfField: string;
   weather: string;
-  subjectDetail: string;
   backgroundType: string;
   qualityEngine?: string;
 }

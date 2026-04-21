@@ -76,11 +76,7 @@ import {
   CAMERA_ANGLE_OPTIONS,
   TIME_OF_DAY_OPTIONS,
   LIGHTING_ATMOSPHERES,
-  COLOR_GRADES,
-  COMPOSITIONS,
-  DEPTH_OF_FIELDS,
   WEATHERS,
-  SUBJECT_DETAILS,
   BACKGROUND_TYPES,
   IMAGE_STYLES,
   BLOG_STYLES,
@@ -384,11 +380,7 @@ export default function App() {
         cameraView: '정면 (Front View)',
         timeOfDay: '아침 (Morning)',
         lightingAtmosphere: '시네마틱 라이팅 (Cinematic Lighting)',
-        colorGrade: '다크 앤 무디 (Dark & Moody)',
-        composition: '3분할 법칙 (Rule of Thirds)',
-        depthOfField: '얕은 피사체 심도 (Shallow Bokeh)',
         weather: '맑음 (Clear Sky)',
-        subjectDetail: '하이퍼 디테일 (Hyper-detailed)',
         backgroundType: '자연 숲 (Natural Forest)'
       },
       currentStep: 'lyrics',
@@ -473,24 +465,43 @@ export default function App() {
     try {
       localStorage.setItem('echoesuntohim_workflow', JSON.stringify(workflow));
     } catch (e) {
-      // If localStorage is full, try to save without images as a fallback
-      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        console.warn("LocalStorage full, saving workflow without images");
+      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        console.warn("LocalStorage full, trying progressive fallback to save core data");
+        
+        // Step 1: Try saving without blog post content but keep images
         try {
-          const strippedWorkflow = {
+          const noBlogWorkflow = {
             ...workflow,
-            results: {
-              ...workflow.results,
-              images: [],
-              blogPost: workflow.results.blogPost ? {
-                ...workflow.results.blogPost,
-                content: '블로그 본문이 너무 길어 임시 저장되지 않았습니다. (이미지 포함)'
-              } : undefined
-            }
+            results: { ...workflow.results, blogPost: undefined }
           };
-          localStorage.setItem('echoesuntohim_workflow', JSON.stringify(strippedWorkflow));
-        } catch (fallbackError) {
-          console.error("Fallback save also failed", fallbackError);
+          localStorage.setItem('echoesuntohim_workflow', JSON.stringify(noBlogWorkflow));
+          return;
+        } catch (e1) {
+          // Step 2: Try saving without images but keep everything else (lyrics, analysis)
+          try {
+            const noImagesWorkflow = {
+              ...workflow,
+              results: { ...workflow.results, images: [] }
+            };
+            localStorage.setItem('echoesuntohim_workflow', JSON.stringify(noImagesWorkflow));
+            console.log("Saved core data (lyrics/analysis) by removing images");
+          } catch (e2) {
+            // Step 3: Absolute minimum - just params and basic results
+            try {
+              const minWorkflow = {
+                params: workflow.params,
+                results: { 
+                  lyrics: workflow.results.lyrics,
+                  timedLyrics: workflow.results.timedLyrics,
+                  englishLyrics: workflow.results.englishLyrics
+                },
+                step: workflow.step
+              };
+              localStorage.setItem('echoesuntohim_workflow', JSON.stringify(minWorkflow));
+            } catch (e3) {
+              console.error("Critical: Could not even save minimal workflow data");
+            }
+          }
         }
       }
     }
@@ -694,15 +705,37 @@ export default function App() {
       // Parse timestamps for highlights
       const timestampRegex = /\[(\d{2}):(\d{2})\]\s*\[(.*?)\]/g;
       let match;
-      const highlights: any[] = [];
+      const allSections: any[] = [];
       const lyricsText = result.lyrics || "";
       while ((match = timestampRegex.exec(lyricsText)) !== null) {
         const minutes = parseInt(match[1]);
         const seconds = parseInt(match[2]);
         const label = match[3];
         const time = minutes * 60 + seconds;
-        highlights.push({ start: time, duration: 30, label }); // Default 30s
+        allSections.push({ start: time, label });
       }
+
+      // Priority: Chorus > Bridge > Others
+      const prioritized = [...allSections].sort((a, b) => {
+        const aLabel = a.label.toLowerCase();
+        const bLabel = b.label.toLowerCase();
+        const aIsChorus = aLabel.includes('chorus') || aLabel.includes('후렴');
+        const bIsChorus = bLabel.includes('chorus') || bLabel.includes('후렴');
+        const aIsBridge = aLabel.includes('bridge') || aLabel.includes('브릿지');
+        const bIsBridge = bLabel.includes('bridge') || bLabel.includes('브릿지');
+        
+        if (aIsChorus && !bIsChorus) return -1;
+        if (!aIsChorus && bIsChorus) return 1;
+        if (aIsBridge && !bIsBridge) return -1;
+        if (!aIsBridge && bIsBridge) return 1;
+        return 0;
+      });
+
+      // Take prioritized sections up to shortsCount and assign random duration (20-59s)
+      const highlights = prioritized.slice(0, shortsCount).map(h => {
+        const randomDuration = Math.floor(Math.random() * (59 - 20 + 1)) + 20;
+        return { start: h.start, duration: randomDuration, label: h.label };
+      });
 
       if (!options?.skipSync) {
         setWorkflow(prev => ({
@@ -799,7 +832,7 @@ export default function App() {
           ...prev.params,
           target: target,
           title: cleanTitle,
-          koreanTitle: kTitle.trim() || prev.params.koreanTitle,
+          koreanTitle: (kTitle.trim() || prev.params.koreanTitle || '').replace(/\[.*?\]/g, '').trim(),
           englishTitle: eTitle.trim() || prev.params.englishTitle
         },
         results: {
@@ -812,8 +845,10 @@ export default function App() {
           title: cleanTitle
         }
       }));
-
-      // Trigger analysis
+      
+      addLog("📁 음원이 업로드되었습니다. 자동으로 정밀 분석을 시작합니다...");
+      
+      // Trigger analysis - RESTORED
       analyzeAudioComprehensively(file);
 
       // Also decode for buffer (visualization)
@@ -1102,8 +1137,13 @@ export default function App() {
 
       const prompt = `
         [SYSTEM ROLE]
-        당신은 체류 시간을 극대화하는 블로그 콘텐츠 전문가이자 HTML 디자이너입니다.
-        아래 정보와 각 플랫폼별 가이드에 맞춰 시각적으로 화려하고 매력적인 HTML 포스팅을 생성하세요.
+        당신은 지금부터 블로그 전문가가 아니라, 사용자님이 지정한 **'${userPerspective}'** 그 자체가 되어 글을 써야 합니다.
+        모든 문체와 관점은 반드시 **'${userPerspective}'**의 성격에 맞춰야 하며, 전체적인 분위기는 사용자님이 설정한 **'${userStyle}'** 스타일을 100% 준수하세요.
+        
+        [미션]
+        - 독자 타겟: **'${userAudience}'**
+        - 분량: 최소 1,500자 이상의 풍성하고 깊이 있는 내용
+        - 목표: 사용자님이 기획한 '관점'과 '스타일'을 유지하면서, 각 플랫폼(네이버/티스토리/구글)의 특성에 맞춰 최적화된 형태로 출력하세요.
 
         [곡 정보]
         - 제목: ${workflow.params.koreanTitle || workflow.results.title}
@@ -1445,7 +1485,7 @@ export default function App() {
         params: {
           ...prev.params,
           title: finalTitle,
-          koreanTitle: kTitle || prev.params.koreanTitle,
+          koreanTitle: (kTitle || prev.params.koreanTitle || '').replace(/\[.*?\]/g, '').trim(),
           englishTitle: eTitle || prev.params.englishTitle
         },
         progress: { ...prev.progress, lyrics: 100 },
@@ -1601,20 +1641,16 @@ export default function App() {
         - 구도 및 시점: ${workflow.imageParams.cameraView}
         - 시간대: ${workflow.imageParams.timeOfDay}
         - 조명 및 대기: ${workflow.imageParams.lightingAtmosphere}
-        - 색감 및 톤: ${workflow.imageParams.colorGrade}
-        - 구도 구성: ${workflow.imageParams.composition}
-        - 피사체 심도: ${workflow.imageParams.depthOfField}
         - 날씨 및 환경: ${workflow.imageParams.weather}
-        - 세부 묘사: ${workflow.imageParams.subjectDetail}
         - 배경 유형: ${workflow.imageParams.backgroundType}
         - 스타일 테마: ${workflow.imageSettings.style}
         
         [지시사항]
-        1. 가사의 핵심 키워드(놀이터, 그네, 비눗방울, 별, 꽃 등)를 시각적으로 구체화하세요.
-        2. 곡의 분위기(따뜻함, 위로, 그리움 등)가 조명과 색감에 반영되도록 하세요. 
-        3. **중요**: ${workflow.params.songInterpretation ? `사용자가 제공한 [사용자 곡 해석]을 최우선으로 반영하여 이미지를 구상하세요. AI의 해석보다 사용자의 의도가 우선입니다.` : `음악 종류가 'CCM'일 경우, 기독교적인 상징(빛, 십자가, 기도하는 모습, 평화로운 자연, 교회, 은혜로운 분위기 등)을 적극적으로 활용하여 경건하고 영적인 느낌이 강하게 나도록 프롬프트를 구성하세요. 대중음악일 경우 트렌디하고 감각적인 미장센에 집중하세요.`}
-        4. 인물보다는 상징적인 사물이나 풍경 위주로 묘사하여 감성을 극대화하세요.
-        5. 사용자가 선택한 [이미지 생성 옵션]을 프롬프트에 반드시 반영하여 해당 스타일과 질감, 조명, 구도가 명확히 드러나도록 하세요.
+        1. 가사를 심도 있게 분석하여, 각 곡만이 가지는 고유한 서사, 상징, 핵심 장면을 시각적으로 완전히 다르게 구체화하세요. (매 곡마다 피사체, 배경, 메타포가 완전히 달라져야 합니다.)
+        2. 곡의 고유한 분위기와 감정이 조명과 색감에 적극적으로 반영되도록 하세요.
+        3. **중요**: ${workflow.params.songInterpretation ? `사용자가 제공한 [사용자 곡 해석]을 최우선으로 반영하여 이미지를 구상하세요. AI의 해석보다 사용자의 의도가 우선입니다.` : `음악 종류가 'CCM'일 경우, 기독교적인 상징(빛, 십자가, 기도하는 모습, 평화로운 자연, 교회, 은혜로운 분위기 등)을 적극적으로 활용하여 경건하고 영적인 느낌이 강하게 나도록 프롬프트를 구성하세요. 대중음악일 경우 곡의 주제에 맞는 트렌디하고 감각적인 미장센에 집중하세요.`}
+        4. 곡의 주제에 맞춰 인물을 포함하거나, 독창적인 사물 및 풍경을 배치하여 감성을 극대화하세요. 이전과 유사한 반복적인 구도(예: 길거리에 핀 작은 꽃 등)는 절대 피하십시오.
+        5. 사용자가 선택한 [이미지 생성 옵션]을 프롬프트에 반드시 반영하되, 옵션이 곡의 서사를 해치지 않게 자연스럽게 융합하세요.
         6. 영어로 프롬프트를 작성하세요.
         
         JSON 형식으로 출력:
@@ -1709,9 +1745,12 @@ export default function App() {
             },
             results: {
               ...prev.results,
-              images: [...prev.results.images.filter(img => img.label !== label), tempImage]
+              images: [...prev.results.images.filter(img => img.label.replace(/\s/g, '').toLowerCase() !== label.replace(/\s/g, '').toLowerCase()), tempImage]
             }
           }));
+
+          // 화면에 렌더링될 수 있도록 잠시 대기 (브라우저 Paint 보장)
+          await new Promise(resolve => setTimeout(resolve, 100));
 
           // 2. Upload to Firebase Storage in the background
           addLog(`📤 [${label}] 이미지를 클라우드 저장소에 업로드 중...`);
@@ -1719,16 +1758,31 @@ export default function App() {
           const finalUrl = storageUrl || base64Url;
 
           // 3. Update with permanent storage URL
-          const newImage = { url: finalUrl, type, label, prompt };
+          const newImage = { url: finalUrl, localUrl: base64Url, type, label, prompt };
           generatedImages.push(newImage);
 
           setWorkflow(prev => ({
             ...prev,
             results: {
               ...prev.results,
-              images: prev.results.images.map(img => img.label === label ? newImage : img)
+              images: prev.results.images.map(img => img.label.replace(/\s/g, '').toLowerCase() === label.replace(/\s/g, '').toLowerCase() ? newImage : img)
             }
           }));
+
+          // 4. 즉시 히스토리(DB)에 저장하여 유실 방지
+          const titleToSave = workflow.params.title || workflow.params.koreanTitle || uploadedAudioName || "제목 없음";
+          setSunoTracks(prev => {
+            const exists = prev.some(t => t.title === titleToSave);
+            if (exists) {
+              return prev.map(t => t.title === titleToSave ? { 
+                ...t, 
+                generatedImages: [...(t.generatedImages || []).filter((img: any) => img.label.replace(/\s/g, '').toLowerCase() !== label.replace(/\s/g, '').toLowerCase()), newImage] 
+              } : t);
+            } else {
+              return [{ title: titleToSave, generatedImages: [newImage], created_at: new Date().toISOString() }, ...prev];
+            }
+          });
+
           return true;
         } catch (e) {
           addLog(`❌ [${label}] 이미지 생성 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`);
@@ -1760,13 +1814,16 @@ export default function App() {
       }
 
       // After all images are generated, save them to the track history in sunoTracks
-      if (generatedImages.length > 0 && workflow.params.title) {
-        setSunoTracks(prev => prev.map(t => {
-          if (t.title === workflow.params.title) {
-            return { ...t, generatedImages };
+      if (generatedImages.length > 0) {
+        const titleToSave = workflow.params.title || workflow.params.koreanTitle || uploadedAudioName || "제목 없음";
+        setSunoTracks(prev => {
+          const exists = prev.some(t => t.title === titleToSave);
+          if (exists) {
+            return prev.map(t => t.title === titleToSave ? { ...t, generatedImages } : t);
+          } else {
+            return [{ title: titleToSave, generatedImages, created_at: new Date().toISOString() }, ...prev];
           }
-          return t;
-        }));
+        });
       }
 
       setWorkflow(prev => ({
@@ -1904,7 +1961,8 @@ export default function App() {
         - 구도 및 시점: ${workflow.imageParams.cameraView}
         - 시간대: ${workflow.imageParams.timeOfDay}
         - 조명 및 대기: ${workflow.imageParams.lightingAtmosphere}
-        - 색감 및 톤: ${workflow.imageParams.colorGrade}
+        - 날씨: ${workflow.imageParams.weather}
+        - 배경: ${workflow.imageParams.backgroundType}
         - 퀄리티 및 엔진: ${workflow.imageParams.qualityEngine}
         
         [지시사항]
@@ -2097,7 +2155,7 @@ export default function App() {
     }
   };
 
-  const downloadImageWithTitle = async (img: { url: string; type: 'horizontal' | 'vertical'; label: string }) => {
+  const downloadImageWithTitle = async (img: { url: string; localUrl?: string; type: 'horizontal' | 'vertical'; label: string }) => {
     addLog(`[${img.label}] 타이틀 포함 이미지 다운로드 준비 중...`);
     try {
       const canvas = document.createElement('canvas');
@@ -2106,11 +2164,18 @@ export default function App() {
 
       const mainImg = new Image();
       mainImg.crossOrigin = "anonymous";
-      mainImg.src = img.url;
+      mainImg.src = img.localUrl || img.url;
 
       await new Promise((resolve, reject) => {
         mainImg.onload = resolve;
-        mainImg.onerror = reject;
+        mainImg.onerror = () => {
+          if (mainImg.crossOrigin) {
+            mainImg.crossOrigin = "";
+            mainImg.src = img.localUrl || img.url;
+          } else {
+            reject(new Error("이미지 로드에 실패했습니다 (CORS 문제일 수 있습니다)"));
+          }
+        };
       });
 
       canvas.width = mainImg.width;
@@ -2631,6 +2696,8 @@ export default function App() {
               videoEngine={videoEngine}
               setVideoEngine={setVideoEngine}
               videoQuality={videoQuality}
+              audioFadeIn={audioFadeIn}
+              audioFadeOut={audioFadeOut}
               logs={logs}
             />
           )}

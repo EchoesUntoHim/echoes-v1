@@ -18,6 +18,21 @@ import {
   INSTRUMENTS 
 } from '../constants';
 
+const formatTime = (seconds: number) => {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+const parseTime = (timeStr: string) => {
+  const parts = timeStr.split(':');
+  if (parts.length !== 2) return 0;
+  const m = parseInt(parts[0], 10);
+  const s = parseInt(parts[1], 10);
+  if (isNaN(m) || isNaN(s)) return 0;
+  return m * 60 + s;
+};
+
 interface LyricsTabProps {
   workflow: any;
   setWorkflow: React.Dispatch<React.SetStateAction<any>>;
@@ -54,54 +69,12 @@ export const LyricsTab = ({
   const [isTranslating, setIsTranslating] = React.useState(false);
   const translationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // 실시간 번역 로직 (한글 -> 영어)
+  // 실시간 자동 번역 로직 제거 (비용 절감 및 사용자 수동 제어)
+  /*
   React.useEffect(() => {
-    if (!workflow.results.lyrics || workflow.progress.lyrics < 100) return;
-
-    if (translationTimeoutRef.current) {
-      clearTimeout(translationTimeoutRef.current);
-    }
-
-    translationTimeoutRef.current = setTimeout(async () => {
-      const currentKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
-      if (!currentKey) return;
-      
-      setIsTranslating(true);
-      try {
-        const genAI = new GoogleGenAI({ apiKey: currentKey });
-        
-        const prompt = `다음 한글 가사를 영어로 번역해줘. 
-        섹션 태그([Verse], [Chorus] 등)는 그대로 유지해야 해.
-        가사 내용만 자연스럽고 시적인 영어로 번역해줘.
-        번역된 결과물만 출력해줘.
-        
-        한글 가사:
-        ${workflow.results.lyrics}`;
-
-        const response = await genAI.models.generateContent({
-          model: aiEngine || "gemini-flash-latest",
-          contents: prompt
-        });
-        const translatedText = response.text;
-        
-        setWorkflow(prev => ({
-          ...prev,
-          results: {
-            ...prev.results,
-            englishLyrics: translatedText
-          }
-        }));
-      } catch (error) {
-        console.error("Translation error:", error);
-      } finally {
-        setIsTranslating(false);
-      }
-    }, 2000);
-
-    return () => {
-      if (translationTimeoutRef.current) clearTimeout(translationTimeoutRef.current);
-    };
+    ...
   }, [workflow.results.lyrics, apiKey, workflow.progress.lyrics]);
+  */
 
   return (
     <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">

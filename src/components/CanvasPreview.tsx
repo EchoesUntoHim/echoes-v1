@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 
 interface CanvasPreviewProps {
-  img: { url: string };
+  img: { url: string; localUrl?: string };
   settings: any;
   params: any;
   type: string;
@@ -16,11 +16,7 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const mainImg = new Image();
-    mainImg.crossOrigin = "anonymous";
-    mainImg.src = img.url;
-
-    mainImg.onload = () => {
+    const drawCanvas = (loadedImg: HTMLImageElement) => {
       // Set fixed aspect ratio based on type
       const targetWidth = type === 'main' ? 1920 : 1080;
       const targetHeight = type === 'main' ? 1080 : 1920;
@@ -29,7 +25,7 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
       canvas.height = targetHeight;
       
       // Apply "Cover" logic to match VideoPlayer
-      const imgAspect = mainImg.width / mainImg.height;
+      const imgAspect = loadedImg.width / loadedImg.height;
       const canvasAspect = canvas.width / canvas.height;
       let drawWidth, drawHeight;
       
@@ -46,14 +42,14 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
       // Draw image with "Cover" logic
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.drawImage(mainImg, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.drawImage(loadedImg, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
 
       // Apply dark overlay to match VideoPlayer
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const korTitle = params.koreanTitle || "제목 없음";
+      const korTitle = (params.koreanTitle || "제목 없음").replace(/\[.*?\]/g, '').trim();
       const engTitle = params.englishTitle || "";
 
       const xOffset = settings.titleXOffset || 0;
@@ -138,7 +134,7 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
       }
     };
 
-    mainImg.onerror = () => {
+    const drawError = () => {
       ctx.fillStyle = '#1A1F26';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#ef4444';
@@ -148,12 +144,26 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
       ctx.font = '20px sans-serif';
       ctx.fillText('다시 생성하거나 업로드해주세요', canvas.width / 2, canvas.height / 2 + 50);
     };
+
+    const mainImg = new Image();
+    mainImg.crossOrigin = "anonymous";
+    mainImg.src = img.localUrl || img.url;
+
+    mainImg.onload = () => drawCanvas(mainImg);
+
+    mainImg.onerror = () => {
+      // CORS 에러 우회를 위해 새로운 Image 객체로 재시도
+      const fallbackImg = new Image();
+      fallbackImg.src = img.localUrl || img.url;
+      fallbackImg.onload = () => drawCanvas(fallbackImg);
+      fallbackImg.onerror = drawError;
+    };
   }, [img, settings, params, type]);
 
   return (
     <canvas 
       ref={canvasRef} 
-      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+      className="w-full h-full object-contain transition-transform duration-500" 
     />
   );
 };
