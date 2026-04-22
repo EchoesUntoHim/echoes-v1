@@ -3,39 +3,22 @@ import { TitleEffect, VocalType } from './types';
 export const AI_ENGINES = [
   { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (가사/음원분석용)', type: 'free' },
   { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (가사/음원분석용)', type: 'paid' },
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (가사/음원분석용)', type: 'paid' },
-  { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (가사/음원분석용)', type: 'free' },
   { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview (가사/음원분석용)', type: 'free' },
   { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview (가사/음원분석용)', type: 'paid' },
-  { value: 'deep-research-pro-preview-12-2025', label: 'Deep Research Pro (분석/리서치 전용)', type: 'paid' },
-  { value: 'gemini-flash-latest', label: 'Gemini Flash Latest (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite Latest (가사/음원분석용)', type: 'free' },
-  { value: 'gemini-pro-latest', label: 'Gemini Pro Latest (가사/음원분석용)', type: 'paid' },
   { value: 'gemma-3-1b-it', label: 'Gemma 3 1B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemma-3-4b-it', label: 'Gemma 3 4B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemma-3-12b-it', label: 'Gemma 3 12B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemma-3-27b-it', label: 'Gemma 3 27B IT (가사/텍스트용)', type: 'free' },
   { value: 'gemma-3n-e2b-it', label: 'Gemma 3N E2B IT (가사/텍스트용)', type: 'free' },
-  { value: 'gemma-3n-e4b-it', label: 'Gemma 3N E4B IT (가사/텍스트용)', type: 'free' },
-  { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B IT (가사/텍스트용)', type: 'free' },
-  { value: 'gemma-4-31b-it', label: 'Gemma 4 31B IT (가사/텍스트용)', type: 'free' },
-  { value: 'gemini-2.5-computer-use-preview-10-2025', label: 'Gemini 2.5 Computer Use (자동화용)', type: 'paid' },
-  { value: 'gemini-3.1-pro-preview-customtools', label: 'Gemini 3.1 Pro Custom Tools (가사/음원분석용)', type: 'paid' }
+  { value: 'gemma-3n-e4b-it', label: 'Gemma 3N E4B IT (가사/텍스트용)', type: 'free' }
 ];
 
 export const IMAGE_ENGINES = [
-  { value: 'gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash Image (이미지생성용)', type: 'free' },
-  { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image (이미지생성용)', type: 'paid' },
-  { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (이미지생성용)', type: 'free' },
-  { value: 'nano-banana-pro-preview', label: 'Nano Banana Pro (이미지생성용)', type: 'paid' }
+  { value: 'gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash Image (이미지생성용)', type: 'free' }
 ];
 
 export const MUSIC_ENGINES = [
-  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (검증됨)', type: 'free' },
-  { value: 'lyria-3-pro-preview', label: 'Lyria 3 Pro (음악생성용)', type: 'paid' },
-  { value: 'lyria-3-clip-preview', label: 'Lyria 3 Clip (음악생성용)', type: 'free' },
-  { value: 'google-magenta-free', label: 'Google Magenta (음악생성용)', type: 'free' }
+  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (검증됨)', type: 'free' }
 ];
 
 export const VIDEO_ENGINES = [
@@ -54,11 +37,13 @@ export const CCM_SUB_GENRES = [
 ];
 
 export const POP_MOODS = [
-  '신나는', '슬픈', '잔잔한', '몽환적인', '강렬한', '따뜻한', '차가운', '그루비한', '희망찬', '우울한'
+  '신나는', '슬픈', '잔잔한', '몽환적인', '강렬한', '따뜻한', '차가운', '그루비한', '희망찬', '우울한',
+  '레트로한', '도시적인', '긴장감넘치는', '치유되는', '섹시한', '반항적인', '청량한', '어쿠스틱한', '시크한'
 ];
 
 export const CCM_MOODS = [
-  '은혜로운', '경건한', '기쁨의', '위로가되는', '장엄한', '평안한', '감동적인', '열정적인'
+  '은혜로운', '경건한', '기쁨의', '위로가되는', '장엄한', '평안한', '감동적인', '열정적인',
+  '가슴벅찬', '깊은묵상의', '성령충만한', '치유와회복의', '담대하게선포하는', '감사하는', '고독한기도의', '애통하는', '기대하는'
 ];
 
 export const TEMPOS = ['매우 느림', '느림', '보통', '빠름', '매우 빠름'];
@@ -69,7 +54,7 @@ export const LYRICS_STYLES = [
 
 export const VOCAL_OPTIONS: Record<VocalType, string[]> = {
   Male: [
-    '부드러운 미성 남성', '허스키한 중저음 남성', '파워풀한 락 보컬 남성', '감미로운 R&B 남성', '맑은 테너', 
+    '부드러운 미성 남성', '허스키한 중저음 남성', '파워풀한 락 보컬 남성', '감미로운 R&B 남성', '맑은 테너',
     '거친 바리톤', '트렌디한 팝 보컬 남성', '소울풀한 남성', '담백한 포크 보컬 남성', '깊은 울림의 베이스 남성'
   ],
   Female: [
@@ -77,8 +62,24 @@ export const VOCAL_OPTIONS: Record<VocalType, string[]> = {
     '섹시한 재즈 보컬 여성', '맑고 깨끗한 미성 여성', '허스키한 소울 보컬 여성', '귀여운 아이돌 보컬', '애절한 발라드 보컬 여성'
   ],
   Duet: [
-    '남녀 감성 듀엣', '남남 파워 듀엣', '여여 화음 듀엣', '어쿠스틱 남녀 듀엣', 'R&B 남녀 소울 듀엣',
-    '뮤지컬 스타일 남녀 듀엣', '재즈풍 남녀 듀엣', '락 스타일 남녀 듀엣', '포크 스타일 남녀 듀엣', '가스펠 스타일 남녀 듀엣'
+    '------ 남녀 듀엣 ------',
+    '대화하듯 주고받는 남녀 감성 듀엣',
+    '서로 화답하는 어쿠스틱 남녀 듀엣',
+    '풍성한 화음의 R&B 남녀 소울 듀엣',
+    '뮤지컬처럼 극적인 남녀 듀엣',
+    '따뜻하게 감싸주는 팝 발라드 남녀 듀엣',
+    '------ 남남 듀엣 ------',
+    '힘있게 선포하는 남남 파워 듀엣',
+    '깊은 울림의 남남 감성 발라드 듀엣',
+    '리듬감 있게 주고받는 힙합 남남 듀엣',
+    '거칠고 열정적인 락 스타일 남남 듀엣',
+    '담백하고 진솔한 포크 남남 듀엣',
+    '------ 여여 듀엣 ------',
+    '천사처럼 어우러지는 여여 화음 듀엣',
+    '맑고 청아하게 울리는 여여 듀엣',
+    '폭발적인 가창력의 여여 디바 듀엣',
+    '세련된 선율의 재즈풍 여여 듀엣',
+    '밝고 경쾌한 아이돌 스타일 여여 듀엣'
   ],
   Choir: ['웅장한 가스펠 합창', '소년 소녀 합창단', '클래식 4부 합창', '현대적인 워십 콰이어']
 };

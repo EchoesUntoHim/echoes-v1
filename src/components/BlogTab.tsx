@@ -112,7 +112,7 @@ export const BlogTab = ({
   };
 
   return (
-    <motion.div key="blog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
+    <motion.div key="blog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold mb-2">블로그 포스팅 생성</h1>

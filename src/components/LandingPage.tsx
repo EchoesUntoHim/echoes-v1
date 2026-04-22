@@ -21,23 +21,23 @@ export const LandingPage = ({ onStart }: LandingPageProps) => {
         <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-4">
           <Zap className="w-4 h-4 text-primary" fill="currentColor" />
           <span className="text-sm font-bold text-primary tracking-tight text-right">차세대 AI 콘텐츠 자동화 엔진</span>
-          <span className="ml-2 text-[10px] font-black text-primary/40 border-l border-primary/20 pl-2">v1.4.10</span>
+          <span className="ml-2 text-[10px] font-black text-primary/40 border-l border-primary/20 pl-2">v1.4.28</span>
         </div>
-        
+
         <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-white">
           AI로 찬양을 만들고,<br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-primary to-secondary">
             예배 영상까지 한 번에
           </span> 완성하세요.
         </h1>
-        
+
         <p className="text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto font-medium leading-relaxed">
           Echoes Unto Him은 하나님께 울려퍼지는 예배를 위해 음악 생성부터 영상 편집, 블로그 포스팅까지 모든 과정을 자동화합니다.<br className="hidden md:block" />
           예배자를 위한 압도적인 콘텐츠 자동화 솔루션.
         </p>
 
         <div className="flex flex-col md:flex-row items-center justify-center gap-6 pt-10">
-          <button 
+          <button
             onClick={onStart}
             className="px-10 py-5 bg-primary text-background rounded-2xl font-black text-xl flex items-center gap-3 hover:scale-105 transition-transform neon-glow-primary shadow-2xl shadow-primary/30"
           >

@@ -10,6 +10,7 @@ import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
 import { VIDEO_ENGINES } from '../constants';
 import { createDefaultSettings } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 interface VideoTabProps {
   workflow: any;
@@ -42,6 +43,9 @@ interface VideoTabProps {
   audioFadeIn?: number;
   audioFadeOut?: number;
   logs: string[];
+  apiKey: string;
+  aiEngine: string;
+  isTranslating?: boolean;
 }
 
 export const VideoTab = ({
@@ -74,8 +78,17 @@ export const VideoTab = ({
   videoQuality,
   audioFadeIn = 0,
   audioFadeOut = 0,
-  logs
+  logs,
+  apiKey,
+  aiEngine,
+  isTranslating = false
 }: VideoTabProps) => {
+  const [internalIsTranslating, setInternalIsTranslating] = React.useState(false);
+  const translationTimeoutRef = React.useRef<any>(null);
+
+  // 실시간 자동 번역 (v1.4.26 - App.tsx에서 통합 관리)
+  // 단, VideoTab에서 가사를 직접 수정할 경우를 위해 최소한의 싱크는 App.tsx의 useEffect가 담당함
+  // 여기서는 중복 호출 방지를 위해 로컬 번역 로직 제거
   React.useEffect(() => {
     // Auto-recovery for missing images from sunoTracks history
     if ((!workflow.results.images || workflow.results.images.length === 0) && (workflow.params.title || workflow.params.koreanTitle)) {
@@ -103,7 +116,7 @@ export const VideoTab = ({
   }, [workflow.params.title, workflow.params.koreanTitle, workflow.results.images?.length]);
 
   return (
-    <motion.div key="video" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
+    <motion.div key="video" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold mb-2">영상 렌더링</h1>
@@ -258,7 +271,14 @@ export const VideoTab = ({
             <div className="space-y-4">
               <GlassCard className="space-y-3 p-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-primary flex items-center gap-1"><TypeIcon className="w-3 h-3" /> 3. 가사 입력</h3>
+                  <h3 className="text-xs font-bold text-primary flex items-center gap-1">
+                    <TypeIcon className="w-3 h-3" /> 3. 가사 입력
+                    {isTranslating && (
+                      <span className="ml-2 text-[10px] text-primary animate-pulse flex items-center gap-1">
+                        <RefreshCw className="w-2 h-2 animate-spin" /> 실시간 번역 중...
+                      </span>
+                    )}
+                  </h3>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -424,11 +444,11 @@ export const VideoTab = ({
           </div>
 
           <GlassCard className="space-y-4 xl:col-span-2">
-              <div className="flex flex-row flex-nowrap gap-2 w-full">
+            <div className="flex flex-row flex-wrap gap-4 w-full">
               {Array.from({ length: shortsCount }).map((_, idx) => {
                 const highlight = shortsHighlights[idx] || { start: 0, duration: 30 };
                 return (
-                  <div key={idx} className="flex-1 min-w-0 space-y-2 p-2 bg-white/5 rounded-xl border border-white/5">
+                  <div key={idx} className="w-[calc(50%-1rem)] md:w-[calc(33.33%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(20%-1rem)] min-w-[160px] space-y-2 p-2 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex justify-between items-center mb-1">
                       <div className="text-[10px] font-bold text-primary truncate"># {idx + 1}</div>
                       <div className="text-[9px] text-gray-500 font-mono">{Math.round(highlight.duration)}s</div>
@@ -484,11 +504,11 @@ export const VideoTab = ({
                 );
               })}
             </div>
-            
+
             <div className="mt-6 border-t border-white/5 pt-4">
-              <VideoSettingsPanel 
-                type="shorts" 
-                settings={workflow.imageSettings['shorts'] || createDefaultSettings()} 
+              <VideoSettingsPanel
+                type="shorts"
+                settings={workflow.imageSettings['shorts'] || createDefaultSettings()}
                 onChange={(newSettings) => setWorkflow(prev => ({
                   ...prev,
                   imageSettings: { ...prev.imageSettings, shorts: newSettings }

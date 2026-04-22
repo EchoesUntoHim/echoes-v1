@@ -5,17 +5,17 @@ import { GlassCard } from './GlassCard';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
 import { GoogleGenAI } from "@google/genai";
-import { 
-  AI_ENGINES, 
-  TARGETS, 
-  POP_SUB_GENRES, 
-  CCM_SUB_GENRES, 
-  POP_MOODS, 
-  CCM_MOODS, 
-  TEMPOS, 
-  LYRICS_STYLES, 
-  VOCAL_OPTIONS, 
-  INSTRUMENTS 
+import {
+  AI_ENGINES,
+  TARGETS,
+  POP_SUB_GENRES,
+  CCM_SUB_GENRES,
+  POP_MOODS,
+  CCM_MOODS,
+  TEMPOS,
+  LYRICS_STYLES,
+  VOCAL_OPTIONS,
+  INSTRUMENTS
 } from '../constants';
 
 const formatTime = (seconds: number) => {
@@ -46,8 +46,9 @@ interface LyricsTabProps {
   musicEngine: string;
   apiKey: string;
   addLog: (msg: string) => void;
-  availableModels?: {value: string, label: string, type?: string}[];
+  availableModels?: { value: string, label: string, type?: string }[];
   fetchAvailableModels?: () => void;
+  isTranslating?: boolean;
 }
 
 export const LyricsTab = ({
@@ -64,9 +65,9 @@ export const LyricsTab = ({
   apiKey,
   addLog,
   availableModels = AI_ENGINES,
-  fetchAvailableModels
+  fetchAvailableModels,
+  isTranslating = false
 }: LyricsTabProps) => {
-  const [isTranslating, setIsTranslating] = React.useState(false);
   const translationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // 실시간 자동 번역 로직 제거 (비용 절감 및 사용자 수동 제어)
@@ -77,13 +78,13 @@ export const LyricsTab = ({
   */
 
   return (
-    <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
+    <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
       <GlassCard className="border-secondary/30 bg-secondary/5">
         <div className="flex items-center gap-2 text-secondary mb-4">
           <Send className="w-5 h-5" />
           <span className="text-sm font-black uppercase tracking-widest">사용자 직접 입력 (최우선 반영)</span>
         </div>
-        <textarea 
+        <textarea
           value={workflow.params.userInput || ''}
           onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, userInput: e.target.value } }))}
           placeholder="여기에 특정 가사 내용, 분위기, 스토리 등을 자유롭게 입력하세요. 입력 시 아래 설정보다 이 내용이 우선적으로 반영됩니다."
@@ -111,7 +112,7 @@ export const LyricsTab = ({
               ))}
             </select>
             {fetchAvailableModels && (
-              <button 
+              <button
                 onClick={fetchAvailableModels}
                 className="p-1 hover:bg-white/10 rounded transition-colors"
                 title="모델 목록 갱신"
@@ -123,10 +124,10 @@ export const LyricsTab = ({
           <div className="text-right">
             <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">음악 엔진</span>
             <p className="text-xs font-mono text-secondary">
-              {musicEngine.includes('magenta') ? 'Google Magenta' : 
-               musicEngine.includes('musiclm') ? 'Google MusicLM' : 
-               musicEngine.includes('suno') ? 'Suno AI' : 
-               musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
+              {musicEngine.includes('magenta') ? 'Google Magenta' :
+                musicEngine.includes('musiclm') ? 'Google MusicLM' :
+                  musicEngine.includes('suno') ? 'Suno AI' :
+                    musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
             </p>
           </div>
         </div>
@@ -134,72 +135,72 @@ export const LyricsTab = ({
 
       <GlassCard className="grid grid-cols-1 md:grid-cols-2 gap-6 border-primary/20">
         <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-primary">
-                <TypeIcon className="w-5 h-5" />
-                <span className="text-sm font-black uppercase tracking-widest">곡 정보 설정</span>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-primary">
+              <TypeIcon className="w-5 h-5" />
+              <span className="text-sm font-black uppercase tracking-widest">곡 정보 설정</span>
+            </div>
+            <div className="space-y-4 p-5 bg-primary/10 rounded-2xl border-2 border-primary/30 neon-glow-primary/20">
+              <div>
+                <label className="text-xs font-bold text-primary mb-2 block uppercase tracking-tighter">곡 제목 (AI 자동 생성 가능)</label>
+                <input
+                  type="text"
+                  placeholder="예: 벚꽃 흩날리는 오후"
+                  value={workflow.params.title || ''}
+                  onChange={(e) => {
+                    const newTitle = e.target.value;
+                    const [kTitle, eTitle] = newTitle.includes('_') ? newTitle.split('_') : [newTitle, ''];
+                    setWorkflow(prev => ({
+                      ...prev,
+                      params: {
+                        ...prev.params,
+                        title: newTitle,
+                        koreanTitle: kTitle || prev.params.koreanTitle,
+                        englishTitle: eTitle || prev.params.englishTitle
+                      },
+                      results: { ...prev.results, title: newTitle }
+                    }));
+                  }}
+                  className="w-full bg-black/60 border border-primary/40 rounded-xl px-4 py-4 focus:border-primary outline-none text-white transition-all text-xl font-black placeholder:text-white/20 shadow-inner"
+                />
               </div>
-              <div className="space-y-4 p-5 bg-primary/10 rounded-2xl border-2 border-primary/30 neon-glow-primary/20">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-primary mb-2 block uppercase tracking-tighter">곡 제목 (AI 자동 생성 가능)</label>
-                  <input 
+                  <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">한글 제목</label>
+                  <input
                     type="text"
-                    placeholder="예: 벚꽃 흩날리는 오후"
-                    value={workflow.params.title || ''}
-                    onChange={(e) => {
-                      const newTitle = e.target.value;
-                      const [kTitle, eTitle] = newTitle.includes('_') ? newTitle.split('_') : [newTitle, ''];
-                      setWorkflow(prev => ({ 
-                        ...prev, 
-                        params: { 
-                          ...prev.params, 
-                          title: newTitle,
-                          koreanTitle: kTitle || prev.params.koreanTitle,
-                          englishTitle: eTitle || prev.params.englishTitle
-                        },
-                        results: { ...prev.results, title: newTitle }
-                      }));
-                    }}
-                    className="w-full bg-black/60 border border-primary/40 rounded-xl px-4 py-4 focus:border-primary outline-none text-white transition-all text-xl font-black placeholder:text-white/20 shadow-inner"
+                    value={workflow.params.koreanTitle || ''}
+                    onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, koreanTitle: e.target.value } }))}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">한글 제목</label>
-                    <input 
-                      type="text"
-                      value={workflow.params.koreanTitle || ''}
-                      onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, koreanTitle: e.target.value } }))}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">영어 제목</label>
-                    <input 
-                      type="text"
-                      value={workflow.params.englishTitle || ''}
-                      onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, englishTitle: e.target.value } }))}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
-                    />
-                  </div>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-400 mb-2 block uppercase tracking-tighter">주제 (Topic)</label>
-                  <input 
-                    type="text" 
-                    value={workflow.params.topic}
-                    onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, topic: e.target.value } }))}
-                    placeholder="예: 그리운 고향, 첫사랑의 기억, 주님의 은혜"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-white transition-all"
+                  <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-tighter">영어 제목</label>
+                  <input
+                    type="text"
+                    value={workflow.params.englishTitle || ''}
+                    onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, englishTitle: e.target.value } }))}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-400 mb-2 block uppercase tracking-tighter">주제 (Topic)</label>
+                <input
+                  type="text"
+                  value={workflow.params.topic}
+                  onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, topic: e.target.value } }))}
+                  placeholder="예: 그리운 고향, 첫사랑의 기억, 주님의 은혜"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-white transition-all"
+                />
               </div>
             </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-400 mb-2 block">타겟층</label>
-              <select 
+              <select
                 value={workflow.params.target}
                 onChange={(e) => {
                   const target = e.target.value;
@@ -214,7 +215,7 @@ export const LyricsTab = ({
             </div>
             <div>
               <label className="text-sm font-medium text-gray-400 mb-2 block">음악 장르</label>
-              <select 
+              <select
                 value={workflow.params.subGenre}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, subGenre: e.target.value } }))}
                 className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-3 outline-none text-white appearance-none cursor-pointer"
@@ -229,7 +230,7 @@ export const LyricsTab = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-400 mb-2 block">템포</label>
-              <select 
+              <select
                 value={workflow.params.tempo}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, tempo: e.target.value } }))}
                 className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-3 outline-none text-white appearance-none cursor-pointer"
@@ -239,7 +240,7 @@ export const LyricsTab = ({
             </div>
             <div>
               <label className="text-sm font-medium text-gray-400 mb-2 block">가사 스타일</label>
-              <select 
+              <select
                 value={workflow.params.lyricsStyle}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, lyricsStyle: e.target.value } }))}
                 className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-3 outline-none text-white appearance-none cursor-pointer"
@@ -253,7 +254,7 @@ export const LyricsTab = ({
             <label className="text-sm font-medium text-gray-400 mb-2 block">분위기</label>
             <div className="flex flex-wrap gap-2">
               {(workflow.params.target === '대중음악' ? POP_MOODS : CCM_MOODS).map(m => (
-                <button 
+                <button
                   key={m}
                   onClick={() => setWorkflow(prev => ({ ...prev, params: { ...prev.params, mood: m } }))}
                   className={cn(
@@ -273,7 +274,7 @@ export const LyricsTab = ({
             <label className="text-sm font-medium text-gray-400 mb-2 block">보컬 타입</label>
             <div className="grid grid-cols-2 gap-2 mb-3">
               {(Object.keys(VOCAL_OPTIONS)).map(v => (
-                <button 
+                <button
                   key={v}
                   onClick={() => {
                     const firstVocal = (VOCAL_OPTIONS as any)[v][0];
@@ -281,8 +282,8 @@ export const LyricsTab = ({
                   }}
                   className={cn(
                     "px-3 py-2 rounded-lg text-xs font-bold border transition-all",
-                    Object.values(VOCAL_OPTIONS).some(opts => opts.includes(workflow.params.vocal) && opts === (VOCAL_OPTIONS as any)[v]) 
-                      ? "bg-secondary text-white border-secondary" 
+                    Object.values(VOCAL_OPTIONS).some(opts => opts.includes(workflow.params.vocal) && opts === (VOCAL_OPTIONS as any)[v])
+                      ? "bg-secondary text-white border-secondary"
                       : "bg-white/5 border-white/10 text-gray-400"
                   )}
                 >
@@ -290,13 +291,15 @@ export const LyricsTab = ({
                 </button>
               ))}
             </div>
-            <select 
+            <select
               value={workflow.params.vocal}
               onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, vocal: e.target.value } }))}
               className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-3 outline-none text-sm text-white appearance-none cursor-pointer"
             >
               {Object.values(VOCAL_OPTIONS).find(opts => opts.includes(workflow.params.vocal))?.map(opt => (
-                <option key={opt} value={opt} className="bg-[#1A1F26] text-white">{opt}</option>
+                <option key={opt} value={opt} className="bg-[#1A1F26] text-white" disabled={opt.startsWith('---')}>
+                  {opt}
+                </option>
               ))}
             </select>
           </div>
@@ -305,7 +308,7 @@ export const LyricsTab = ({
             <label className="text-sm font-medium text-gray-400 mb-2 block">메인 악기 (AI가 세션을 구성합니다)</label>
             <div className="flex flex-wrap gap-2">
               {INSTRUMENTS.map(inst => (
-                <button 
+                <button
                   key={inst}
                   onClick={() => {
                     setWorkflow(prev => ({ ...prev, params: { ...prev.params, instrument: inst } }));
@@ -326,7 +329,7 @@ export const LyricsTab = ({
               <Music className="w-4 h-4 text-secondary" />
               <span className="text-xs font-bold text-secondary uppercase tracking-wider">음악 엔진: Suno AI v3.5</span>
             </div>
-            <button 
+            <button
               onClick={generateLyrics}
               className="w-full bg-primary text-background py-4 rounded-xl font-black text-lg neon-glow-primary"
             >
@@ -348,7 +351,7 @@ export const LyricsTab = ({
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
                 <span className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-1">생성된 제목 (수정 가능)</span>
-                <input 
+                <input
                   type="text"
                   value={workflow.results.title}
                   onChange={(e) => setWorkflow(prev => ({ ...prev, results: { ...prev.results, title: e.target.value } }))}
@@ -359,7 +362,7 @@ export const LyricsTab = ({
                 <Copy className="w-5 h-5" />
               </button>
             </div>
-            
+
             {workflow.results.suggestedTitles && workflow.results.suggestedTitles.length > 0 && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <p className="text-xs text-gray-400 mb-3">AI가 제안하는 다른 제목들 (클릭하여 변경)</p>
@@ -385,8 +388,8 @@ export const LyricsTab = ({
                       }}
                       className={cn(
                         "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                        workflow.results.title === title 
-                          ? "bg-primary/20 text-primary border-primary/30" 
+                        workflow.results.title === title
+                          ? "bg-primary/20 text-primary border-primary/30"
                           : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
                       )}
                     >
@@ -404,7 +407,7 @@ export const LyricsTab = ({
                 <h3 className="font-bold text-primary">한글 가사 (수정 가능)</h3>
                 <button onClick={() => copyToClipboard(workflow.results.lyrics || '')} className="p-2 hover:bg-white/5 rounded-lg"><Copy className="w-4 h-4" /></button>
               </div>
-              <textarea 
+              <textarea
                 value={workflow.results.lyrics}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, results: { ...prev.results, lyrics: e.target.value } }))}
                 className="w-full text-sm font-sans whitespace-pre-wrap text-gray-300 leading-relaxed h-80 overflow-y-auto p-4 bg-black/20 rounded-xl border border-white/5 focus:border-primary/30 outline-none resize-none"
@@ -418,7 +421,7 @@ export const LyricsTab = ({
                   <button onClick={() => copyToClipboard(workflow.results.englishLyrics || '')} className="p-2 hover:bg-white/5 rounded-lg"><Copy className="w-4 h-4" /></button>
                 </div>
               </div>
-              <textarea 
+              <textarea
                 value={workflow.results.englishLyrics || ''}
                 onChange={(e) => setWorkflow(prev => ({ ...prev, results: { ...prev.results, englishLyrics: e.target.value } }))}
                 className="w-full text-sm font-sans whitespace-pre-wrap text-gray-300 leading-relaxed h-80 overflow-y-auto p-4 bg-black/20 rounded-xl border border-white/5 focus:border-primary/30 outline-none resize-none"
@@ -428,8 +431,8 @@ export const LyricsTab = ({
               <div className="flex justify-between items-center">
                 <h3 className="font-bold text-secondary">Suno AI 프롬프트</h3>
                 <div className="flex gap-2">
-                  <button 
-                    onClick={generatePromptOnly} 
+                  <button
+                    onClick={generatePromptOnly}
                     className="px-3 py-1.5 bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
                   >
                     <RefreshCw className="w-3 h-3" /> 프롬프트만 재생성
@@ -439,7 +442,7 @@ export const LyricsTab = ({
                   </button>
                 </div>
               </div>
-              <textarea 
+              <textarea
                 readOnly
                 value={workflow.results.sunoPrompt}
                 className="w-full text-xs font-mono text-gray-400 h-80 overflow-y-auto p-4 bg-black/40 rounded-xl border border-white/5 focus:border-secondary/30 outline-none resize-none leading-relaxed"
@@ -461,7 +464,7 @@ export const LyricsTab = ({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                   <button 
+                  <button
                     onClick={() => {
                       const text = workflow.results.timedLyrics.map((item: any) => `[${formatTime(item.time)}] ${item.kor}`).join('\n');
                       copyToClipboard(text);
@@ -478,7 +481,7 @@ export const LyricsTab = ({
                   <div key={idx} className="flex gap-3 items-start bg-black/30 p-3 rounded-xl border border-white/5 hover:border-secondary/30 transition-all group">
                     <div className="w-24 shrink-0">
                       <div className="text-[10px] font-bold text-secondary mb-1 uppercase opacity-60">시간</div>
-                      <input 
+                      <input
                         type="text"
                         value={formatTime(item.time)}
                         onChange={(e) => {
@@ -497,7 +500,7 @@ export const LyricsTab = ({
                       <div className="flex gap-2">
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-gray-500 mb-1 uppercase opacity-60">한글 가사</div>
-                          <input 
+                          <input
                             type="text"
                             value={item.kor}
                             onChange={(e) => {
@@ -513,7 +516,7 @@ export const LyricsTab = ({
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-gray-500 mb-1 uppercase opacity-60">영어 번역</div>
-                          <input 
+                          <input
                             type="text"
                             value={item.eng}
                             onChange={(e) => {
@@ -529,13 +532,13 @@ export const LyricsTab = ({
                         </div>
                       </div>
                       {item.section && (
-                         <div className="inline-block px-2 py-0.5 bg-secondary/10 text-secondary text-[10px] font-bold rounded uppercase">
-                           {item.section}
-                         </div>
+                        <div className="inline-block px-2 py-0.5 bg-secondary/10 text-secondary text-[10px] font-bold rounded uppercase">
+                          {item.section}
+                        </div>
                       )}
                     </div>
                     <div className="self-center opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button 
+                      <button
                         onClick={() => {
                           const newList = workflow.results.timedLyrics.filter((_: any, i: number) => i !== idx);
                           setWorkflow((prev: any) => ({
@@ -545,16 +548,16 @@ export const LyricsTab = ({
                         }}
                         className="p-1.5 text-red-400/50 hover:text-red-400 transition-colors"
                         title="삭제"
-                       >
-                         <RefreshCw className="w-3 h-3 rotate-45" />
-                       </button>
+                      >
+                        <RefreshCw className="w-3 h-3 rotate-45" />
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-              
+
               <div className="mt-4 flex justify-center">
-                <button 
+                <button
                   onClick={() => {
                     const lastTime = workflow.results.timedLyrics[workflow.results.timedLyrics.length - 1]?.time || 0;
                     const newList = [...workflow.results.timedLyrics, { time: lastTime + 5, kor: '', eng: '' }];

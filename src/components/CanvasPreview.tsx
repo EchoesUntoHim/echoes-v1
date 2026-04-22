@@ -20,15 +20,15 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
       // Set fixed aspect ratio based on type
       const targetWidth = type === 'main' ? 1920 : 1080;
       const targetHeight = type === 'main' ? 1080 : 1920;
-      
+
       canvas.width = targetWidth;
       canvas.height = targetHeight;
-      
+
       // Apply "Cover" logic to match VideoPlayer
       const imgAspect = loadedImg.width / loadedImg.height;
       const canvasAspect = canvas.width / canvas.height;
       let drawWidth, drawHeight;
-      
+
       if (canvasAspect > imgAspect) {
         drawWidth = canvas.width;
         drawHeight = canvas.width / imgAspect;
@@ -36,9 +36,9 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
         drawHeight = canvas.height;
         drawWidth = canvas.height * imgAspect;
       }
-      
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       // Draw image with "Cover" logic
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -58,19 +58,19 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
 
       let x = canvas.width / 2 + (xOffset * (canvas.width / 100));
       let y = canvas.height / 2 + (yOffset * (canvas.height / 100));
-      
+
       if (settings.titlePosition === 'top') y = canvas.height * 0.2 + (yOffset * (canvas.height / 100));
       if (settings.titlePosition === 'bottom') y = canvas.height * 0.8 + (yOffset * (canvas.height / 100));
 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       const applyEffect = (text: string, tx: number, ty: number, size: number, color: string) => {
         ctx.save();
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
-        
+
         if (settings.titleEffect === 'shadow') {
           ctx.shadowColor = 'rgba(0,0,0,0.8)';
           ctx.shadowBlur = 15;
@@ -117,7 +117,7 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
           ctx.lineWidth = size * 0.1;
           ctx.strokeText(text, tx, ty);
         }
-        
+
         ctx.fillStyle = color;
         ctx.fillText(text, tx, ty);
         ctx.restore();
@@ -161,9 +161,9 @@ export const CanvasPreview = ({ img, settings, params, type }: CanvasPreviewProp
   }, [img, settings, params, type]);
 
   return (
-    <canvas 
-      ref={canvasRef} 
-      className="w-full h-full object-contain transition-transform duration-500" 
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full object-cover transition-transform duration-500"
     />
   );
 };

@@ -149,7 +149,7 @@ export const PublishTab = ({
   };
 
   return (
-    <motion.div key="publish" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8 pb-20">
+    <motion.div key="publish" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8 pb-20">
       <header className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold mb-2">영상 업로드 및 발행</h1>

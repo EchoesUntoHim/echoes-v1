@@ -88,7 +88,7 @@ export const ImageTab = ({
     }
   };
   return (
-    <motion.div key="image" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8">
+    <motion.div key="image" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold mb-2">이미지 생성</h1>
@@ -434,7 +434,7 @@ export const ImageTab = ({
               <h4 className="font-bold text-sm text-primary mb-4 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5" /> 숏츠 이미지 확인
               </h4>
-              <div className="flex flex-row flex-nowrap gap-2 w-full items-start">
+              <div className="flex flex-row flex-wrap gap-4 w-full items-start">
                 {workflow.results.images.filter((img: any) => img && (img.label || '').includes('숏츠')).map((img: any, i: number) => {
                   const settings = workflow.imageSettings['shorts'] || createDefaultSettings();
                   return (
@@ -442,7 +442,7 @@ export const ImageTab = ({
                       key={i}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="flex-1 min-w-0 flex flex-col gap-2"
+                      className="w-[calc(50%-1rem)] md:w-[calc(33.33%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(20%-1rem)] min-w-[160px] flex flex-col gap-2"
                     >
                       <div className="relative rounded-xl overflow-hidden border border-white/10 group aspect-[9/16] w-full bg-black/40">
                         <CanvasPreview img={img} settings={settings} params={workflow.params} type="shorts" />

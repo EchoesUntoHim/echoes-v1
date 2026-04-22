@@ -158,6 +158,7 @@ export default function App() {
     }
   });
   const [isVideoRendering, setIsVideoRendering] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   // Removed lyriaAudio and isLyriaGenerating as they are now in MusicGenerator component
 
   // Removed generateMusicWithLyria as it's now in MusicGenerator component
@@ -467,7 +468,7 @@ export default function App() {
     } catch (e) {
       if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
         console.warn("LocalStorage full, trying progressive fallback to save core data");
-        
+
         // Step 1: Try saving without blog post content but keep images
         try {
           const noBlogWorkflow = {
@@ -490,12 +491,12 @@ export default function App() {
             try {
               const minWorkflow = {
                 params: workflow.params,
-                results: { 
+                results: {
                   lyrics: workflow.results.lyrics,
                   timedLyrics: workflow.results.timedLyrics,
                   englishLyrics: workflow.results.englishLyrics
                 },
-                step: workflow.step
+                currentStep: workflow.currentStep
               };
               localStorage.setItem('echoesuntohim_workflow', JSON.stringify(minWorkflow));
             } catch (e3) {
@@ -533,6 +534,86 @@ export default function App() {
       setEnglishVideoLyrics(workflow.results.englishLyrics);
     }
   }, [workflow.results.lyrics, workflow.results.englishLyrics]);
+
+  // 실시간 자동 번역 로직 (v1.4.26)
+  // 한글 가사 변경 시 4초 후 영어 가사 자동 업데이트
+  useEffect(() => {
+    if (!workflow.results.lyrics || !apiKey) return;
+
+    const timeoutId = setTimeout(async () => {
+      // 이미 번역이 진행 중이거나, 가사가 비어있으면 중단
+      if (isTranslating) return;
+
+      // 이전 영어 가사와 비교하여 변화가 필요한지 체크 (간단한 비교)
+      // 실제로는 한글 가사만 보고 번역을 수행함
+      await translateLyrics(workflow.results.lyrics);
+    }, 4000); // 4초 디바운스
+
+    return () => clearTimeout(timeoutId);
+  }, [workflow.results.lyrics, apiKey]);
+
+  const translateLyrics = async (koreanText: string) => {
+    if (!koreanText || !apiKey) return;
+
+    setIsTranslating(true);
+    const selectedModel = aiEngine && aiEngine.includes('gemini') ? aiEngine : "gemini-3.1-flash-lite-preview";
+
+    try {
+      addLog(`🔄 [${selectedModel}] 영어 가사 자동 번역 시작...`);
+
+      const lines = koreanText.split('\n');
+      const cleanLines = lines.map(l => l.replace(/^\[\d{2}:\d{2}\]\s*/, '').trim());
+      const timestamps = lines.map(l => {
+        const m = l.match(/^\[\d{2}:\d{2}\]\s*/);
+        return m ? m[0] : '';
+      });
+
+      const prompt = `Translate the following Korean lyrics to English line-by-line. 
+      Keep the line count EXACTLY the same (${cleanLines.length} lines).
+      Do NOT include any timestamps, section headers, or extra explanations.
+      If a line is empty or a section header like [Verse 1], return it exactly as is.
+      
+      Lyrics:
+      ${cleanLines.join('\n')}`;
+
+      const genAI = new GoogleGenAI({ apiKey });
+      const response = await genAI.models.generateContent({
+        model: selectedModel,
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
+      });
+
+      const translatedContent = response.text || "";
+      const translatedLines = translatedContent.split('\n');
+
+      const restored = lines.map((_, i) => {
+        // 한글 가사에 타임스탬프가 있었던 경우에만 영어 가사에도 복원
+        const timestamp = timestamps[i];
+        const translation = translatedLines[i] || "";
+
+        // 만약 번역 결과에 이미 타임스탬프가 포함되어 있다면 중복 방지를 위해 제거
+        const cleanTranslation = translation.replace(/^\[\d{2}:\d{2}\]\s*/, '').trim();
+
+        return timestamp + cleanTranslation;
+      });
+
+      const finalEnglish = restored.join('\n');
+
+      setWorkflow(prev => ({
+        ...prev,
+        results: {
+          ...prev.results,
+          englishLyrics: finalEnglish
+        }
+      }));
+
+      addLog(`✅ [${selectedModel}] 영어 가사 자동 번역 완료`);
+    } catch (error) {
+      console.error("Auto-translation error:", error);
+      addLog(`❌ 번역 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   // Dynamically update blog content when image texts change
   useEffect(() => {
@@ -723,7 +804,7 @@ export default function App() {
         const bIsChorus = bLabel.includes('chorus') || bLabel.includes('후렴');
         const aIsBridge = aLabel.includes('bridge') || aLabel.includes('브릿지');
         const bIsBridge = bLabel.includes('bridge') || bLabel.includes('브릿지');
-        
+
         if (aIsChorus && !bIsChorus) return -1;
         if (!aIsChorus && bIsChorus) return 1;
         if (aIsBridge && !bIsBridge) return -1;
@@ -845,9 +926,9 @@ export default function App() {
           title: cleanTitle
         }
       }));
-      
+
       addLog("📁 음원이 업로드되었습니다. 자동으로 정밀 분석을 시작합니다...");
-      
+
       // Trigger analysis - RESTORED
       analyzeAudioComprehensively(file);
 
@@ -1027,8 +1108,8 @@ export default function App() {
 
       const isCCM = workflow.params.target === 'CCM';
       const persona = isCCM
-        ? "당신은 기독교 문화 콘텐츠 전문가이자 은혜로운 예배 영상을 전문으로 하는 최정상급 유튜버입니다."
-        : "당신은 100만 명의 구독자를 보유한 최정상급 음악 유튜버이자 K-Pop/Pop 트렌드 전문가입니다.";
+        ? "당신은 전 세계 기독교 문화 트렌드를 선도하며 수억 명의 영혼에게 영향력을 끼치는 '디지털 사역의 정점'에 선 최정상급 워십 비저너리입니다. 당신의 채널은 유튜브와 틱톡을 합쳐 3억 명 이상의 팔로워를 보유하고 있으며, 당신이 올리는 영상 하나가 전 세계 예배 문화의 새로운 표준이 됩니다. 유튜브의 정교한 알고리즘 설계와 틱톡의 폭발적인 숏폼 트렌드를 완벽하게 지배하며, 시청자의 마음을 1초 만에 사로잡는 영적이고 감성적인 카피라이팅의 독보적인 권위자입니다."
+        : "당신은 전 세계 5억 명 이상의 구독자를 보유하며 유튜브와 틱톡을 통틀어 지구상에서 가장 영향력 있는 글로벌 No.1 음악 인플루언서이자 큐레이터입니다. 당신의 메타데이터는 '알고리즘의 신'이라 불릴 만큼 완벽한 키워드 배치와, 전 세계적인 바이럴 열풍을 즉각적으로 일으키는 고도의 심리학적 카피라이팅이 결합된 마스터피스입니다. 미스터비스트(MrBeast)를 넘어서는 압도적인 도달률과 데이터 분석 능력을 갖추었으며, 트렌드를 따라가는 것이 아니라 스스로 트렌드를 창조하고 지배하는 음악 산업의 살아있는 전설입니다.";
 
       const prompt = `
         ${persona}
@@ -1124,8 +1205,8 @@ export default function App() {
 
       const isCCM = workflow.params.target === 'CCM';
       const genreContext = isCCM
-        ? "이 곡은 CCM(Contemporary Christian Music)이므로, 독자들에게 영적인 깊이와 은혜, 위로를 전달하는 데 집중하세요. 문체는 경건하면서도 따뜻해야 합니다."
-        : "이 곡은 대중음악이므로, 독자들에게 트렌디한 감성과 공감, 음악적 세련미를 전달하는 데 집중하세요. 문체는 감각적이고 세련되어야 합니다.";
+        ? "이 곡은 CCM(Contemporary Christian Music)이므로, 독자들에게 영적인 깊이와 은혜, 위로를 전달하는 데 집중하세요."
+        : "이 곡은 대중음악이므로, 전 세계 5억 명의 구독자를 거느린 글로벌 No.1 음악 인플루언서로서 트렌드를 창조하는 감각적인 포스팅을 작성하세요. 시청자의 마음을 1초 만에 사로잡는 고도의 심리학적 카피라이팅을 적용하세요.";
 
       const userStyle = workflow.blogSettings?.style || '감성적이고 따뜻한 블로그';
       const userPerspective = workflow.blogSettings?.blogPerspective || '소개자 관점';
@@ -1372,17 +1453,25 @@ export default function App() {
       const isCCM = workflow.params.target === 'CCM';
 
       const ccmPersona = `
-        You are a profound CCM (Contemporary Christian Music) songwriter and worship leader with 30 years of experience. 
-        Your lyrics are deeply rooted in spiritual grace, divine love, and biblical metaphors without being preachy or clichè. 
-        Your titles should feel like a "sacred poem"—evocative, reverent, and awe-inspiring (e.g., "은혜의 파도_Tides of Grace", "영원의 울림_Eternal Resonance").
-        Avoid secular slang; use language that stirs the soul and reflects a heart of worship.
+        You are a world-renowned CCM (Contemporary Christian Music) visionary, songwriter, and worship leader with 30 years of elite experience. 
+        Your expertise spans two core dimensions:
+        1. **Vertical Worship**: Profound praise directed toward God, rooted in spiritual grace and divine love. (e.g., "영원의 지평선_Horizon of Eternity")
+        2. **Horizontal Fellowship**: Capturing how God works and responds within human relationships. You write about comfort, encouragement, and love between people as a manifestation of God's presence and intervention. Even in these human-to-human interactions, emphasize that it is God who is working and responding. (e.g., "작은 손길 속의 기적_Miracle in a Small Touch")
+        
+        Your lyrics blend ancient spiritual wisdom with contemporary poetic sensitivity. 
+        Your work is defined by "Heavenly Resonance"—using profound biblical metaphors that feel fresh, timeless, and deeply moving. 
+        Titles should feel like "Sacred Artifacts"—awe-inspiring, majestic, and spiritually charged.
+        CRITICAL: English titles must NEVER be a literal translation of the Korean title. They must capture the "spiritual vibe" and "divine essence" poetically.
+        Avoid all clichés; your mission is to stir the deepest parts of the human spirit toward the Divine presence in all aspects of life.
       `;
 
       const popPersona = `
-        You are a top-tier K-Pop and Global Pop lyricist known for trendy, relatable, and cinematic storytelling. 
-        Your lyrics capture the nuances of modern relationships, urban loneliness, and youth with poetic sensitivity. 
-        Your titles must be "hooky" and "aesthetic"—like a movie title or a viral hit (e.g., "너라는 우주_Your Galaxy", "자정의 소음_Midnight Noise").
-        Use metaphors that are fresh, trendy, and emotionally resonant for a wide public audience.
+        You are a global chart-topping lyricist and cinematic storyteller at the absolute peak of the music industry. 
+        Your lyrics are "cultural mirrors"—capturing the complex, multi-layered emotional landscape of modern life with surgical precision and artistic flair. 
+        You excel at "Rhythmic Poetry"—where every word is meticulously chosen for its emotional weight and melodic flow. 
+        Your titles are "Global Hooks"—aesthetic, trendy, and instantly iconic, blending street-smart reality with high-concept metaphors (e.g., "도시의 유령_Neon Ghost", "심장의 소음_Cardiogram Noise").
+        CRITICAL: English titles must NEVER be a literal translation of the Korean title. They must capture the "emotional mood" and "cinematic atmosphere" with high-end aesthetic sense.
+        Your goal is to define the "Zeitgeist" of the current generation, blending raw vulnerability with polished, sophisticated expression.
       `;
 
       const prompt = `
@@ -1400,6 +1489,24 @@ export default function App() {
         - Lyrics Style: ${workflow.params.lyricsStyle}
         - Vocal Type: ${workflow.params.vocal}
         - Main Instrument: ${workflow.params.instrument}
+        
+        [GENRE & MOOD CRITICAL GUIDELINE]
+        - **Genre (${workflow.params.subGenre})**: The core vocabulary and rhythmic structure must strictly adhere to the nuances of this genre.
+        - **Mood (${workflow.params.mood})**: This mood must be the "emotional soul" of the lyrics. Every line should reflect this atmosphere, from word choice to metaphorical depth. The overall "vibe" should be unmistakable.
+        
+        [LYRICS STYLE GUIDELINE: ${workflow.params.lyricsStyle}]
+        ${(() => {
+          switch (workflow.params.lyricsStyle) {
+            case '시적인': return 'Use rich metaphors, abstract imagery, and sensory language. Focus on atmosphere and emotional depth.';
+            case '직설적인': return 'Use plain, honest language. Say exactly what is on the mind without hiding behind metaphors. High emotional transparency.';
+            case '서사적인': return 'Tell a clear story with a beginning, middle, and end. Focus on characters, settings, and progression.';
+            case '은유적인': return 'Use symbolic objects or situations to represent emotions or concepts. Encourage deep interpretation.';
+            case '대화체': return 'Use natural, spoken language as if talking to someone. Include colloquialisms and a sense of intimacy.';
+            case '독백체': return 'A deep internal reflection. Focus on the inner voice and personal realization.';
+            case '운율이 강조된': return 'Focus on consistent rhyming schemes and syllable counts. Ensure a strong sense of beat and flow.';
+            default: return '';
+          }
+        })()}
 
         Guidelines:
         1. Song Titles (CRITICAL): Generate 5 different, highly creative and genre-appropriate titles.
@@ -1412,9 +1519,13 @@ export default function App() {
            - Structure: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Chorus], [Outro].
            - ${isCCM ? "CCM Style: Focus on vertical worship (to God) or deep spiritual reflection." : "Pop Style: Focus on horizontal relationships (human to human) or self-discovery."}
            - **LINE-BY-LINE MAPPING (CRITICAL)**: The Korean and English lyrics MUST have the exact same number of lines in each section. Every Korean line must have a corresponding English translation on the same line number within that section. This is for video subtitle sync.
+           - **TIMESTAMP EXCLUSION (CRITICAL)**: Do NOT include timestamps like [00:00] in the lyrics body. Only return the pure lyrics text.
+           - **DUET OPTIMIZATION (IF APPLICABLE)**: If Vocal Type is a Duet, divide the lines clearly between [Vocal 1], [Vocal 2], and [Together]. Match the gender roles to the selected Duet type (e.g., Male/Female, Male/Male, Female/Female) and ensure the dialogue or harmony feels natural for that combination.
            - Double line break between sections, single line break between every line.
-        3. Suno AI Prompt: Generate a detailed Suno AI v3.5 prompt (max 2000 chars).
-           - Include instrumentation, specific vocal texture, and production style (e.g., "atmospheric synth pads", "intimate acoustic guitar").
+        3. Suno AI Prompt: Generate a highly detailed and evocative Suno AI v3.5 prompt.
+           - LENGTH (CRITICAL): MUST be between 600 and 1000 characters.
+           - VOCAL CONTRAST (CRITICAL FOR DUETS): If Vocal Type is a Duet, you MUST specify TWO distinctly different vocal textures (e.g., one "airy, breathy, and soft female voice" and one "solid, powerful, and belting female voice") to ensure the AI separates the singers clearly. Do not use identical descriptions for both singers.
+           - Include specific instrumentation, intricate vocal texture, production atmosphere, and structural cues (e.g., "building cinematic tension with atmospheric pads", "intimate breathy female vocals with a touch of vinyl crackle").
 
         Response Format (JSON):
         {
@@ -1774,9 +1885,9 @@ export default function App() {
           setSunoTracks(prev => {
             const exists = prev.some(t => t.title === titleToSave);
             if (exists) {
-              return prev.map(t => t.title === titleToSave ? { 
-                ...t, 
-                generatedImages: [...(t.generatedImages || []).filter((img: any) => img.label.replace(/\s/g, '').toLowerCase() !== label.replace(/\s/g, '').toLowerCase()), newImage] 
+              return prev.map(t => t.title === titleToSave ? {
+                ...t,
+                generatedImages: [...(t.generatedImages || []).filter((img: any) => img.label.replace(/\s/g, '').toLowerCase() !== label.replace(/\s/g, '').toLowerCase()), newImage]
               } : t);
             } else {
               return [{ title: titleToSave, generatedImages: [newImage], created_at: new Date().toISOString() }, ...prev];
@@ -2304,7 +2415,7 @@ export default function App() {
   };
   const generateVideos = () => {
     addLog("Echoes Unto Him 고성능 렌더링 엔진 가동 중...");
-    addLog("가사 레이어 합성 및 페이드 애니메이션 최적화 시작...");
+    addLog("가사 레이어 합성 및 자막 렌더링 최적화 시작...");
 
     addLog("실제 렌더링 서버 연동 대기중... (TODO: 실제 백엔드 렌더링 파이프라인 호출)");
 
@@ -2502,7 +2613,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.10</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.28</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2532,7 +2643,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.10</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.28</span>
           </div>
         </div>
 
@@ -2552,12 +2663,12 @@ export default function App() {
           <SidebarItem icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
           <SidebarItem icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
           {/* 
-2487:           <SidebarItem 
-2488:             icon={Layers} 
-2489:             label="AI 편곡" 
-2490:             active={activeTab === 'arrangement'} 
-2491:             onClick={() => handleTabChange('arrangement')} 
-2492:           />
+          <SidebarItem 
+            icon={Layers} 
+            label="AI 편곡" 
+            active={activeTab === 'arrangement'} 
+            onClick={() => handleTabChange('arrangement')} 
+          />
           */}
 
           <div className="mt-4 pt-4 border-t border-white/5">
@@ -2612,6 +2723,7 @@ export default function App() {
               addLog={addLog}
               availableModels={availableModels}
               fetchAvailableModels={fetchAvailableModels}
+              isTranslating={isTranslating}
             />
           )}
 
@@ -2699,6 +2811,9 @@ export default function App() {
               audioFadeIn={audioFadeIn}
               audioFadeOut={audioFadeOut}
               logs={logs}
+              apiKey={apiKey}
+              aiEngine={aiEngine}
+              isTranslating={isTranslating}
             />
           )}
 
