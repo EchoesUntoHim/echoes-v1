@@ -188,8 +188,6 @@ export default function App() {
   const [videoQuality, setVideoQuality] = useState(() => localStorage.getItem('video_quality') || '1080p');
   const [voiceReference, setVoiceReference] = useState<string | null>(null);
   const [voiceRefName, setVoiceRefName] = useState<string>('');
-  const [audioFadeIn, setAudioFadeIn] = useState(() => parseInt(localStorage.getItem('audio_fade_in') || '0'));
-  const [audioFadeOut, setAudioFadeOut] = useState(() => parseInt(localStorage.getItem('audio_fade_out') || '0'));
   const [platforms, setPlatforms] = useState(() => {
     const saved = localStorage.getItem('echoesuntohim_platforms');
     try {
@@ -228,13 +226,7 @@ export default function App() {
     localStorage.setItem('video_engine', videoEngine);
   }, [videoEngine]);
 
-  useEffect(() => {
-    localStorage.setItem('audio_fade_in', audioFadeIn.toString());
-  }, [audioFadeIn]);
 
-  useEffect(() => {
-    localStorage.setItem('audio_fade_out', audioFadeOut.toString());
-  }, [audioFadeOut]);
 
   const togglePlatform = (key: keyof typeof platforms) => {
     if (platforms[key] === 'connected') {
@@ -535,13 +527,22 @@ export default function App() {
     }
   }, [workflow.results.lyrics, workflow.results.englishLyrics]);
 
-  // 실시간 자동 번역 로직 (v1.4.26)
-  // 한글 가사 변경 시 4초 후 영어 가사 자동 업데이트
+  // v1.5.6 추가 작업: 중복 번역 방지를 위한 레퍼런스
+  const lastTranslatedLyricsRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!workflow.results.lyrics || !apiKey) return;
+    
+    // 새로고침 시 혹은 가사가 동일한 경우 번역 스킵 (토큰 절약)
+    if (workflow.results.lyrics === lastTranslatedLyricsRef.current) return;
+    
+    // 초기 로드 시 영어 가사가 이미 존재하면 레퍼런스만 업데이트하고 스킵
+    if (!lastTranslatedLyricsRef.current && workflow.results.englishLyrics) {
+      lastTranslatedLyricsRef.current = workflow.results.lyrics;
+      return;
+    }
 
     const timeoutId = setTimeout(async () => {
-      // 이미 번역이 진행 중이거나, 가사가 비어있으면 중단
       if (isTranslating) return;
 
       // 이전 영어 가사와 비교하여 변화가 필요한지 체크 (간단한 비교)
@@ -1114,6 +1115,7 @@ export default function App() {
       const prompt = `
         ${persona}
         다음 곡 정보를 바탕으로 유튜브 업로드에 최적화된 메타데이터를 생성해주세요.
+        특히 한국어의 미묘한 정서와 한국 유튜브 시청자들의 감성을 자극하는 카피라이팅을 최우선으로 하세요.
         
         [곡 정보]
         - 음악 종류: ${workflow.params.target}
@@ -1122,6 +1124,11 @@ export default function App() {
         - 분위기: ${workflow.params.mood}
         - 가사 일부: ${workflow.results.lyrics?.substring(0, 200)}...
         ${workflow.params.songInterpretation ? `- **사용자 곡 해석 (최우선 반영)**: ${workflow.params.songInterpretation}` : ''}
+        ${isCCM ? `
+        [CCM 특별 지시사항]
+        - 수직적 차원 (Vertical): 하나님을 향한 찬양과 경배의 고백을 최우선으로 담아내세요.
+        - 수평적 차원 (Horizontal): 사람들 사이의 관계 속에서 하나님이 어떻게 일하시고 응답하시는지 포착하세요. 인간관계의 상호작용 속에서도 결국 일하시고 반응하시는 분은 하나님이심을 강조하는 통찰력 있는 카피를 작성하세요.
+        ` : ''}
         
         Response Format (JSON):
         {
@@ -1212,14 +1219,13 @@ export default function App() {
       const userPerspective = workflow.blogSettings?.blogPerspective || '소개자 관점';
       const userAudience = workflow.blogSettings?.targetAudience || '모든 음악 애호가';
 
-      const naverPersona = `[네이버 블로그] 화자: ${userPerspective}, 스타일: ${userStyle}. 네이버 검색 노출을 위해 키워드 전략을 세우고 다정한 문체와 이모지를 활용해 풍성하게 작성하세요.`;
-      const tistoryPersona = `[티스토리] 화자: ${userPerspective}, 스타일: ${userStyle}. 깔끔하고 전문적인 레이아웃으로 정보 전달력을 높여 분석적으로 작성하세요.`;
-      const googlePersona = `[구글 블로거] 화자: ${userPerspective}, 스타일: ${userStyle}. 구글 SEO에 최적화된 구조(H1~H3)와 객관적인 글로벌 문체로 작성하세요.`;
+      const naverPersona = `[네이버 블로그 최적화] 스타일: ${userStyle}. 사용자 선택 스타일을 100% 유지하되, 네이버 블로그 검색 노출을 위해 '이미지-텍스트 흐름'과 '적절한 이모지 배치' 등 기술적 레이아웃 최적화에 집중하세요.`;
+      const tistoryPersona = `[티스토리 최적화] 스타일: ${userStyle}. 사용자 선택 스타일을 100% 유지하되, 깔끔하고 전문적인 정보 전달력을 위해 '섹션별 구조화'와 '분석적 레이아웃' 등 기술적 구조 최적화에 집중하세요.`;
+      const googlePersona = `[구글 블로거 SEO 최적화] 스타일: ${userStyle}. 사용자 선택 스타일을 100% 유지하되, 구글 검색 엔진 최적화(SEO)를 위해 '엄격한 H1~H3 태그 계층 구조'와 '전략적 키워드 배치' 등 기술적 SEO 최적화에 집중하세요.`;
 
       const prompt = `
-        [SYSTEM ROLE]
-        당신은 지금부터 블로그 전문가가 아니라, 사용자님이 지정한 **'${userPerspective}'** 그 자체가 되어 글을 써야 합니다.
-        모든 문체와 관점은 반드시 **'${userPerspective}'**의 성격에 맞춰야 하며, 전체적인 분위기는 사용자님이 설정한 **'${userStyle}'** 스타일을 100% 준수하세요.
+        당신은 지금부터 사용자님이 지정한 스타일인 **'${userStyle}'** 인격 그 자체가 되어 글을 써야 하는 전문 작가입니다.
+        모든 문체, 단어 선택, 문장 구조는 반드시 **'${userStyle}'**의 특성에 100% 일치해야 하며, 독자의 몰입을 위해 인격의 일관성을 끝까지 유지하세요.
         
         [미션]
         - 독자 타겟: **'${userAudience}'**
@@ -1256,7 +1262,7 @@ export default function App() {
           ${targets.tistory ? '"tistory": { "title": "...", "content": "HTML 내용", "tags": "태그" },' : ''}
           ${targets.google ? '"google": { "title": "...", "content": "HTML 내용", "tags": "태그" },' : ''}
           "imageTexts": {
-            ${processedImages.map(img => `"${img.label}": "이 이미지가 위치한 단락의 '소제목(챕터 제목)' 또는 해당 단락의 가장 핵심적인 문장을 그대로 사용 (본문과 무관한 문구 금지)"`).join(',\n            ')}
+            ${processedImages.map(img => `"${img.label}": "이 이미지가 위치한 단락의 핵심을 관통하는 '가장 중요한 문구' 또는 '강력한 인사이트'를 한 문장으로 생성 (이미지 위 오버레이용이므로 임팩트 있게 작성)"`).join(',\n            ')}
           }
         }
       `;
@@ -1510,21 +1516,25 @@ export default function App() {
 
         Guidelines:
         1. Song Titles (CRITICAL): Generate 5 different, highly creative and genre-appropriate titles.
-           - Format: [TargetTag][Korean Title]_[English Title] (e.g., "[CCM]제목_Title")
-           - TargetTag MUST be "[CCM]" if Target Audience is CCM, or "[대중음악]" if Target Audience is 대중음악.
-           - If CCM: Focus on keywords like 'Grace', 'Light', 'Path', 'Eternal', 'Voice', 'Stillness'. The titles should feel warm and sacred.
-           - If Pop: Focus on keywords like 'Memory', 'City', 'Echo', 'Colors', 'Blue', 'Distance'. The titles should feel trendy and cinematic.
-           - CRITICAL: Titles MUST NOT be literal translations. The English title should capture the "vibe" and "emotion" of the Korean title poetically.
+           - Format: [TargetTag][Korean Title]_[English Title] (e.g., "[CCM]새벽의 발자국_Footsteps of Dawn")
+           - **SPACING (STRICT)**: Use normal spaces for spacing between words. **NEVER use "_" or "/" as a spacer or separator inside titles.** The only "_" allowed is the one separating the Korean and English titles.
+           - **CCM CRITICAL**: Avoid standard Christian clichés (e.g., "Grace", "Light", "Love"). Instead, use fresh, unique biblical metaphors or deep spiritual insights that capture the specific soul of this song. Titles should feel like a "Sacred Masterpiece"—original and artistically profound.
+           - **POP CRITICAL**: Titles should be aesthetic, trendy, and instantly iconic ("Global Hooks"). Avoid generic "City", "Memory" clichés.
+           - CRITICAL: Titles MUST NOT be literal translations. The English title should capture the "vibe" and "divine essence" (for CCM) or "cinematic atmosphere" (for Pop) poetically.
         2. Lyrics (CRITICAL): Generate full lyrics for a 3-6 minute long song in BOTH Korean and English.
            - Structure: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Chorus], [Outro].
-           - ${isCCM ? "CCM Style: Focus on vertical worship (to God) or deep spiritual reflection." : "Pop Style: Focus on horizontal relationships (human to human) or self-discovery."}
+           - ${isCCM ? "CCM Style: Focus on BOTH vertical worship (to God) and horizontal spiritual reflection (God working through human relationships). Balance these two dimensions to create a holistic spiritual narrative." : "Pop Style: Focus on horizontal relationships (human to human) or self-discovery."}
            - **LINE-BY-LINE MAPPING (CRITICAL)**: The Korean and English lyrics MUST have the exact same number of lines in each section. Every Korean line must have a corresponding English translation on the same line number within that section. This is for video subtitle sync.
            - **TIMESTAMP EXCLUSION (CRITICAL)**: Do NOT include timestamps like [00:00] in the lyrics body. Only return the pure lyrics text.
            - **DUET OPTIMIZATION (IF APPLICABLE)**: If Vocal Type is a Duet, divide the lines clearly between [Vocal 1], [Vocal 2], and [Together]. Match the gender roles to the selected Duet type (e.g., Male/Female, Male/Male, Female/Female) and ensure the dialogue or harmony feels natural for that combination.
            - Double line break between sections, single line break between every line.
         3. Suno AI Prompt: Generate a highly detailed and evocative Suno AI v3.5 prompt.
            - LENGTH (CRITICAL): MUST be between 600 and 1000 characters.
-           - VOCAL CONTRAST (CRITICAL FOR DUETS): If Vocal Type is a Duet, you MUST specify TWO distinctly different vocal textures (e.g., one "airy, breathy, and soft female voice" and one "solid, powerful, and belting female voice") to ensure the AI separates the singers clearly. Do not use identical descriptions for both singers.
+           - VOCAL CONTRAST (DYNAMIC GUIDELINE):
+             * If Vocal Type includes '음색 대조': Specify TWO PHYSICALLY DISTINCT and contrasting vocal textures (e.g., "airy, breathy female" vs "solid, powerful, belt-focused female") to ensure extreme separation.
+             * If Vocal Type includes '화음 조화': Specify harmoniously blended vocal textures (e.g., "soft, silk-like vocals that blend perfectly into a rich harmony").
+             * If Vocal Type includes '음역 대비': Specify contrasting pitch ranges (e.g., "high-pitched crystalline soprano" vs "deep, resonant bass/alto") for a wide melodic spectrum.
+             * Otherwise: Ensure clear distinction but focus on melodic interaction.
            - Include specific instrumentation, intricate vocal texture, production atmosphere, and structural cues (e.g., "building cinematic tension with atmospheric pads", "intimate breathy female vocals with a touch of vinyl crackle").
 
         Response Format (JSON):
@@ -1571,16 +1581,14 @@ export default function App() {
 
       // Always use the first suggested title as the new default
       const suggestedTitles = result.titles || ["제목_없음"];
-      const finalTitle = suggestedTitles[0];
+      const rawFirstTitle = suggestedTitles[0];
+      const finalTitle = typeof rawFirstTitle === 'string' ? rawFirstTitle : "제목_없음";
 
       const [kTitle, eTitle] = finalTitle.includes('_') ? finalTitle.split('_') : [finalTitle, ''];
 
-      // Ensure lyrics have proper line breaks if AI missed them
       const formatLyrics = (text: string) => (text || "")
         .replace(/&#10;/g, '\n')
-        // 섹션 헤더([Verse], [Chorus] 등) 앞에 빈 줄을 추가하여 구조를 명확히 함
         .replace(/(\[Verse|\[Chorus|\[Bridge|\[Outro|\[Intro)/g, '\n\n$1')
-        // 너무 많은 연속된 빈 줄은 최대 2개로 제한
         .replace(/\n{3,}/g, '\n\n')
         .trim();
 
@@ -1596,8 +1604,8 @@ export default function App() {
         params: {
           ...prev.params,
           title: finalTitle,
-          koreanTitle: (kTitle || prev.params.koreanTitle || '').replace(/\[.*?\]/g, '').trim(),
-          englishTitle: eTitle || prev.params.englishTitle
+          koreanTitle: (kTitle || '').replace(/\[.*?\]/g, '').trim(),
+          englishTitle: eTitle || ''
         },
         progress: { ...prev.progress, lyrics: 100 },
         results: {
@@ -1705,6 +1713,82 @@ export default function App() {
     }
   };
 
+  const regenerateTitles = async () => {
+    const currentApiKey = apiKey || process.env.GEMINI_API_KEY;
+    if (!currentApiKey) {
+      setIsApiKeyModalOpen(true);
+      return;
+    }
+    if (!workflow.results.lyrics) {
+      addLog("⚠️ 오류: 제목을 생성할 가사가 없습니다. 먼저 가사를 생성해주세요.");
+      return;
+    }
+
+    addLog("✨ [v1.5.6] 독창적인 제목만 새롭게 5개 재생성 중... (가사 유지)");
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: currentApiKey });
+      const model = aiEngine;
+
+      const prompt = `
+        당신은 전 세계가 주목하는 최고의 작사가이자 크리에이티브 디렉터입니다.
+        아래 제공된 [가사]와 [주제]를 분석하여, 곡의 정체성을 가장 잘 나타내는 **'독창적이고 예술적인'** 제목 5개를 생성해주세요.
+        
+        [가사]
+        ${workflow.results.lyrics}
+        
+        [주제]
+        ${workflow.params.topic}
+        
+        [지시사항 (필독)]
+        - **띄어쓰기 및 구분자 준수**: 제목 내부의 단어 사이에는 반드시 **일반 공백(띄어쓰기)**을 사용하세요. **'_'나 '/'를 띄어쓰기 용도로 사용하는 것을 엄격히 금지합니다.** '_'는 오직 한글 제목과 영어 제목을 구분할 때만 **딱 한 번** 사용하세요.
+        - **획일성 탈피**: '은혜', '빛', '사랑', '기억', '도시' 등 뻔하고 상투적인 CCM/POP 클리셰 키워드 사용을 엄격히 금지합니다.
+        - **신선한 메타포**: 성경의 깊은 통찰이나 일상의 구체적인 순간을 낯설게 조합하여 제목을 만드세요.
+        - **포맷 준수**: [TargetTag]한글 제목_English Title (예: [CCM]새벽의 발자국_Footsteps of Dawn)
+        
+        Response Format (JSON):
+        {
+          "titles": ["추천제목1_English1", "추천제목2_English2", "추천제목3_English3", "추천제목4_English4", "추천제목5_English5"]
+        }
+      `;
+
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              titles: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["titles"]
+          }
+        }
+      });
+
+      const responseText = response.text;
+      if (!responseText) throw new Error("AI 응답이 비어있습니다.");
+
+      const result = JSON.parse(responseText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim());
+      const newTitles = result.titles || [];
+
+      if (newTitles.length > 0) {
+        addLog(`새로운 제목 제안 완료: ${newTitles.length}개`);
+        setWorkflow(prev => ({
+          ...prev,
+          results: {
+            ...prev.results,
+            suggestedTitles: newTitles
+          }
+        }));
+      }
+    } catch (error) {
+      console.error("Regenerate Titles Error:", error);
+      addLog("❌ 오류: 제목 재생성 중 문제가 발생했습니다.");
+    }
+  };
+
   const generateImages = async () => {
     const currentApiKey = apiKey || process.env.GEMINI_API_KEY;
     if (!currentApiKey) {
@@ -1729,40 +1813,32 @@ export default function App() {
 
       // 1. Generate optimized prompts for each platform
       const promptGen = `
-        당신은 30년차 전문 화가이자 카메라 감독입니다. 곡의 느낌과 분위기를 완벽하게 파악하여 최고의 시각적 작품을 만들어냅니다. 특히 CCM과 대중음악의 미묘한 감성 차이를 누구보다 잘 이해하고 있습니다.
-        아래의 가사와 곡 정보를 분석하여, 곡의 감정과 서사를 가장 잘 표현할 수 있는 이미지 생성 프롬프트를 작성하세요.
+        You are a world-renowned cinematic director and legendary visual artist with 30 years of elite experience in the global music video industry. 
+        Your mission is to translate the deep emotional narrative and spiritual essence of a song into breathtaking, high-end cinematic imagery.
         
-        [곡 제목]
-        ${workflow.results.title || workflow.params.title || "제목 없음"}
-
-        [가사 내용]
-        ${workflow.results.lyrics || "가사 없음"}
-        ${workflow.results.englishLyrics ? `\n[영어 가사]\n${workflow.results.englishLyrics}` : ''}
+        [SONG DATA]
+        - Title: ${workflow.results.title || workflow.params.title || "Untitled"}
+        - Lyrics: ${workflow.results.lyrics || "N/A"}
+        ${workflow.results.englishLyrics ? `- English Lyrics: ${workflow.results.englishLyrics}` : ''}
+        ${workflow.params.songInterpretation ? `- **CRITICAL USER INTERPRETATION (TOP PRIORITY)**: ${workflow.params.songInterpretation}` : ''}
+        - Music Target: ${workflow.params.target}
+        - BPM/Mood: ${workflow.results.audioAnalysis?.bpm || "Moderate"} / ${workflow.results.audioAnalysis?.mood || workflow.params.mood || "Emotional"}
         
-        ${workflow.params.songInterpretation ? `[사용자 곡 해석 (최우선 반영)]\n${workflow.params.songInterpretation}\n` : ''}
-
-        [음악 데이터]
-        음악 종류: ${workflow.params.target}
-        BPM: ${workflow.results.audioAnalysis?.bpm || "보통"}
-        분위기: ${workflow.results.audioAnalysis?.mood || workflow.params.mood || "감성적인"}
-        에너지: ${workflow.results.audioAnalysis?.energy || "0.5"}
+        [USER STYLE PREFERENCES]
+        - Art Style: ${workflow.imageParams.artStyle}
+        - Camera View: ${workflow.imageParams.cameraView}
+        - Time of Day: ${workflow.imageParams.timeOfDay}
+        - Lighting: ${workflow.imageParams.lightingAtmosphere}
+        - Weather: ${workflow.imageParams.weather}
+        - Background: ${workflow.imageParams.backgroundType}
+        - Theme: ${workflow.imageSettings.style}
         
-        [사용자 선택 이미지 생성 옵션]
-        - 화풍 및 장르: ${workflow.imageParams.artStyle}
-        - 구도 및 시점: ${workflow.imageParams.cameraView}
-        - 시간대: ${workflow.imageParams.timeOfDay}
-        - 조명 및 대기: ${workflow.imageParams.lightingAtmosphere}
-        - 날씨 및 환경: ${workflow.imageParams.weather}
-        - 배경 유형: ${workflow.imageParams.backgroundType}
-        - 스타일 테마: ${workflow.imageSettings.style}
-        
-        [지시사항]
-        1. 가사를 심도 있게 분석하여, 각 곡만이 가지는 고유한 서사, 상징, 핵심 장면을 시각적으로 완전히 다르게 구체화하세요. (매 곡마다 피사체, 배경, 메타포가 완전히 달라져야 합니다.)
-        2. 곡의 고유한 분위기와 감정이 조명과 색감에 적극적으로 반영되도록 하세요.
-        3. **중요**: ${workflow.params.songInterpretation ? `사용자가 제공한 [사용자 곡 해석]을 최우선으로 반영하여 이미지를 구상하세요. AI의 해석보다 사용자의 의도가 우선입니다.` : `음악 종류가 'CCM'일 경우, 기독교적인 상징(빛, 십자가, 기도하는 모습, 평화로운 자연, 교회, 은혜로운 분위기 등)을 적극적으로 활용하여 경건하고 영적인 느낌이 강하게 나도록 프롬프트를 구성하세요. 대중음악일 경우 곡의 주제에 맞는 트렌디하고 감각적인 미장센에 집중하세요.`}
-        4. 곡의 주제에 맞춰 인물을 포함하거나, 독창적인 사물 및 풍경을 배치하여 감성을 극대화하세요. 이전과 유사한 반복적인 구도(예: 길거리에 핀 작은 꽃 등)는 절대 피하십시오.
-        5. 사용자가 선택한 [이미지 생성 옵션]을 프롬프트에 반드시 반영하되, 옵션이 곡의 서사를 해치지 않게 자연스럽게 융합하세요.
-        6. 영어로 프롬프트를 작성하세요.
+        [INSTRUCTIONS]
+        1. **Cinematic Mastery**: Create highly detailed, photorealistic, or artistic prompts that capture the specific "soul" of this song. Every image must be visually distinct and unique to this specific narrative.
+        2. **Spiritual Depth (CCM)**: If Target is CCM, use powerful spiritual metaphors (light, divine presence, sacred spaces) to create an atmosphere of grace and awe.
+        3. **Visual Storytelling**: Avoid clichés. Focus on unique compositions, atmospheric lighting, and high-concept mise-en-scène.
+        4. **User Priority**: Strictly incorporate the [USER INTERPRETATION] as the primary conceptual foundation.
+        5. Write all image prompts in high-end, descriptive English.
         
         JSON 형식으로 출력:
         {
@@ -2039,12 +2115,20 @@ export default function App() {
       return;
     }
 
-    if (shortsCount === 0) {
-      addLog("⚠️ 오류: 숏츠 개수가 0개로 설정되어 있습니다.");
+    const existingShortsCount = workflow.results.images.filter((img: any) => img.label.startsWith('숏츠')).length;
+    const remainingToGenerate = shortsCount - existingShortsCount;
+
+    if (remainingToGenerate <= 0) {
+      addLog("ℹ️ 정보: 이미 설정된 개수만큼의 숏츠 이미지가 존재합니다.");
       return;
     }
 
-    addLog(`[${imageEngine}] 숏츠 이미지 전체 재생성 중... (설정된 개수: ${shortsCount}개)`);
+    if (shortsCount > 5) {
+      alert("최대 숏츠 생성 개수(5개)를 초과할 수 없습니다.");
+      return;
+    }
+
+    addLog(`[${imageEngine}] 숏츠 이미지 보강 생성 중... (현재: ${existingShortsCount}개, 추가: ${remainingToGenerate}개)`);
     setIsShortsGenerating(true);
 
     try {
@@ -2084,7 +2168,7 @@ export default function App() {
         
         JSON 형식으로 출력:
         {
-          "shortsPrompts": ["숏츠 하이라이트를 위한 ${shortsCount}개의 서로 다른 감성적인 프롬프트."]
+          "shortsPrompts": ["숏츠 하이라이트를 위한 ${remainingToGenerate}개의 서로 다른 감성적인 프롬프트."]
         }
       `;
 
@@ -2113,18 +2197,13 @@ export default function App() {
         throw new Error("숏츠 프롬프트가 누락되었습니다.");
       }
 
-      // Remove existing shorts images
-      setWorkflow(prev => ({
-        ...prev,
-        results: {
-          ...prev.results,
-          images: prev.results.images.filter(img => !img.label.startsWith('숏츠'))
-        }
-      }));
+      // KEEP existing images, don't remove them. 
+      // We will only add or update based on the label match.
 
-      const actualShortsCount = Math.min(prompts.shortsPrompts.length, shortsCount);
+      const actualShortsCount = Math.min(prompts.shortsPrompts.length, remainingToGenerate);
       for (let i = 0; i < actualShortsCount; i++) {
-        addLog(`새로운 숏츠 하이라이트 ${i + 1} 생성 중...`);
+        const shortsIndex = existingShortsCount + i + 1;
+        addLog(`새로운 숏츠 하이라이트 ${shortsIndex} 생성 중...`);
         const response = await ai.models.generateContent({
           model: imageEngine,
           contents: { parts: [{ text: prompts.shortsPrompts[i] }] },
@@ -2133,12 +2212,33 @@ export default function App() {
 
         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (part?.inlineData?.data) {
-          const url = `data:image/png;base64,${part.inlineData.data}`;
+          const base64Url = `data:image/png;base64,${part.inlineData.data}`;
+
+          // UI 즉시 업데이트를 위해 임시 객체 생성
+          const tempImage = { url: base64Url, type: 'vertical' as const, label: `숏츠 ${existingShortsCount + i + 1}`, prompt: prompts.shortsPrompts[i] };
+
           setWorkflow(prev => ({
             ...prev,
             results: {
               ...prev.results,
-              images: [...prev.results.images, { url, type: 'vertical', label: `숏츠 ${i + 1}`, prompt: prompts.shortsPrompts[i] }]
+              images: [
+                ...prev.results.images.filter(img => img.label !== tempImage.label),
+                tempImage
+              ]
+            }
+          }));
+
+          // Firebase Storage 업로드 및 최종 URL 업데이트
+          addLog(`📤 [숏츠 ${i + 1}] 클라우드 저장소에 업로드 중...`);
+          const storageUrl = await uploadImageToStorage(base64Url);
+          const finalUrl = storageUrl || base64Url;
+          const finalImage = { ...tempImage, url: finalUrl, localUrl: base64Url };
+
+          setWorkflow(prev => ({
+            ...prev,
+            results: {
+              ...prev.results,
+              images: prev.results.images.map(img => img.label === tempImage.label ? finalImage : img)
             }
           }));
         }
@@ -2613,7 +2713,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.4.28</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.5.6</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2631,7 +2731,7 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed md:static inset-y-0 left-0 z-20 w-64 border-r border-white/5 p-6 flex flex-col gap-8 bg-background transition-transform duration-300 ease-in-out md:translate-x-0",
+        "fixed md:static inset-y-0 left-0 z-20 w-60 border-r border-white/5 p-4 flex flex-col gap-4 bg-background transition-transform duration-300 ease-in-out md:translate-x-0",
         isMobileMenuOpen ? "translate-x-0 top-[73px] h-[calc(100vh-73px)]" : "-translate-x-full h-full"
       )}>
         <div
@@ -2643,7 +2743,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.4.28</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.5.6</span>
           </div>
         </div>
 
@@ -2655,15 +2755,16 @@ export default function App() {
           데이터 전체 초기화
         </button>
 
-        <nav className="flex-1 flex flex-col gap-2">
-          <SidebarItem icon={TypeIcon} label="가사 & 프롬프트" active={activeTab === 'lyrics'} onClick={() => handleTabChange('lyrics')} />
-          <SidebarItem icon={Music} label="음원 리스트" active={activeTab === 'music'} onClick={() => handleTabChange('music')} />
-          <SidebarItem icon={ImageIcon} label="이미지 생성" active={activeTab === 'image'} onClick={() => handleTabChange('image')} />
-          <SidebarItem icon={Video} label="영상 렌더링" active={activeTab === 'video'} onClick={() => handleTabChange('video')} />
-          <SidebarItem icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
-          <SidebarItem icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
+        <nav className="flex-1 flex flex-col gap-1 min-h-0 overflow-y-auto pr-1">
+          <SidebarItem small={true} icon={TypeIcon} label="가사 & 프롬프트" active={activeTab === 'lyrics'} onClick={() => handleTabChange('lyrics')} />
+          <SidebarItem small={true} icon={Music} label="음원 리스트" active={activeTab === 'music'} onClick={() => handleTabChange('music')} />
+          <SidebarItem small={true} icon={ImageIcon} label="이미지 생성" active={activeTab === 'image'} onClick={() => handleTabChange('image')} />
+          <SidebarItem small={true} icon={Video} label="영상 렌더링" active={activeTab === 'video'} onClick={() => handleTabChange('video')} />
+          <SidebarItem small={true} icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
+          <SidebarItem small={true} icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
           {/* 
           <SidebarItem 
+            small={true}
             icon={Layers} 
             label="AI 편곡" 
             active={activeTab === 'arrangement'} 
@@ -2671,8 +2772,8 @@ export default function App() {
           />
           */}
 
-          <div className="mt-4 pt-4 border-t border-white/5">
-            <SidebarItem icon={Key} label="API 키 설정" active={false} onClick={() => { setIsApiKeyModalOpen(true); setIsMobileMenuOpen(false); }} />
+          <div className="mt-2 pt-2 border-t border-white/5">
+            <SidebarItem small={true} icon={Key} label="API 키 설정" active={false} onClick={() => { setIsApiKeyModalOpen(true); setIsMobileMenuOpen(false); }} />
           </div>
         </nav>
 
@@ -2713,6 +2814,7 @@ export default function App() {
               setWorkflow={setWorkflow}
               generateLyrics={generateLyrics}
               generatePromptOnly={generatePromptOnly}
+              regenerateTitles={regenerateTitles}
               copyToClipboard={copyToClipboard}
               handleTabChange={handleTabChange}
               logs={logs}
@@ -2808,8 +2910,7 @@ export default function App() {
               videoEngine={videoEngine}
               setVideoEngine={setVideoEngine}
               videoQuality={videoQuality}
-              audioFadeIn={audioFadeIn}
-              audioFadeOut={audioFadeOut}
+
               logs={logs}
               apiKey={apiKey}
               aiEngine={aiEngine}
@@ -2897,10 +2998,7 @@ export default function App() {
               setVideoEngine={setVideoEngine}
               videoQuality={videoQuality}
               setVideoQuality={setVideoQuality}
-              audioFadeIn={audioFadeIn}
-              setAudioFadeIn={setAudioFadeIn}
-              audioFadeOut={audioFadeOut}
-              setAudioFadeOut={setAudioFadeOut}
+
               onReset={resetApp}
               availableModels={availableModels}
               fetchAvailableModels={fetchAvailableModels}

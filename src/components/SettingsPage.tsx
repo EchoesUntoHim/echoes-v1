@@ -9,11 +9,11 @@ import { AI_ENGINES, IMAGE_ENGINES, MUSIC_ENGINES, VIDEO_ENGINES } from '../cons
 
 interface SettingsPageProps {
   onOpenKeySelection: () => void;
-  platforms: { 
-    youtube: 'connected' | 'disconnected'; 
-    tiktok: 'connected' | 'disconnected'; 
-    naver: 'connected' | 'disconnected'; 
-    tistory: 'connected' | 'disconnected'; 
+  platforms: {
+    youtube: 'connected' | 'disconnected';
+    tiktok: 'connected' | 'disconnected';
+    naver: 'connected' | 'disconnected';
+    tistory: 'connected' | 'disconnected';
     google: 'connected' | 'disconnected';
   };
   togglePlatform: (key: 'youtube' | 'tiktok' | 'naver' | 'tistory' | 'google') => void;
@@ -34,7 +34,7 @@ interface SettingsPageProps {
   audioFadeOut: number;
   setAudioFadeOut: (seconds: number) => void;
   onReset: () => void;
-  availableModels?: {value: string, label: string, type?: string}[];
+  availableModels?: { value: string, label: string, type?: string }[];
   fetchAvailableModels?: () => void;
   copyToClipboard?: (text: string) => void;
   logs?: string[];
@@ -91,7 +91,7 @@ const GUIDES = {
   }
 };
 
-export const SettingsPage = ({ 
+export const SettingsPage = ({
   onOpenKeySelection,
   platforms,
   togglePlatform,
@@ -119,7 +119,7 @@ export const SettingsPage = ({
 }: SettingsPageProps) => {
   const [isKeySaved, setIsKeySaved] = useState(false);
   const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
-  
+
   // Platform Keys State
   const [platformKeys, setPlatformKeys] = useState(() => {
     const saved = localStorage.getItem('echoesuntohim_platform_keys');
@@ -144,7 +144,7 @@ export const SettingsPage = ({
     const newKeys = { ...platformKeys, [platform]: keys };
     setPlatformKeys(newKeys);
     localStorage.setItem('echoesuntohim_platform_keys', JSON.stringify(newKeys));
-    
+
     // Auto-connect if keys are provided
     if (Object.values(keys).every(v => v !== '')) {
       if (platforms[platform as keyof typeof platforms] === 'disconnected') {
@@ -170,7 +170,7 @@ export const SettingsPage = ({
             <Key className="w-5 h-5" />
             <h3 className="text-lg font-bold">API 키 관리</h3>
           </div>
-          
+
           <div className="space-y-6">
             <div className="p-4 bg-black/40 rounded-xl border border-white/10 space-y-4">
               <div className="flex flex-col gap-4">
@@ -181,15 +181,15 @@ export const SettingsPage = ({
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="AIzaSy..."
                     className="flex-1 bg-[#1A1F26] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none"
                   />
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => {
                         localStorage.setItem('gemini_api_key', apiKey);
                         setIsKeySaved(true);
@@ -199,7 +199,7 @@ export const SettingsPage = ({
                     >
                       {isKeySaved ? <><CheckCircle2 className="w-4 h-4" /> 저장됨</> : '저장하기'}
                     </button>
-                    <button 
+                    <button
                       onClick={fetchAvailableModels}
                       className="px-4 py-2 bg-white/10 text-white rounded-lg text-xs font-bold hover:bg-white/20 transition-all shrink-0 flex items-center gap-2"
                     >
@@ -215,7 +215,7 @@ export const SettingsPage = ({
                         <CheckCircle2 className="w-3 h-3" />
                         사용 가능한 엔진 목록 ({availableModels.length})
                       </p>
-                      <button 
+                      <button
                         onClick={() => {
                           if (copyToClipboard) {
                             const json = JSON.stringify(availableModels, null, 2);
@@ -229,7 +229,7 @@ export const SettingsPage = ({
                       </button>
                     </div>
                     <div className="space-y-2">
-                      <select 
+                      <select
                         value={aiEngine}
                         onChange={(e) => setAiEngine(e.target.value)}
                         className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-primary outline-none cursor-pointer"
@@ -253,7 +253,7 @@ export const SettingsPage = ({
                   <p className="font-bold text-sm">AI Studio 키 선택기 (내부용)</p>
                   <p className="text-xs text-gray-400">AI Studio 환경에서만 동작합니다.</p>
                 </div>
-                <button 
+                <button
                   onClick={onOpenKeySelection}
                   className="px-4 py-2 bg-white/10 text-white rounded-lg text-xs font-bold hover:bg-white/20 transition-all shrink-0"
                 >
@@ -261,7 +261,7 @@ export const SettingsPage = ({
                 </button>
               </div>
             </div>
-            
+
             <div className="pt-2 flex flex-col gap-1 text-[10px] text-gray-500">
               <div className="flex items-center gap-2">
                 <Info className="w-3 h-3" />
@@ -283,7 +283,7 @@ export const SettingsPage = ({
                   <p className="font-bold">언어/분석 엔진</p>
                   <p className="text-xs text-gray-400">가사 생성 및 음원 분석에 사용할 AI 모델을 선택합니다.</p>
                 </div>
-                <select 
+                <select
                   value={aiEngine}
                   onChange={(e) => setAiEngine(e.target.value)}
                   className="bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-2 outline-none text-white appearance-none cursor-pointer text-sm min-w-[200px]"
@@ -303,7 +303,7 @@ export const SettingsPage = ({
                   <p className="font-bold">음악 생성 엔진</p>
                   <p className="text-xs text-gray-400">배경 음악 생성에 사용할 엔진을 선택합니다.</p>
                 </div>
-                <select 
+                <select
                   value={musicEngine}
                   onChange={(e) => setMusicEngine(e.target.value)}
                   className="bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-2 outline-none text-white appearance-none cursor-pointer text-sm min-w-[200px]"
@@ -323,7 +323,7 @@ export const SettingsPage = ({
                   <p className="font-bold">이미지 생성 엔진</p>
                   <p className="text-xs text-gray-400">영상 배경 이미지 생성에 사용할 엔진을 선택합니다.</p>
                 </div>
-                <select 
+                <select
                   value={imageEngine}
                   onChange={(e) => setImageEngine(e.target.value)}
                   className="bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-2 outline-none text-white appearance-none cursor-pointer text-sm min-w-[200px]"
@@ -342,9 +342,9 @@ export const SettingsPage = ({
         <GlassCard className="space-y-6">
           <h3 className="text-lg font-bold border-b border-white/5 pb-4">플랫폼 연동</h3>
           <div className="space-y-4">
-            <PlatformToggle 
-              label="틱톡 (TikTok)" 
-              status={platforms.tiktok} 
+            <PlatformToggle
+              label="틱톡 (TikTok)"
+              status={platforms.tiktok}
               onToggle={() => {
                 if (platforms.tiktok === 'connected') togglePlatform('tiktok');
                 else setActiveGuide('tiktok');
@@ -352,9 +352,9 @@ export const SettingsPage = ({
               description="틱톡 영상 업로드를 위해 계정을 연동합니다. 개발자 포털의 Client Key가 필요합니다."
               onHelp={() => setActiveGuide('tiktok')}
             />
-            <PlatformToggle 
-              label="네이버 블로그" 
-              status={platforms.naver} 
+            <PlatformToggle
+              label="네이버 블로그"
+              status={platforms.naver}
               onToggle={() => {
                 if (platforms.naver === 'connected') togglePlatform('naver');
                 else setActiveGuide('naver');
@@ -362,9 +362,9 @@ export const SettingsPage = ({
               description="네이버 블로그 글쓰기 API를 통해 포스팅을 자동 업로드합니다."
               onHelp={() => setActiveGuide('naver')}
             />
-            <PlatformToggle 
-              label="티스토리" 
-              status={platforms.tistory} 
+            <PlatformToggle
+              label="티스토리"
+              status={platforms.tistory}
               onToggle={() => {
                 if (platforms.tistory === 'connected') togglePlatform('tistory');
                 else setActiveGuide('tistory');
@@ -372,9 +372,9 @@ export const SettingsPage = ({
               description="티스토리 Open API를 사용하여 포스팅을 자동 발행합니다."
               onHelp={() => setActiveGuide('tistory')}
             />
-            <PlatformToggle 
-              label="구글 블로그 (Blogger)" 
-              status={platforms.google} 
+            <PlatformToggle
+              label="구글 블로그 (Blogger)"
+              status={platforms.google}
               onToggle={() => {
                 if (platforms.google === 'connected') togglePlatform('google');
                 else setActiveGuide('google');
@@ -394,7 +394,7 @@ export const SettingsPage = ({
                   <p className="font-bold">비디오 렌더링 품질</p>
                   <p className="text-xs text-gray-400">최종 영상의 해상도와 품질을 설정합니다.</p>
                 </div>
-                <select 
+                <select
                   value={videoQuality}
                   onChange={(e) => {
                     setVideoQuality(e.target.value);
@@ -416,7 +416,7 @@ export const SettingsPage = ({
                   <p className="font-bold">오디오 페이드 인 (초)</p>
                   <p className="text-xs text-gray-400">영상 시작 시 오디오가 서서히 커지는 시간을 설정합니다.</p>
                 </div>
-                <input 
+                <input
                   type="number"
                   min="0"
                   max="10"
@@ -436,7 +436,7 @@ export const SettingsPage = ({
                   <p className="font-bold">오디오 페이드 아웃 (초)</p>
                   <p className="text-xs text-gray-400">영상 종료 시 오디오가 서서히 작아지는 시간을 설정합니다.</p>
                 </div>
-                <input 
+                <input
                   type="number"
                   min="0"
                   max="10"
@@ -456,7 +456,7 @@ export const SettingsPage = ({
                   <p className="font-bold text-red-500">전체 초기화</p>
                   <p className="text-xs text-gray-400">모든 설정과 작업 데이터를 삭제하고 초기 상태로 되돌립니다.</p>
                 </div>
-                <button 
+                <button
                   onClick={onReset}
                   className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white transition-all"
                 >
@@ -488,14 +488,14 @@ export const SettingsPage = ({
                   </div>
                   <h3 className="text-xl font-bold">{GUIDES[activeGuide].title}</h3>
                 </div>
-                <button 
+                <button
                   onClick={() => setActiveGuide(null)}
                   className="p-2 hover:bg-white/5 rounded-full transition-colors"
                 >
                   <X className="w-6 h-6 text-gray-400" />
                 </button>
               </div>
-              
+
               <div className="flex-1 p-8 space-y-8 overflow-y-auto custom-scrollbar">
                 <div className="space-y-4">
                   <p className="text-xs font-bold text-primary uppercase tracking-wider">Step-by-Step 가이드</p>
@@ -516,7 +516,7 @@ export const SettingsPage = ({
                       <>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client Key</label>
-                          <input 
+                          <input
                             type="text"
                             value={platformKeys.tiktok.clientKey}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, tiktok: { ...prev.tiktok, clientKey: e.target.value } }))}
@@ -526,7 +526,7 @@ export const SettingsPage = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client Secret</label>
-                          <input 
+                          <input
                             type="password"
                             value={platformKeys.tiktok.clientSecret}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, tiktok: { ...prev.tiktok, clientSecret: e.target.value } }))}
@@ -540,7 +540,7 @@ export const SettingsPage = ({
                       <>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client ID</label>
-                          <input 
+                          <input
                             type="text"
                             value={platformKeys.naver.clientId}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, naver: { ...prev.naver, clientId: e.target.value } }))}
@@ -550,7 +550,7 @@ export const SettingsPage = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client Secret</label>
-                          <input 
+                          <input
                             type="password"
                             value={platformKeys.naver.clientSecret}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, naver: { ...prev.naver, clientSecret: e.target.value } }))}
@@ -564,7 +564,7 @@ export const SettingsPage = ({
                       <>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client ID</label>
-                          <input 
+                          <input
                             type="text"
                             value={platformKeys.google.clientId}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, clientId: e.target.value } }))}
@@ -574,7 +574,7 @@ export const SettingsPage = ({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] text-gray-500 ml-1">Client Secret</label>
-                          <input 
+                          <input
                             type="password"
                             value={platformKeys.google.clientSecret}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, clientSecret: e.target.value } }))}
@@ -587,7 +587,7 @@ export const SettingsPage = ({
                     {activeGuide === 'tistory' && (
                       <div className="space-y-2">
                         <label className="text-[10px] text-gray-500 ml-1">Access Token</label>
-                        <input 
+                        <input
                           type="password"
                           value={platformKeys.tistory.accessToken}
                           onChange={(e) => setPlatformKeys(prev => ({ ...prev, tistory: { ...prev.tistory, accessToken: e.target.value } }))}
@@ -598,9 +598,9 @@ export const SettingsPage = ({
                     )}
                   </div>
                 </div>
-                
+
                 <div className="pt-4">
-                  <a 
+                  <a
                     href={GUIDES[activeGuide].link}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -613,13 +613,13 @@ export const SettingsPage = ({
               </div>
 
               <div className="p-6 bg-black/20 border-t border-white/5 flex gap-3 shrink-0">
-                <button 
+                <button
                   onClick={() => setActiveGuide(null)}
                   className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all"
                 >
                   취소
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     savePlatformKeys(activeGuide, platformKeys[activeGuide]);
                     setActiveGuide(null);

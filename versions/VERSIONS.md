@@ -1,3 +1,498 @@
+# 버전 관리 이력 (CCM Pro / Echoes Unto Him)
+
+## [v1.5.5] - 2026-04-23
+
+### 상세 수정 내역 (v1.5.6)
+
+#### 1. src/components/VideoPlayer.tsx (페이드 및 시작 화면 로직)
+**원코드:**
+```tsx
+      // v1.5.2: prop 기반 오디오 페이드 / 시각적 페이드 타입별 분리
+      const audioFadeOut = fadeOutDuration > 0 ? fadeOutDuration : 3;
+      const isMainOrTiktok = type === 'main' || type === 'tiktok';
+      const visualFadeInDur = isMainOrTiktok ? 1.5 : 0; // 메인/틱톡만 페이드인
+
+      if (duration && currentAudioTime >= startTime + duration - audioFadeOut) {
+         const fadeOutProgress = (currentAudioTime - (startTime + duration - audioFadeOut)) / audioFadeOut;
+         audio.volume = Math.max(0, 1 - fadeOutProgress);
+      } else {
+         audio.volume = 1;
+      }
+      ...
+      // v1.5.2: 시각적 페이드 - 메인/틱톡은 페이드인, 숏츠는 없음
+      let visualOpacity = 0;
+      if (visualFadeInDur > 0 && segmentTime < visualFadeInDur) {
+        visualOpacity = 1 - (segmentTime / visualFadeInDur);
+      }
+      if (visualOpacity > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, visualOpacity)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+```
+
+**수정코드:**
+```tsx
+      // v1.5.5: prop 기반 오디오/시각적 페이드 통합
+      const audioFadeIn = fadeInDuration || 0;
+      const audioFadeOut = fadeOutDuration > 0 ? fadeOutDuration : 3;
+
+      let targetVolume = 1;
+      if (segmentTime < audioFadeIn && audioFadeIn > 0) {
+        targetVolume = segmentTime / audioFadeIn;
+      } else if (duration && currentAudioTime >= startTime + duration - audioFadeOut) {
+        const fadeOutProgress = (currentAudioTime - (startTime + duration - audioFadeOut)) / audioFadeOut;
+        targetVolume = 1 - fadeOutProgress;
+      }
+      audio.volume = Math.max(0, Math.min(1, targetVolume));
+      ...
+      // v1.5.5: 시각적 페이드 - 재생 중이고 페이드가 설정된 경우에만 검은 화면 오버레이 적용
+      let visualOpacity = 0;
+      if (isPlaying && audioFadeIn > 0 && segmentTime < audioFadeIn) {
+        visualOpacity = 1 - (segmentTime / audioFadeIn);
+      }
+      if (visualOpacity > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, visualOpacity)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+```
+
+#### 2. src/components/VideoSettingsPanel.tsx (정렬 및 페이드 UI)
+**원코드 (타이틀 설정부):**
+```tsx
+          <select 
+            value={settings.titlePosition}
+            onChange={(e) => onChange({ ...settings, titlePosition: e.target.value as TitlePosition })}
+            className="bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:border-primary outline-none cursor-pointer min-w-[100px]"
+          >
+            <option value="middle">중앙 (Center)</option>
+            <option value="top">상단 (Top)</option>
+            <option value="bottom">하단 (Bottom)</option>
+            <option value="custom">사용자 (Custom)</option>
+          </select>
+```
+
+**수정코드 (정렬 및 ID/심미성 추가):**
+```tsx
+          <select 
+            id={`title-position-${type}`}
+            aria-label="타이틀 위치 선택"
+            value={settings.titlePosition}
+            onChange={(e) => onChange({ ...settings, titlePosition: e.target.value as TitlePosition })}
+            className="bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:border-primary hover:border-white/30 transition-all outline-none cursor-pointer min-w-[100px]"
+          >
+            <option value="middle">중앙 (Center)</option>
+            <option value="top">상단 (Top)</option>
+            <option value="bottom">하단 (Bottom)</option>
+            <option value="custom">사용자 (Custom)</option>
+          </select>
+
+          <select 
+            id={`title-align-${type}`}
+            aria-label="타이틀 정렬 선택"
+            value={settings.titleAlign}
+            onChange={(e) => onChange({ ...settings, titleAlign: e.target.value as any })}
+            className="bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:border-primary hover:border-white/30 transition-all outline-none cursor-pointer min-w-[80px]"
+          >
+            <option value="center">가운데 정렬</option>
+            <option value="left">왼쪽 정렬</option>
+            <option value="right">오른쪽 정렬</option>
+          </select>
+```
+
+---
+
+## [v1.5.5] - 2026-04-23
+### GPU 과부하 및 메모리 누수 픽스 (v1.5.5)
+- **렌더링 최적화**: `VideoPlayer.tsx` 내부 캔버스 애니메이션 루프(`requestAnimationFrame`)에서 오디오가 정지 상태일 때(이전 렌더링 프레임과 시간이 동일할 때) 무거운 캔버스 그리기(Shadow, 폰트 렌더링, 이미지 Draw)를 생략(`return`)하여 유휴 상태의 GPU 점유율을 대폭 감소시켰습니다.
+- **역방향 탐색 호환성 유지**: 영상이 끝났을 때 애니메이션 루프 자체를 소멸시키지 않고 유지하여, 정지된 상태에서도 사용자가 타임라인 바를 역방향으로 조작(`handleSeek`)하면 즉시 화면이 갱신되도록 개선했습니다.
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.5`).
+
+### 상세 수정 내역 (v1.5.5)
+
+#### 1. src/components/VideoPlayer.tsx
+**원코드:**
+```tsx
+    let animationFrameId: number;
+
+    const render = () => {
+      const currentAudioTime = audio.currentTime;
+      const segmentTime = currentAudioTime - (startTime || 0);
+      
+      if (duration && currentAudioTime >= startTime + duration) {
+         audio.pause();
+         setIsPlaying(false);
+         if (onEnded) onEnded();
+         return;
+      }
+```
+
+**수정코드:**
+```tsx
+    let animationFrameId: number;
+    let lastRenderTime = -1;
+
+    const render = () => {
+      const currentAudioTime = audio.currentTime;
+      const segmentTime = currentAudioTime - (startTime || 0);
+      
+      if (duration && currentAudioTime >= startTime + duration) {
+         if (isPlaying) {
+           audio.pause();
+           setIsPlaying(false);
+           if (onEnded) onEnded();
+         }
+         // Do not return here to keep the loop alive for manual seeking
+      }
+      
+      // GPU 최적화: 오디오 시간이 변경되지 않았으면(일시정지 상태) 무거운 그리기 연산 생략
+      if (currentAudioTime === lastRenderTime) {
+         animationFrameId = requestAnimationFrame(render);
+         return;
+      }
+      lastRenderTime = currentAudioTime;
+```
+
+## [v1.5.4] - 2026-04-23
+### 사이드바 UI 레이아웃 최적화 (v1.5.4)
+- **사이드바 메뉴 컴팩트화**: `SidebarItem.tsx`에 `small` 속성을 추가하여 작은 패딩과 폰트를 사용할 수 있도록 지원.
+- **사이드바 스크롤 처리**: `App.tsx` 내의 사이드바 메뉴 네비게이션 영역에 `overflow-y-auto`를 추가하여 화면 세로 높이가 좁아도 하단의 'API 키 설정', '로그인/사용자', '설정' 영역이 가려지지 않고 유지되도록 수정.
+- **메뉴 사이즈 축소**: 기존 메뉴 간격 및 패딩을 축소(`w-64 p-6 gap-8` -> `w-60 p-4 gap-4`)하고, "가사 & 프롬프트"부터 "블로그 생성"까지의 탭 항목에 `small={true}`를 적용.
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.4`).
+
+### 상세 수정 내역 (v1.5.4)
+
+#### 1. src/components/SidebarItem.tsx
+**원코드:**
+```tsx
+interface SidebarItemProps {
+  icon: any;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}
+
+export const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group",
+      active 
+        ? "bg-primary/10 text-primary border border-primary/20" 
+        : "text-gray-400 hover:bg-white/5 hover:text-white"
+    )}
+  >
+    <Icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", active && "text-primary")} />
+    <span className="font-medium">{label}</span>
+  </button>
+);
+```
+
+**수정코드:**
+```tsx
+interface SidebarItemProps {
+  icon: any;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  small?: boolean;
+}
+
+export const SidebarItem = ({ icon: Icon, label, active, onClick, small = false }: SidebarItemProps) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "w-full flex items-center rounded-xl transition-all duration-300 group",
+      small ? "gap-2 px-3 py-2 text-xs" : "gap-3 px-4 py-3",
+      active 
+        ? "bg-primary/10 text-primary border border-primary/20" 
+        : "text-gray-400 hover:bg-white/5 hover:text-white"
+    )}
+  >
+    <Icon className={cn("transition-transform group-hover:scale-110", small ? "w-4 h-4" : "w-5 h-5", active && "text-primary")} />
+    <span className={cn("font-medium", small ? "text-xs" : "")}>{label}</span>
+  </button>
+);
+```
+
+#### 2. src/App.tsx (레이아웃)
+**원코드:**
+```tsx
+      <aside className={cn(
+        "fixed md:static inset-y-0 left-0 z-20 w-64 border-r border-white/5 p-6 flex flex-col gap-8 bg-background transition-transform duration-300 ease-in-out md:translate-x-0",
+        isMobileMenuOpen ? "translate-x-0 top-[73px] h-[calc(100vh-73px)]" : "-translate-x-full h-full"
+      )}>
+// ...
+        <nav className="flex-1 flex flex-col gap-2">
+// ...
+          <div className="mt-4 pt-4 border-t border-white/5">
+```
+
+**수정코드:**
+```tsx
+      <aside className={cn(
+        "fixed md:static inset-y-0 left-0 z-20 w-60 border-r border-white/5 p-4 flex flex-col gap-4 bg-background transition-transform duration-300 ease-in-out md:translate-x-0",
+        isMobileMenuOpen ? "translate-x-0 top-[73px] h-[calc(100vh-73px)]" : "-translate-x-full h-full"
+      )}>
+// ...
+        <nav className="flex-1 flex flex-col gap-1 min-h-0 overflow-y-auto pr-1">
+// ...
+          <div className="mt-2 pt-2 border-t border-white/5">
+```
+
+## [v1.5.3] - 2026-04-23
+### 빌드 에러 패치 및 스코프 오류 수정 (v1.5.3)
+- **변수 스코프 문제 해결**: `VideoPlayer.tsx`에서 `nextTime` 변수가 블록 스코프(`if` 문 내부)에 선언되어 있어 외부에서 접근 시 발생하는 `nextTime is not defined` 오류를 수정 (`VideoPlayer.tsx`).
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.3`).
+
+### 상세 수정 내역 (v1.5.3)
+#### 1. src/components/VideoPlayer.tsx (변수 스코프 문제 해결)
+**원코드:**
+```tsx
+        } else {
+          // Fade, Center, Bottom modes
+          let currentPair;
+          let pairProgress = 0;
+
+          if (parsedLyrics.timedLines && parsedLyrics.timedLines.length > 0) {
+            // ...
+            const nextTime = lines[activeIdx + 1]?.time || totalDuration;
+```
+
+**수정코드:**
+```tsx
+        } else {
+          // Fade, Center, Bottom modes
+          let currentPair;
+          let pairProgress = 0;
+          let nextTime = totalDuration;
+
+          if (parsedLyrics.timedLines && parsedLyrics.timedLines.length > 0) {
+            // ...
+            nextTime = lines[activeIdx + 1]?.time || totalDuration;
+```
+## [v1.5.2] - 2026-04-23
+### 영상 렌더링 수정 및 버그 픽스 (v1.5.2)
+- **숏츠 자막 즉시 표시**: 숏츠(fade 모드)에서 1초간 자막이 페이드인 되느라 늦게 나타나던 지연 현상을 수정하여, 영상 시작과 동시에 즉시 노출되도록 보정 (`VideoPlayer.tsx`).
+- **배경 시각적 페이드 오버레이 제한**: 화면 전체가 블랙으로 어두워지는 시각적 페이드 효과를 메인 및 틱톡 영상에만(페이드인) 적용하고, 숏츠에서는 완전히 제거 (`VideoPlayer.tsx`).
+- **스크롤 페이드 인/아웃 복구**: 자막이 화면 상단/하단 경계에 도달 시 부드럽게 사라지고 나타나는 opacity 조절 로직 복구 (`VideoPlayer.tsx`).
+- **영어 자막 교차 노출**: `timedLyrics` 데이터에서 한국어와 영어가 배열에 올바르게 한 줄씩 교차(Interleave) 배치되도록 수정 (`VideoPlayer.tsx`).
+- **오디오 설정 연동 및 문법 오류 픽스**: 틱톡 플레이어에 `audioFadeIn/Out` 설정이 연동되도록 수정하는 과정에서 발생했던 `fadeOutDuration` 속성 누락 오류 해결 (`VideoPlayer.tsx`, `VideoTab.tsx`).
+- **다운로드 오디오 팝노이즈 해결**: 영상 저장 시 오디오 볼륨을 0에서 1로 빠르게 램프업 시켜 시작 부분의 음튐(팝) 노이즈를 방지하는 기능 적용 완료 (`VideoPlayer.tsx`).
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.2`).
+
+### 상세 수정 내역 (v1.5.2)
+
+#### 1. src/components/VideoPlayer.tsx (Props 누락 및 숏츠 페이드인 보정)
+**원코드:**
+```tsx
+  originalFileName = ""
+}: any, ref) => {
+// ...
+            if (displayMode === 'fade') {
+              if (pairProgress < 0.1) opacity = pairProgress / 0.1;
+              else if (pairProgress > 0.9) opacity = (1 - pairProgress) / 0.1;
+            }
+```
+
+**수정코드:**
+```tsx
+  originalFileName = "",
+  fadeInDuration = 0,
+  fadeOutDuration = 0
+}: any, ref) => {
+// ...
+            if (displayMode === 'fade') {
+              const fadeDur = 0.5;
+              const timeSinceStart = currentAudioTime - currentPair.time;
+              const timeUntilEnd = nextTime - currentAudioTime;
+              // v1.5.2: 숏츠(시작시간) 이전 자막은 페이드인 생략하여 즉시 표시
+              if (timeSinceStart < fadeDur && currentPair.time > startTime) {
+                opacity = timeSinceStart / fadeDur;
+              } else if (timeUntilEnd < fadeDur) {
+                opacity = timeUntilEnd / fadeDur;
+              }
+            }
+```
+
+#### 2. src/components/VideoPlayer.tsx (timedLyrics 파싱 오류 수정)
+**원코드:**
+```tsx
+      timedLyrics.forEach(item => {
+        if (item.kor) korLines.push(item.kor);
+        if (item.eng) engLines.push(item.eng);
+        pairs.push({ kor: item.kor || '', eng: item.eng || '' });
+      });
+
+      return { 
+        flat: [...korLines, ...engLines], 
+```
+
+**수정코드:**
+```tsx
+      timedLyrics.forEach(item => {
+        if (item.kor) flat.push(item.kor);
+        if (item.eng) flat.push(item.eng);
+        pairs.push({ kor: item.kor || '', eng: item.eng || '' });
+      });
+
+      return { 
+        flat, 
+```
+
+## [v1.5.1] - 2026-04-22
+### 숏츠 보강 생성 로직 정교화 및 안정성 패치
+- **숏츠 순차 생성 로직 적용**: 이미 생성된 숏츠가 있을 경우, 1번부터 다시 만드는 것이 아니라 **다음 번호부터** 이어서 생성하도록 개선 (`App.tsx`).
+- **5개 제한 유효성 검사 추가**: 전체 숏츠 개수가 5개를 초과할 경우 작업을 중단하고 사용자에게 경고 메시지를 표시하여 리소스 낭비 방지.
+- **AI 프롬프트 최적화**: 보강 생성 시 필요한 개수만큼의 프롬프트만 요청하도록 최적화.
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.1`).
+
+### 상세 수정 내역 (v1.5.1)
+
+#### 1. src/App.tsx (순차 생성 및 유효성 검사)
+**원코드:**
+```tsx
+    addLog(`[${imageEngine}] 숏츠 이미지 전체 재생성 중... (설정된 개수: ${shortsCount}개)`);
+    ...
+    for (let i = 0; i < actualShortsCount; i++) {
+      addLog(`새로운 숏츠 하이라이트 ${i + 1} 생성 중...`);
+```
+**수정코드:**
+```tsx
+    const existingShortsCount = workflow.results.images.filter((img: any) => img.label.startsWith('숏츠')).length;
+    const remainingToGenerate = shortsCount - existingShortsCount;
+    if (shortsCount > 5) { alert("최대 숏츠 생성 개수(5개)를 초과할 수 없습니다."); return; }
+    ...
+    for (let i = 0; i < actualShortsCount; i++) {
+      const shortsIndex = existingShortsCount + i + 1;
+      addLog(`새로운 숏츠 하이라이트 ${shortsIndex} 생성 중...`);
+```
+
+#### 2. src/App.tsx, src/components/LandingPage.tsx, package.json (버전 업데이트)
+- `package.json`: `"version": "1.5.1"`
+- `App.tsx`: UI 버전 표시 `v1.5.1` 및 로그/주석 내 버전 정보 업데이트.
+- `LandingPage.tsx`: UI 버전 표시 `v1.5.1`.
+
+
+## [v1.5.0] - 2026-04-22
+### 숏츠 이미지 보강 생성 기능 도입 및 이미지 생성 안정화
+- **숏츠 이미지 보강 생성 로직 도입**: 이미지 생성 중 오류가 발생하거나 중간에 멈췄을 때, 메인/틱톡 이미지는 보존하면서 부족한 숏츠 이미지들만 선택적으로 채워 넣는 기능 추가 (`App.tsx`).
+- **이미지 생성 UI 세분화**: 숏츠 이미지 설정 영역에 '누락된 숏츠 보강 생성' 및 '숏츠 이미지 전체 초기화 후 생성' 버튼을 배치하여 작업 효율성 증대 (`ImageTab.tsx`).
+- **데이터 무결성 강화**: 개별 이미지 생성 시마다 즉시 클라우드 저장소(Firebase) 업로드 및 DB 동기화를 수행하여 데이터 유실 방지 로직 강화.
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.5.0`).
+
+### 상세 수정 내역 (v1.5.0)
+
+#### 1. src/App.tsx (숏츠 보강 생성 로직 고도화)
+**원코드 (기존 숏츠 삭제 방식):**
+```tsx
+      // Remove existing shorts images
+      setWorkflow(prev => ({
+        ...prev,
+        results: {
+          ...prev.results,
+          images: prev.results.images.filter(img => !img.label.startsWith('숏츠'))
+        }
+      }));
+```
+**수정코드 (보강 및 개별 업데이트 방식):**
+```tsx
+      // KEEP existing images, don't remove them. 
+      // We will only add or update based on the label match.
+      ...
+      const tempImage = { url: base64Url, type: 'vertical' as const, label: `숏츠 ${i + 1}`, prompt: prompts.shortsPrompts[i] };
+      setWorkflow(prev => ({
+        ...prev,
+        results: {
+          ...prev.results,
+          images: [
+            ...prev.results.images.filter(img => img.label !== tempImage.label),
+            tempImage
+          ]
+        }
+      }));
+```
+
+#### 2. src/components/ImageTab.tsx (UI 버튼 세분화)
+**원코드:**
+```tsx
+                <button
+                  onClick={regenerateShorts}
+                  className="w-full mt-4 py-2 bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" /> 숏츠 이미지만 전체 재생성
+                </button>
+```
+**수정코드:**
+```tsx
+                <div className="space-y-2 mt-4">
+                  <button
+                    onClick={regenerateShorts}
+                    className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 border border-primary/30"
+                  >
+                    <RefreshCw className="w-4 h-4" /> 누락된 숏츠 보강 생성
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm('모든 숏츠 이미지를 삭제하고 새로 생성하시겠습니까?')) {
+                        setWorkflow(prev => ({
+                          ...prev,
+                          results: {
+                            ...prev.results,
+                            images: prev.results.images.filter((img: any) => !img.label.startsWith('숏츠'))
+                          }
+                        }));
+                        await regenerateShorts();
+                      }
+                    }}
+                    className="w-full py-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg text-[10px] font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    숏츠 이미지 전체 초기화 후 생성
+                  </button>
+                </div>
+```
+
+## [v1.4.29] - 2026-04-22
+### 듀엣 보컬 대비 선택제 및 블로그 플랫폼별 기술 최적화 고도화
+- **듀엣 보컬 옵션 사용자 중심 재구조화**: 가독성을 위해 '남녀 / 남남 / 여여' 성별 구조를 유지하면서, 각 섹션 내에 '음색 대조', '화음 조화', '음역 대비' 등 총 20여 개의 세분화된 옵션을 전략적으로 배치 (`constants.ts`).
+- **가사 생성 로직 최적화**: 사용자가 고른 구체적인 성별 조합과 음색 스타일(`음색 대조`, `화음 조화`, `음역 대비`)을 AI가 정확히 포착하여, 물리적 음색 차이와 화음의 깊이를 극대화하는 동적 프롬프트 생성.
+- **블로그 플랫폼 기술 최적화**: 사용자 선택 스타일을 100% 유지하면서, 네이버(이미지 흐름), 티스토리(구조화), 구글(H태그 SEO) 등 플랫폼별 '기술적 레이아웃'만 전문적으로 최적화하도록 로직 강화.
+- **이미지 핵심 문구 오버레이 (Text Overlay)**: 이미지 위에 표시되는 텍스트 생성 시, 단순 제목이 아닌 본문의 핵심 인사이트나 강력한 문구를 추출하여 오버레이하도록 지침 강화.
+- **CCM 제목 독창성 고도화**: '은혜', '영광', '소망' 등 상투적인 CCM 키워드 클리셰 사용을 엄격히 금지하고, 곡의 서사를 꿰뚫는 신선한 성경적 메타포와 예술적 깊이를 담은 제목을 생성하도록 로직 보강.
+- **'제목만 다시 생성' 기능 도입**: 가사 전체를 다시 만들 필요 없이, 기존 가사의 맥락을 유지하며 독창적인 제목 5개를 즉시 재생성할 수 있는 전용 버튼 추가 (`LyricsTab`).
+- **제목 띄어쓰기 규정 강화 및 데이터 안정화**: 제목 내부 띄어쓰기에 `_`, `/` 등 기호 사용을 엄격히 금지하고 **일반 공백** 사용을 강제함. `_`는 오직 한글과 영어 제목 사이의 **단일 구분자**로만 사용하도록 로직을 강화하여 데이터 무결성 및 가독성 확보.
+- **AI 페르소나 최상위권 업그레이드**: 
+    - **이미지 엔진**: 30년 경력의 베테랑 영화감독 및 아트 디렉터 페르소나 주입.
+    - **유튜브 메타데이터**: 글로벌 No.1 큐레이터 페르소나에 한국적 정서 및 CCM 수직/수평 차원 심화 지침 추가.
+- **버전 상향**: `package.json`, `App.tsx`, `LandingPage.tsx` 전면 적용 (`v1.4.29`).
+
+### 상세 수정 내역 (v1.4.29)
+
+#### 1. src/constants.ts (듀엣 보컬 옵션 확장)
+**수정코드:**
+```tsx
+  Duet: [
+    '------ 남녀 듀엣 (음색 대비/조화) ------',
+    '음색 대조형: 남녀 감성 듀엣 (공기감 vs 호소력)',
+    '화음 조화형: 부드러운 남녀 팝 발라드 듀엣',
+    '에너지 대조형: 파워풀 남성 vs 청아한 여성 듀엣',
+    '대화하듯 주고받는 남녀 감성 듀엣',
+    ...
+  ],
+```
+
+#### 2. src/App.tsx (블로그 기술 최적화 및 이미지 오버레이)
+**원코드 (imageTexts 지침):**
+```tsx
+"imageTexts": {
+  ${processedImages.map(img => `"${img.label}": "이 이미지가 위치한 단락의 '소제목(챕터 제목)' 또는 해당 단락의 가장 핵심적인 문장을 그대로 사용 (본문과 무관한 문구 금지)"`).join(',\n            ')}
+}
+```
+**수정코드 (핵심 문구 추출 강화):**
+```tsx
+"imageTexts": {
+  ${processedImages.map(img => `"${img.label}": "이 이미지가 위치한 단락의 핵심을 관통하는 '가장 중요한 문구' 또는 '강력한 인사이트'를 한 문장으로 생성 (이미지 위 오버레이용이므로 임팩트 있게 작성)"`).join(',\n            ')}
+}
+```
 
 ## [v1.4.28] - 2026-04-22
 ### 글로벌 최정상급(MrBeast 레벨) 페르소나 및 CCM 영적 차원 고도화

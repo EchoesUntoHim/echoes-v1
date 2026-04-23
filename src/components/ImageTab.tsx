@@ -252,12 +252,31 @@ export const ImageTab = ({
                 <span className="text-xl font-bold text-primary w-8">{shortsCount}</span>
               </div>
               {workflow.results.images.length > 0 && shortsCount > 0 && (
-                <button
-                  onClick={regenerateShorts}
-                  className="w-full mt-4 py-2 bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" /> 숏츠 이미지만 전체 재생성
-                </button>
+                <div className="space-y-2 mt-4">
+                  <button
+                    onClick={regenerateShorts}
+                    className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 border border-primary/30"
+                  >
+                    <RefreshCw className="w-4 h-4" /> 누락된 숏츠 보강 생성
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm('모든 숏츠 이미지를 삭제하고 새로 생성하시겠습니까?')) {
+                        setWorkflow(prev => ({
+                          ...prev,
+                          results: {
+                            ...prev.results,
+                            images: prev.results.images.filter((img: any) => !img.label.startsWith('숏츠'))
+                          }
+                        }));
+                        await regenerateShorts();
+                      }
+                    }}
+                    className="w-full py-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg text-[10px] font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    숏츠 이미지 전체 초기화 후 생성
+                  </button>
+                </div>
               )}
             </div>
           </GlassCard>

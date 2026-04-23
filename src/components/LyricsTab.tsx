@@ -49,6 +49,7 @@ interface LyricsTabProps {
   availableModels?: { value: string, label: string, type?: string }[];
   fetchAvailableModels?: () => void;
   isTranslating?: boolean;
+  regenerateTitles?: () => Promise<void>;
 }
 
 export const LyricsTab = ({
@@ -66,7 +67,8 @@ export const LyricsTab = ({
   addLog,
   availableModels = AI_ENGINES,
   fetchAvailableModels,
-  isTranslating = false
+  isTranslating = false,
+  regenerateTitles
 }: LyricsTabProps) => {
   const translationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -365,37 +367,50 @@ export const LyricsTab = ({
 
             {workflow.results.suggestedTitles && workflow.results.suggestedTitles.length > 0 && (
               <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-xs text-gray-400 mb-3">AI가 제안하는 다른 제목들 (클릭하여 변경)</p>
-                <div className="flex flex-wrap gap-2">
-                  {workflow.results.suggestedTitles.map((title: string, idx: number) => (
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-gray-400">AI가 제안하는 다른 제목들 (클릭하여 변경)</p>
+                  {regenerateTitles && (
                     <button
-                      key={idx}
-                      onClick={() => {
-                        const [kTitle, eTitle] = title.includes('_') ? title.split('_') : [title, ''];
-                        setWorkflow(prev => ({
-                          ...prev,
-                          params: {
-                            ...prev.params,
-                            title: title,
-                            koreanTitle: kTitle,
-                            englishTitle: eTitle
-                          },
-                          results: {
-                            ...prev.results,
-                            title: title
-                          }
-                        }));
-                      }}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                        workflow.results.title === title
-                          ? "bg-primary/20 text-primary border-primary/30"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                      )}
+                      onClick={regenerateTitles}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-[10px] font-black transition-all border border-primary/20"
                     >
-                      {title.replace('_', ' / ')}
+                      <RefreshCw className="w-3 h-3" /> 제목만 다시 생성
                     </button>
-                  ))}
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {workflow.results.suggestedTitles.map((title: any, idx: number) => {
+                    if (typeof title !== 'string') return null;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          const [kTitle, eTitle] = title.includes('_') ? title.split('_') : [title, ''];
+                          setWorkflow(prev => ({
+                            ...prev,
+                            params: {
+                              ...prev.params,
+                              title: title,
+                              koreanTitle: kTitle,
+                              englishTitle: eTitle
+                            },
+                            results: {
+                              ...prev.results,
+                              title: title
+                            }
+                          }));
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                          workflow.results.title === title
+                            ? "bg-primary/20 text-primary border-primary/30"
+                            : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                        )}
+                      >
+                        {title.includes('_') ? title.replace('_', ' / ') : title}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

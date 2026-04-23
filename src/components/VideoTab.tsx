@@ -40,8 +40,7 @@ interface VideoTabProps {
   videoEngine: string;
   setVideoEngine: (engine: string) => void;
   videoQuality: string;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
+
   logs: string[];
   apiKey: string;
   aiEngine: string;
@@ -76,8 +75,7 @@ export const VideoTab = ({
   videoEngine,
   setVideoEngine,
   videoQuality,
-  audioFadeIn = 0,
-  audioFadeOut = 0,
+
   logs,
   apiKey,
   aiEngine,
@@ -85,6 +83,24 @@ export const VideoTab = ({
 }: VideoTabProps) => {
   const [internalIsTranslating, setInternalIsTranslating] = React.useState(false);
   const translationTimeoutRef = React.useRef<any>(null);
+
+  // 공통 이미지 검색 함수 (상단 미리보기와 하단 VideoPlayer 동기화용)
+  const getMatchingImage = React.useCallback((type: string) => {
+    const labelMap: Record<string, string> = { 'main': '메인', 'tiktok': '틱톡' };
+    const label = labelMap[type] || `숏츠 ${type.split('_')[1] || ''}`;
+    const normalize = (s: string) => s.replace(/\s/g, '').toLowerCase();
+    const targetLabel = normalize(label);
+
+    const existingImgMatch = [...(workflow.results.images || [])].reverse().find((img: any) => {
+      const imgLabel = normalize(img.label || '');
+      const isCompatMatch = (type === 'main' && imgLabel.includes('main')) ||
+        (type === 'tiktok' && imgLabel.includes('tiktok')) ||
+        (type.startsWith('shorts') && imgLabel.includes(type.replace('_', '')));
+      return imgLabel === targetLabel || imgLabel.includes(targetLabel) || targetLabel.includes(imgLabel) || isCompatMatch;
+    });
+
+    return existingImgMatch ? { ...existingImgMatch, url: existingImgMatch.localUrl || existingImgMatch.url } : null;
+  }, [workflow.results.images]);
 
   // 실시간 자동 번역 (v1.4.26 - App.tsx에서 통합 관리)
   // 단, VideoTab에서 가사를 직접 수정할 경우를 위해 최소한의 싱크는 App.tsx의 useEffect가 담당함
@@ -194,14 +210,7 @@ export const VideoTab = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {['main', 'tiktok', ...Array.from({ length: shortsCount }).map((_, i) => `shorts_${i + 1}`)].map(type => {
                     const label = type === 'main' ? '메인' : type === 'tiktok' ? '틱톡' : `숏츠 ${type.split('_')[1]}`;
-                    const normalize = (s: string) => s.replace(/\s/g, '').toLowerCase();
-                    const targetLabel = normalize(label);
-                    // Find newest matching image and prioritize localUrl. Use includes for robustness.
-                    const existingImgMatch = [...(workflow.results.images || [])].reverse().find((img: any) => {
-                      const imgLabel = normalize(img.label || '');
-                      return imgLabel === targetLabel || imgLabel.includes(targetLabel) || targetLabel.includes(imgLabel);
-                    });
-                    const existingImg = existingImgMatch ? { ...existingImgMatch, url: existingImgMatch.localUrl || existingImgMatch.url } : null;
+                    const existingImg = getMatchingImage(type);
 
                     return (
                       <div key={type} className="relative group">
@@ -361,8 +370,8 @@ export const VideoTab = ({
                 <h3 className="font-bold text-primary mb-4">메인 영상 미리보기 (16:9)</h3>
                 <VideoPlayer
                   ref={mainVideoRef}
-                  key={`main_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.url || 'none'}`}
-                  imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '메인')?.url}
+                  key={`main_${getMatchingImage('main')?.url || 'none'}`}
+                  imageSrc={getMatchingImage('main')?.url}
                   audioSrc={uploadedAudio}
                   lyrics={videoLyrics}
                   englishLyrics={englishVideoLyrics}
@@ -379,8 +388,8 @@ export const VideoTab = ({
                   lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
                   addLog={addLog}
                   originalFileName={uploadedAudioName}
-                  fadeInDuration={audioFadeIn}
-                  fadeOutDuration={audioFadeOut}
+                  fadeInDuration={workflow.imageSettings['main']?.fadeInDuration ?? 1.5}
+                  fadeOutDuration={workflow.imageSettings['main']?.fadeOutDuration ?? 3}
                 />
                 {workflow.results.images.length > 0 && (
                   <div className="space-y-4">
@@ -411,8 +420,8 @@ export const VideoTab = ({
                   <div className="w-full mx-auto shrink-0">
                     <VideoPlayer
                       ref={tiktokVideoRef}
-                      key={`tiktok_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.url || 'none'}`}
-                      imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === '틱톡')?.url}
+                      key={`tiktok_${getMatchingImage('tiktok')?.url || 'none'}`}
+                      imageSrc={getMatchingImage('tiktok')?.url}
                       audioSrc={uploadedAudio}
                       lyrics={videoLyrics}
                       englishLyrics={englishVideoLyrics}
@@ -429,6 +438,8 @@ export const VideoTab = ({
                       lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
                       addLog={addLog}
                       originalFileName={uploadedAudioName}
+                      fadeInDuration={workflow.imageSettings['main']?.fadeInDuration ?? 1.5}
+                      fadeOutDuration={workflow.imageSettings['main']?.fadeOutDuration ?? 3}
                     />
                   </div>
                   <button
@@ -456,8 +467,8 @@ export const VideoTab = ({
 
                     <VideoPlayer
                       ref={el => { shortsVideoRefs.current[idx] = el; }}
-                      key={`shorts_${idx + 1}_${[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.url || 'none'}`}
-                      imageSrc={[...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.localUrl || [...(workflow.results.images || [])].reverse().find((img: any) => img.label.replace(/\s/g, '').toLowerCase() === `숏츠${idx + 1}`)?.url}
+                      key={`shorts_${idx + 1}_${getMatchingImage(`shorts_${idx + 1}`)?.url || 'none'}`}
+                      imageSrc={getMatchingImage(`shorts_${idx + 1}`)?.url}
                       audioSrc={uploadedAudio}
                       lyrics={videoLyrics}
                       englishLyrics={englishVideoLyrics}
@@ -476,8 +487,8 @@ export const VideoTab = ({
                       lyricsFontSize={workflow.imageSettings['shorts']?.lyricsFontSize ?? 4}
                       addLog={addLog}
                       originalFileName={uploadedAudioName}
-                      fadeInDuration={audioFadeIn}
-                      fadeOutDuration={audioFadeOut}
+                      fadeInDuration={workflow.imageSettings['shorts']?.fadeInDuration ?? 1.5}
+                      fadeOutDuration={workflow.imageSettings['shorts']?.fadeOutDuration ?? 3}
                     />
 
                     <div className="flex flex-col gap-1 py-1">

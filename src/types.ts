@@ -52,6 +52,8 @@ export interface TitleSettings {
   lyricsFontSize?: number;
   lyricsDisplayMode?: LyricsDisplayMode;
   showTitleOverlay?: boolean;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
 }
 
 export interface BlogSettings {
@@ -84,7 +86,9 @@ export const createDefaultSettings = (): TitleSettings => ({
   lyricsScrollEnd: 50,
   lyricsFontSize: 4,
   lyricsDisplayMode: 'fade',
-  showTitleOverlay: true
+  showTitleOverlay: true,
+  fadeInDuration: 1.5,
+  fadeOutDuration: 3
 });
 
 export interface ImageParams {

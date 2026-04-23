@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { 
+import {
   Play,
   Pause,
   Download,
@@ -29,17 +29,19 @@ interface VideoPlayerProps {
   lyricsFontSize?: number;
   addLog?: (msg: string) => void;
   originalFileName?: string;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
 }
 
-export const VideoPlayer = forwardRef(({ 
-  imageSrc, 
-  audioSrc, 
-  lyrics, 
+export const VideoPlayer = forwardRef(({
+  imageSrc,
+  audioSrc,
+  lyrics,
   englishLyrics = "",
   timedLyrics = [],
-  type, 
-  startTime = 0, 
-  duration, 
+  type,
+  startTime = 0,
+  duration,
   onEnded,
   title = "",
   label = "",
@@ -51,7 +53,9 @@ export const VideoPlayer = forwardRef(({
   lyricsScrollEnd = 50,
   lyricsFontSize = 4,
   addLog,
-  originalFileName = ""
+  originalFileName = "",
+  fadeInDuration = 0,
+  fadeOutDuration = 0
 }: any, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,23 +70,22 @@ export const VideoPlayer = forwardRef(({
     isPlaying: isPlaying,
     isRecording: isRecording
   }));
-  
+
   const parsedLyrics = useMemo(() => {
     // 1. Prioritize structured timedLyrics if provided
     if (timedLyrics && timedLyrics.length > 0) {
-      const korLines: string[] = [];
-      const engLines: string[] = [];
+      const flat: string[] = [];
       const pairs: { kor: string; eng: string }[] = [];
-      
+
       timedLyrics.forEach(item => {
-        if (item.kor) korLines.push(item.kor);
-        if (item.eng) engLines.push(item.eng);
+        if (item.kor) flat.push(item.kor);
+        if (item.eng) flat.push(item.eng);
         pairs.push({ kor: item.kor || '', eng: item.eng || '' });
       });
 
-      return { 
-        flat: [...korLines, ...engLines], 
-        pairs, 
+      return {
+        flat,
+        pairs,
         timedLines: timedLyrics.map(item => ({
           time: item.time,
           kor: item.kor || '',
@@ -92,24 +95,24 @@ export const VideoPlayer = forwardRef(({
     }
 
     if (!lyrics && !englishLyrics) return { flat: [], pairs: [], timedLines: [] };
-    
+
     const timeRegex = /\[(\d{2}):(\d{2})\]/;
-    
+
     const parseTimedLines = (text: string) => {
       const lines = text.split('\n');
       let currentSectionTime = 0;
       const result: { time: number; text: string }[] = [];
-      
+
       lines.forEach(line => {
         const timeMatch = line.match(timeRegex);
         const cleanText = line.replace(/\[.*?\]|\(.*?\)/g, '').trim();
-        
+
         if (timeMatch) {
           const mins = parseInt(timeMatch[1]);
           const secs = parseInt(timeMatch[2]);
           currentSectionTime = mins * 60 + secs;
         }
-        
+
         if (cleanText) {
           result.push({ time: currentSectionTime, text: cleanText });
         }
@@ -119,11 +122,11 @@ export const VideoPlayer = forwardRef(({
 
     const korTimed = parseTimedLines(lyrics);
     const engTimed = parseTimedLines(englishLyrics);
-    
+
     // Sync Korean and English lines by index (assuming they match 1:1)
     const timedLines: { time: number; kor: string; eng: string }[] = [];
     const maxIdx = Math.max(korTimed.length, engTimed.length);
-    
+
     for (let i = 0; i < maxIdx; i++) {
       const k = korTimed[i];
       const e = engTimed[i];
@@ -136,11 +139,11 @@ export const VideoPlayer = forwardRef(({
 
     const korLines = lyrics.split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
     const engLines = englishLyrics.split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
-    
+
     const flat: string[] = [];
     const pairs: { kor: string; eng: string }[] = [];
     const maxLines = Math.max(korLines.length, engLines.length);
-    
+
     for (let i = 0; i < maxLines; i++) {
       const kor = korLines[i] || '';
       const eng = engLines[i] || '';
@@ -148,7 +151,7 @@ export const VideoPlayer = forwardRef(({
       if (eng) flat.push(eng);
       if (kor || eng) pairs.push({ kor, eng });
     }
-    
+
     return { flat, pairs, timedLines };
   }, [lyrics, englishLyrics, timedLyrics]);
 
@@ -170,26 +173,39 @@ export const VideoPlayer = forwardRef(({
     img.src = imageSrc;
 
     let animationFrameId: number;
+    let lastRenderTime = -1;
 
     const render = () => {
       const currentAudioTime = audio.currentTime;
       const segmentTime = currentAudioTime - (startTime || 0);
-      
-      if (duration && currentAudioTime >= startTime + duration) {
-         audio.pause();
-         setIsPlaying(false);
-         if (onEnded) onEnded();
-         return;
-      }
-      
-      const fadeOutDuration = 3;
-      const fadeInDuration = 0; // Removed fade in
 
-      if (duration && currentAudioTime >= startTime + duration - fadeOutDuration) {
-         const fadeOutProgress = (currentAudioTime - (startTime + duration - fadeOutDuration)) / fadeOutDuration;
-         audio.volume = Math.max(0, 1 - fadeOutProgress);
+      if (duration && currentAudioTime >= startTime + duration) {
+        if (isPlaying) {
+          audio.pause();
+          setIsPlaying(false);
+          if (onEnded) onEnded();
+        }
+        // Do not return here to keep the loop alive for manual seeking
+      }
+
+      // GPU 최적화: 오디오 시간이 변경되지 않았으면(일시정지 상태) 무거운 그리기 연산 생략
+      if (currentAudioTime === lastRenderTime) {
+        animationFrameId = requestAnimationFrame(render);
+        return;
+      }
+      lastRenderTime = currentAudioTime;
+
+      // v1.5.6: 개별 설정 기반 오디오 페이드
+      const audioFadeIn = fadeInDuration; 
+      const audioFadeOut = fadeOutDuration;
+
+      if (segmentTime < audioFadeIn) {
+        audio.volume = Math.min(1, segmentTime / audioFadeIn);
+      } else if (duration && currentAudioTime >= startTime + duration - audioFadeOut) {
+        const fadeOutProgress = (currentAudioTime - (startTime + duration - audioFadeOut)) / audioFadeOut;
+        audio.volume = Math.max(0, 1 - fadeOutProgress);
       } else {
-         audio.volume = 1;
+        audio.volume = 1;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -198,7 +214,7 @@ export const VideoPlayer = forwardRef(({
       const totalDuration = duration || validAudioDuration;
       const progress = totalDuration > 0 ? Math.max(0, currentAudioTime - startTime) / totalDuration : 0;
       const scale = 1.0 + (progress * 0.1);
-      
+
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.scale(scale, scale);
@@ -226,12 +242,12 @@ export const VideoPlayer = forwardRef(({
 
         let x = canvas.width / 2 + (xOffset * (canvas.width / 100));
         let y = canvas.height / 2 + (yOffset * (canvas.height / 100));
-        
+
         if (titleSettings.titlePosition === 'top') y = canvas.height * 0.2 + (yOffset * (canvas.height / 100));
         if (titleSettings.titlePosition === 'bottom') y = canvas.height * 0.8 + (yOffset * (canvas.height / 100));
 
         ctx.textBaseline = 'middle';
-        
+
         // Handle Alignment
         if (titleSettings.titleAlign === 'left') {
           ctx.textAlign = 'left';
@@ -242,13 +258,13 @@ export const VideoPlayer = forwardRef(({
         } else {
           ctx.textAlign = 'center';
         }
-        
+
         const applyEffect = (text: string, tx: number, ty: number, size: number, color: string) => {
           ctx.save();
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
-          
+
           if (titleSettings.titleEffect === 'shadow') {
             ctx.shadowColor = 'rgba(0,0,0,0.8)';
             ctx.shadowBlur = 15;
@@ -298,11 +314,11 @@ export const VideoPlayer = forwardRef(({
           } else {
             ctx.fillStyle = color;
           }
-          
+
           if (titleSettings.titleEffect !== 'gradient' && titleSettings.titleEffect !== 'cyber' && titleSettings.titleEffect !== 'glitch') {
             ctx.fillStyle = color;
           }
-          
+
           ctx.fillText(text, tx, ty);
           ctx.restore();
         };
@@ -331,7 +347,7 @@ export const VideoPlayer = forwardRef(({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
         ctx.font = `bold ${canvas.width * (lyricsFontSize / 100)}px sans-serif`;
-        
+
         const displayMode = titleSettings?.lyricsDisplayMode || 'scroll';
         const validAudioDuration = audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity ? audio.duration : 100;
         const totalDuration = duration || validAudioDuration;
@@ -341,27 +357,27 @@ export const VideoPlayer = forwardRef(({
         if (displayMode === 'scroll') {
           const lineSpacing = canvas.height * (lyricsFontSize / 40);
           const endPosition = canvas.height * (lyricsScrollEnd / 100);
-          const startOffset = canvas.height * 0.8; 
+          const startOffset = canvas.height * 0.8;
           const totalScrollDistance = startOffset - endPosition + ((parsedLyrics.flat.length - 1) * lineSpacing);
           const currentYOffset = lyricsProgress * totalScrollDistance;
-          
+
           parsedLyrics.flat.forEach((line: string, index: number) => {
             if (!line) return;
             const startY = startOffset + (index * lineSpacing);
             const y = startY - currentYOffset;
-            
+
             const fadeOutEnd = endPosition;
             const fadeOutStart = endPosition + (canvas.height * 0.15);
             const fadeInStart = canvas.height * 0.9;
             const fadeInEnd = canvas.height * 0.8;
-            
+
             let opacity = 1;
             if (y < fadeOutEnd) opacity = 0;
             else if (y < fadeOutStart) opacity = (y - fadeOutEnd) / (fadeOutStart - fadeOutEnd);
-            
+
             if (y > fadeInStart) opacity = 0;
             else if (y > fadeInEnd) opacity = Math.min(opacity, (fadeInStart - y) / (fadeInStart - fadeInEnd));
-            
+
             if (y > 0 && y < canvas.height && opacity > 0) {
               ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
               ctx.shadowColor = 'rgba(0,0,0,0.8)';
@@ -374,6 +390,7 @@ export const VideoPlayer = forwardRef(({
           // Fade, Center, Bottom modes
           let currentPair;
           let pairProgress = 0;
+          let nextTime = totalDuration;
 
           if (parsedLyrics.timedLines && parsedLyrics.timedLines.length > 0) {
             const lines = parsedLyrics.timedLines;
@@ -386,8 +403,8 @@ export const VideoPlayer = forwardRef(({
               }
             }
             currentPair = lines[activeIdx];
-            
-            const nextTime = lines[activeIdx + 1]?.time || totalDuration;
+
+            nextTime = lines[activeIdx + 1]?.time || totalDuration;
             const lineDuration = nextTime - lines[activeIdx].time;
             pairProgress = lineDuration > 0 ? (currentAudioTime - lines[activeIdx].time) / lineDuration : 0;
           } else {
@@ -397,15 +414,24 @@ export const VideoPlayer = forwardRef(({
             if (p) {
               currentPair = { kor: p.kor, eng: p.eng };
               pairProgress = (lyricsProgress * pairCount) % 1;
+              // For non-timed lyrics, nextTime is approximated by pair progress
+              nextTime = startTime + lyricsStartTime + (lyricsDuration * ((pairIndex + 1) / pairCount));
             }
           }
-          
+
           if (currentPair) {
             let opacity = 1;
-            
+
             if (displayMode === 'fade') {
-              if (pairProgress < 0.1) opacity = pairProgress / 0.1;
-              else if (pairProgress > 0.9) opacity = (1 - pairProgress) / 0.1;
+              const fadeDur = 0.5;
+              const timeSinceStart = currentAudioTime - currentPair.time;
+              const timeUntilEnd = nextTime - currentAudioTime;
+              // v1.5.2: 숏츠(시작시간) 이전 자막은 페이드인 생략하여 즉시 표시
+              if (timeSinceStart < fadeDur && currentPair.time > startTime) {
+                opacity = timeSinceStart / fadeDur;
+              } else if (timeUntilEnd < fadeDur) {
+                opacity = timeUntilEnd / fadeDur;
+              }
             }
 
             const lineSpacing = canvas.height * (lyricsFontSize / 40);
@@ -430,17 +456,8 @@ export const VideoPlayer = forwardRef(({
         }
       }
 
-      // Visual Fade Overlay
-      let visualOpacity = 0;
-      
-      if (duration && segmentTime > duration - fadeOutDuration) {
-        visualOpacity = (segmentTime - (duration - fadeOutDuration)) / fadeOutDuration;
-      }
-      
-      if (visualOpacity > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, visualOpacity)})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+      // v1.5.6: 시각적 블랙 페이드인 제거 (사용자 요청)
+      // visualOpacity 관련 로직 삭제됨
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -449,7 +466,7 @@ export const VideoPlayer = forwardRef(({
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       render();
     };
-    
+
     if (img.complete) {
       render();
     }
@@ -509,10 +526,10 @@ export const VideoPlayer = forwardRef(({
     if (!canvas || !audio) return;
 
     setIsRecording(true);
-    
+
     // Create a stream from canvas
     const stream = canvas.captureStream(30);
-    
+
     // Try to capture audio stream
     let audioStream;
     if ((audio as any).captureStream) {
@@ -542,14 +559,14 @@ export const VideoPlayer = forwardRef(({
 
     const mimeType = getSupportedMimeType();
     const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
-    
+
     // GPU Acceleration Hint: Use high bitrate and specific codecs
     const recorderOptions: MediaRecorderOptions = {
       mimeType: mimeType || undefined,
       videoBitsPerSecond: 8000000, // 8Mbps for high quality / GPU usage
       audioBitsPerSecond: 128000   // 128kbps for clear audio
     };
-    
+
     const recorder = new MediaRecorder(stream, recorderOptions);
     const chunks: Blob[] = [];
 
@@ -560,22 +577,22 @@ export const VideoPlayer = forwardRef(({
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: mimeType || 'video/mp4' });
       const url = URL.createObjectURL(blob);
-      
+
       const baseName = originalFileName ? originalFileName.replace(/\.[^/.]+$/, "") : (title || 'video');
       const fileName = `${baseName} ${label || type}.${extension}`;
-      
+
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
-      
+
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      
+
       if (isMobile) {
         // On mobile, we try to click but also provide a fallback
         // Some browsers require the element to be in the DOM
         document.body.appendChild(a);
         a.click();
-        
+
         // Fallback: if it's a blob, opening in a new tab can sometimes trigger the system download UI
         // or at least show the video so the user can long-press to save.
         setTimeout(() => {
@@ -591,31 +608,32 @@ export const VideoPlayer = forwardRef(({
         a.click();
         document.body.removeChild(a);
       }
-      
+
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setIsRecording(false);
       if (addLog) addLog(`✅ ${label || '비디오'} 다운로드가 완료되었습니다.`);
     };
-    
-    // Play from start and record
+
+    // v1.5.2: 음튐 해결 - 볼륨 0에서 시작 후 빠르게 램프업
     audio.currentTime = startTime;
-    audio.volume = 1; // Start with full volume to avoid glitch
-    
-    // Fix initial audio glitch by ensuring playback starts before recording
+    audio.volume = 0; // 팝 노이즈 방지를 위해 0으로 시작
+
     audio.play().then(() => {
       setIsPlaying(true);
-      // Small delay to stabilize audio buffer and prevent initial "pop"
-      setTimeout(() => {
-        if (recorder.state === 'inactive') {
-          recorder.start();
-        }
-      }, 300); // Increased delay for better stabilization
+      recorder.start(); // 즉시 녹화 시작 (딜레이 없음)
+      // 100ms 동안 볼륨 0→1 램프업으로 팝 노이즈 제거
+      let vol = 0;
+      const rampTimer = setInterval(() => {
+        vol = Math.min(1, vol + 0.1);
+        if (audio) audio.volume = vol;
+        if (vol >= 1) clearInterval(rampTimer);
+      }, 10);
     }).catch(e => {
       console.error("Playback failed during download:", e);
-      // Fallback: start anyway
-      recorder.start();
+      if (recorder.state === 'inactive') recorder.start();
+      audio.volume = 1;
     });
-    
+
     // Stop recording when duration is reached or audio ends
     const stopRecording = () => {
       if (recorder.state !== 'inactive') {
@@ -640,21 +658,21 @@ export const VideoPlayer = forwardRef(({
       "relative group rounded-xl overflow-hidden bg-black",
       type === 'main' ? "aspect-video" : "aspect-[9/16]"
     )}>
-      <canvas 
-        ref={canvasRef} 
-        width={type === 'main' ? 1920 : 1080} 
-        height={type === 'main' ? 1080 : 1920} 
-        className="w-full h-full object-cover" 
+      <canvas
+        ref={canvasRef}
+        width={type === 'main' ? 1920 : 1080}
+        height={type === 'main' ? 1080 : 1920}
+        className="w-full h-full object-cover"
       />
-      <audio 
-        ref={audioRef} 
-        src={audioSrc || undefined} 
+      <audio
+        ref={audioRef}
+        src={audioSrc || undefined}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onEnded={() => setIsPlaying(false)} 
+        onEnded={() => setIsPlaying(false)}
         crossOrigin="anonymous"
       />
-      
+
       {/* Center Play Button (Hidden when playing or hovering controls) */}
       <div className={cn(
         "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity pointer-events-none",
@@ -669,10 +687,10 @@ export const VideoPlayer = forwardRef(({
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
         <div className="flex items-center gap-2 text-xs text-white font-mono">
           <span>{Math.floor(displayCurrentTime / 60)}:{(Math.floor(displayCurrentTime % 60)).toString().padStart(2, '0')}</span>
-          <input 
-            type="range" 
-            min={startTime} 
-            max={startTime + displayDuration} 
+          <input
+            type="range"
+            min={startTime}
+            max={startTime + displayDuration}
             step="0.1"
             value={Math.max(startTime, currentTime)}
             onChange={handleSeek}
@@ -685,8 +703,8 @@ export const VideoPlayer = forwardRef(({
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
           <div className="flex items-center gap-3">
-            <button 
-              onClick={handleDownload} 
+            <button
+              onClick={handleDownload}
               disabled={isRecording}
               className="text-white hover:text-primary transition-colors disabled:opacity-50"
               title="영상 다운로드"
