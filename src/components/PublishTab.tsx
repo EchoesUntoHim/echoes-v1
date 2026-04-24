@@ -22,28 +22,28 @@ import {
 
 const GUIDES = {
   tiktok: {
-    title: "틱톡(TikTok) 연동 방법",
+    title: "✨ 틱톡(TikTok) 연동 - 왕초보 탈출 가이드",
     steps: [
-      "틱톡 개발자 포털(TikTok for Developers)에 접속하여 로그인합니다.",
-      "'My Apps' 메뉴에서 'Connect New App'을 클릭합니다.",
-      "앱 이름과 설명을 입력하고 앱을 생성합니다.",
-      "'Products' 섹션에서 'Video Kit' 기능을 반드시 추가하세요.",
-      "대시보드에 있는 'Client Key'와 'Client Secret'을 복사하여 설정 탭에 입력합니다.",
-      "연동하기 버튼을 누르고 틱톡 계정 권한을 승인하면 완료됩니다."
+      "1. [틱톡 개발자 센터](https://developers.tiktok.com/)에 접속해서 내 틱톡 아이디로 로그인하세요.",
+      "2. 화면 위쪽 'My Apps'를 누르고 'Connect New App' (새 앱 연결) 버튼을 찾아서 클릭하세요.",
+      "3. 앱 이름은 자유롭게(예: MyVideoApp) 적으시고 'Create'를 눌러 앱을 만듭니다.",
+      "4. 왼쪽 메뉴에서 'Products'를 누른 뒤, 'Video Kit' 옆의 'Add' 버튼을 꼭! 눌러주세요. (이게 있어야 영상이 올라갑니다)",
+      "5. 이제 'App Details' 화면에 보이는 'Client Key'와 'Client Secret'이라는 긴 글자들을 복사하세요.",
+      "6. 우리 프로그램의 '설정' 탭에 이 글자들을 붙여넣기 하면 모든 준비 끝!"
     ],
-    link: "https://developers.tiktok.com/"
+    link: "https://developers.tiktok.com/console/app"
   },
   youtube: {
-    title: "유튜브(YouTube) 연동 방법",
+    title: "✨ 유튜브(YouTube) 연동 - 80세 할머니도 하는 가이드",
     steps: [
-      "Google Cloud Console에 접속합니다.",
-      "새 프로젝트를 생성하고 'YouTube Data API v3'를 활성화합니다.",
-      "'OAuth 동의 화면'을 설정하고 '외부' 사용자로 등록합니다.",
-      "'사용자 인증 정보'에서 'OAuth 클라이언트 ID'를 생성합니다 (웹 애플리케이션).",
-      "발급된 클라이언트 ID를 설정 탭에 입력합니다.",
-      "유튜브 로그인을 통해 업로드 권한을 승인하면 완료됩니다."
+      "1. [구글 클라우드 콘솔](https://console.cloud.google.com/)에 접속하세요. (파란색 화면이 나와도 당황하지 마세요!)",
+      "2. 맨 위 '프로젝트 선택'을 누르고 '새 프로젝트'를 만듭니다. 이름은 '나의유튜브업로드'라고 지어보세요.",
+      "3. 검색창에 'YouTube Data API v3'라고 치고, 나오는 결과를 클릭한 뒤 '사용' 버튼을 누르세요.",
+      "4. 왼쪽 '사용자 인증 정보' 메뉴 -> '사용자 인증 정보 만들기' -> 'OAuth 클라이언트 ID'를 누릅니다.",
+      "5. '동의 화면 구성'이 나오면 '외부'를 선택하고 내 이메일만 잘 적고 저장하세요.",
+      "6. 마지막으로 '웹 애플리케이션'을 선택하고 발급된 '클라이언트 ID'를 복사해서 우리 프로그램에 넣으면 끝납니다!"
     ],
-    link: "https://console.cloud.google.com/"
+    link: "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
   }
 };
 
@@ -63,6 +63,7 @@ interface PublishTabProps {
   availableModels?: { value: string, label: string, type?: string }[];
   fetchAvailableModels?: () => void;
   shortsCount: number;
+  handleUploadToPlatform: (platform: 'youtube' | 'tiktok', type: string, index?: number) => Promise<void>;
 }
 
 export const PublishTab = ({
@@ -79,7 +80,8 @@ export const PublishTab = ({
   logs,
   availableModels,
   fetchAvailableModels,
-  shortsCount
+  shortsCount,
+  handleUploadToPlatform
 }: PublishTabProps) => {
   const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
   const [isStrategyVisible, setIsStrategyVisible] = useState(true);
@@ -134,7 +136,7 @@ export const PublishTab = ({
 
 
         <button
-          onClick={() => alert(`${label} 업로드 API 연동 필요`)}
+          onClick={() => handleUploadToPlatform(platform, type, index)}
           className={cn(
             "w-full py-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-2",
             isYoutube
@@ -334,8 +336,7 @@ export const PublishTab = ({
         <CheckCircle2 className="w-16 h-16 text-primary mx-auto shadow-2xl" />
         <h2 className="text-2xl font-black">모든 작업이 완료되었습니다!</h2>
         <p className="text-gray-400">생성된 영상과 메타데이터를 사용하여 채널을 성장시켜 보세요.</p>
-        <div className="flex justify-center gap-4 pt-4">
-          <button onClick={() => setIsResetModalOpen(true)} className="px-6 py-3 bg-white/5 rounded-xl font-bold hover:bg-white/10 transition-all border border-white/5">새 작업 시작</button>
+        <div className="flex justify-center pt-4">
           <button onClick={() => handleTabChange('blog')} className="px-6 py-3 bg-primary text-background rounded-xl font-bold hover:neon-glow-primary transition-all shadow-lg shadow-primary/20">블로그 작성하러 가기</button>
         </div>
       </GlassCard>

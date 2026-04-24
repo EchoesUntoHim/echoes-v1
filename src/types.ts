@@ -62,6 +62,13 @@ export interface TitleSettings {
   showTitleOverlay?: boolean;
   fadeInDuration?: number;
   fadeOutDuration?: number;
+  videoMotion?: string;
+  videoFilter?: string;
+  videoOverlay?: string;
+  videoOverlayIntensity?: number;
+  showVisualizer?: boolean;
+  particleSystem?: string;
+  lyricsEffect?: string;
 }
 
 export interface BlogSettings {
@@ -101,7 +108,14 @@ export const createDefaultSettings = (): TitleSettings => ({
   lyricsDisplayMode: 'fade',
   showTitleOverlay: true,
   fadeInDuration: 1.5,
-  fadeOutDuration: 3
+  fadeOutDuration: 3,
+  videoMotion: 'none',
+  videoFilter: 'none',
+  videoOverlay: 'none',
+  videoOverlayIntensity: 0.5,
+  showVisualizer: false,
+  particleSystem: 'none',
+  lyricsEffect: 'none'
 });
 
 export interface ImageParams {
@@ -216,4 +230,5 @@ export interface WorkflowState {
     };
     blogTitle?: string; // Added for compatibility
   };
+  publishSettings?: Record<string, string>;
 }

@@ -9,6 +9,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const storage = getStorage(app);
+// 기본 로그인용 공급자 (추가 권한 없음)
 export const googleProvider = new GoogleAuthProvider();
 
 // Error Handling
@@ -101,10 +102,11 @@ export const uploadImageToStorage = async (imageUrl: string, pathPrefix: string 
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+    return { user: result.user, accessToken };
   } catch (error: any) {
     console.error("Error signing in with Google:", error);
-    // Throw a cleaner error message up to the UI
     const errorMessage = error.code ? `[${error.code}] ${error.message}` : String(error);
     throw new Error(errorMessage);
   }

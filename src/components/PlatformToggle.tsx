@@ -8,15 +8,19 @@ interface PlatformToggleProps {
   onToggle: () => void;
   description: string;
   onHelp?: () => void;
+  icon?: React.ReactNode;
 }
 
-export const PlatformToggle = ({ label, status, onToggle, description, onHelp }: PlatformToggleProps) => {
+export const PlatformToggle = ({ label, status, onToggle, description, onHelp, icon }: PlatformToggleProps) => {
   return (
     <div className="flex flex-col gap-3 p-5 rounded-2xl bg-white/5 border border-white/5 transition-all hover:bg-white/10 group">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={cn("w-2.5 h-2.5 rounded-full", status === 'connected' ? "bg-primary neon-glow-primary" : "bg-gray-600")} />
-          <span className="font-bold text-lg">{label}</span>
+          <div className="flex items-center gap-2">
+            {icon && <div className="p-1.5 rounded-lg bg-white/5">{icon}</div>}
+            <span className="font-bold text-lg">{label}</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onHelp && (

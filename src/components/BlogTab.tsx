@@ -19,6 +19,7 @@ import {
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { uploadToBlogger } from '../services/uploadService';
 
 interface BlogPost {
   id: string;
@@ -46,6 +47,8 @@ interface BlogTabProps {
   logs: string[];
   availableModels?: {value: string, label: string, type?: string}[];
   fetchAvailableModels?: () => void;
+  accessToken?: string | null;
+  onNewWork?: () => void;
 }
 
 export const BlogTab = ({
@@ -65,7 +68,9 @@ export const BlogTab = ({
   shortsCount,
   logs,
   availableModels,
-  fetchAvailableModels
+  fetchAvailableModels,
+  accessToken,
+  onNewWork
 }: BlogTabProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [savedPosts, setSavedPosts] = useState<BlogPost[]>([]);
@@ -491,7 +496,43 @@ export const BlogTab = ({
             </div>
             <div className="flex justify-end pt-2">
               <button 
-                onClick={() => alert('TODO: 실제 블로그 플랫폼 자동 업로드 백엔드 API 연동이 필요합니다.')}
+                onClick={async () => {
+                  if (!accessToken) {
+                    alert('설정 페이지에서 블로그(Google) 연동을 먼저 진행해주세요.');
+                    return;
+                  }
+                  if (!workflow.params.koreanTitle || !workflow.results.blogPost) {
+                    alert('먼저 가사 분석 및 블로그 포스팅 내용을 생성해주세요.');
+                    return;
+                  }
+                  
+                  try {
+                    // blogId는 설정에서 가져오거나 입력받아야 함
+                    const savedKeys = localStorage.getItem('echoesuntohim_platform_keys');
+                    const blogId = savedKeys ? JSON.parse(savedKeys)?.google?.blogId : null;
+                    
+                    if (!blogId) {
+                      alert('설정 페이지에서 블로그 ID를 입력해주세요.');
+                      return;
+                    }
+
+                    const result = await uploadToBlogger(
+                      blogId,
+                      accessToken,
+                      workflow.params.koreanTitle,
+                      workflow.results.blogPost,
+                      workflow.params.tags || ""
+                    );
+                    
+                    if (result.id) {
+                      alert(`✅ 블로그 포스팅 성공! (ID: ${result.id})`);
+                      window.open(result.url, '_blank');
+                    }
+                  } catch (err: any) {
+                    console.error("Blogger upload error:", err);
+                    alert(`❌ 업로드 실패: ${err.message}`);
+                  }
+                }}
                 className="bg-primary text-background px-6 py-2 rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
@@ -589,6 +630,22 @@ export const BlogTab = ({
           </div>
         </div>
       )}
+
+      {/* 새 작업 시작 버튼 추가 */}
+      <div className="flex justify-center pt-8 pb-12">
+        <button 
+          onClick={() => {
+            // 테스트를 위해 데이터 초기화 로직은 주석 처리
+            // if (window.confirm("정말로 새 작업을 시작하시겠습니까?")) {
+              if (onNewWork) onNewWork();
+            // }
+          }} 
+          className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-bold transition-all border border-white/10 flex items-center gap-3 group"
+        >
+          <Zap className="w-5 h-5 text-primary group-hover:animate-pulse" />
+          새 작업 시작 (가사 페이지로 이동)
+        </button>
+      </div>
       
       <Terminal logs={logs} />
     </motion.div>

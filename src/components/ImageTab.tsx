@@ -88,6 +88,8 @@ export const ImageTab = ({
     }
   };
   const [selectedShorts, setSelectedShorts] = React.useState<number[]>([]);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 20;
 
   const toggleShortsSelection = (num: number) => {
     setSelectedShorts(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
@@ -555,33 +557,89 @@ export const ImageTab = ({
             <RefreshCw className="w-3 h-3 text-primary/50" />
             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">이미지 생성 히스토리</span>
           </div>
-          <div className="flex flex-col">
-            {Array.from(new Map((sunoTracks || [])
-              .filter(t => t && t.generatedImages && t.generatedImages.length > 0)
-              .map(t => [t.title, t])
-            ).values()).map((track, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleLoadFromHistory(track)}
-                className="w-full text-left px-3 py-3.5 hover:bg-white/[0.03] transition-all border-b border-white/5 last:border-0 flex items-center justify-between group relative overflow-hidden"
-              >
-                <div className="flex items-center gap-4 overflow-hidden relative z-10">
-                  <span className="text-[10px] text-gray-600 font-mono w-4 text-center group-hover:text-primary/50 transition-colors">{idx + 1}</span>
-                  <span className="text-sm font-bold text-gray-400 truncate group-hover:text-white transition-colors">
-                    {track.title} 
-                    <span className="text-primary/70 ml-2 font-black">[{track.generatedImages?.length || 0}]</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 relative z-10">
-                  <span className="text-[10px] text-gray-600 font-medium tracking-tighter">
-                    {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
-                  </span>
-                  <ChevronRight className="w-3 h-3 text-gray-700 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                </div>
-                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
-              </button>
-            ))
-            }
+          <div className="grid grid-cols-2 gap-x-4">
+            {(() => {
+              const uniqueTracks = Array.from(new Map((sunoTracks || [])
+                .filter(t => t && t.title) // 이미지 유무와 상관없이 제목이 있으면 표시
+                .map(t => [t.title, t])
+              ).values());
+              
+              const totalPages = Math.ceil(uniqueTracks.length / itemsPerPage);
+              const startIndex = (currentPage - 1) * itemsPerPage;
+              const paginatedTracks = uniqueTracks.slice(startIndex, startIndex + itemsPerPage);
+
+              return (
+                <>
+                  {paginatedTracks.map((track, idx) => {
+                    const globalIdx = startIndex + idx + 1;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleLoadFromHistory(track)}
+                        className="w-full text-left px-2 py-1.5 hover:bg-white/[0.05] transition-all border-b border-white/5 flex items-center justify-between group relative overflow-hidden h-[32px]"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden relative z-10 flex-1">
+                          <span className="text-[9px] text-gray-600 font-mono w-4 text-center group-hover:text-primary/50 transition-colors shrink-0">{globalIdx}</span>
+                          <span className="text-[11px] font-medium text-gray-400 truncate group-hover:text-white transition-colors">
+                            {track.title} 
+                            <span className="text-primary/70 ml-1 font-black text-[9px]">[{track.generatedImages?.length || 0}]</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 relative z-10">
+                          <span className="text-[9px] text-gray-600 font-medium tracking-tighter">
+                            {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-gray-700 group-hover:text-primary transition-all" />
+                        </div>
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
+                      </button>
+                    );
+                  })}
+
+                  {/* 페이지네이션 컨트롤 */}
+                  {totalPages > 1 && (
+                    <div className="col-span-2 flex justify-center items-center gap-2 mt-6 pb-4">
+                      <button 
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        className="p-1 rounded hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronRight className="w-4 h-4 rotate-180" />
+                      </button>
+                      
+                      {Array.from({ length: totalPages }).map((_, pIdx) => {
+                        const pageNum = pIdx + 1;
+                        // 현재 페이지 근처만 표시 (옵션)
+                        if (totalPages > 7 && Math.abs(pageNum - currentPage) > 2 && pageNum !== 1 && pageNum !== totalPages) {
+                          if (Math.abs(pageNum - currentPage) === 3) return <span key={pageNum} className="text-gray-600">...</span>;
+                          return null;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={cn(
+                              "w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold transition-all",
+                              currentPage === pageNum ? "bg-primary text-background" : "hover:bg-white/10 text-gray-500"
+                            )}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      <button 
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        className="p-1 rounded hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

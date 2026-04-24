@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Key, CheckCircle2, Info, Copy, HelpCircle, X, ExternalLink } from 'lucide-react';
+import { Key, CheckCircle2, Info, Copy, HelpCircle, X, ExternalLink, Youtube, Music2, Share2, Globe, FileText, Trash2, AlertCircle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { Terminal } from './Terminal';
 import { PlatformToggle } from './PlatformToggle';
@@ -38,54 +38,61 @@ interface SettingsPageProps {
   fetchAvailableModels?: () => void;
   copyToClipboard?: (text: string) => void;
   logs?: string[];
+  tiktokAccessToken?: string | null;
+  setTiktokAccessToken?: (token: string | null) => void;
 }
 
 const GUIDES = {
   tiktok: {
-    title: "틱톡(TikTok) 연동 방법",
+    title: "✨ 틱톡(TikTok) 연동 - 왕초보 탈출 가이드",
     steps: [
-      "틱톡 개발자 포털(TikTok for Developers)에 접속하여 로그인합니다.",
-      "'My Apps' 메뉴에서 'Connect New App'을 클릭합니다.",
-      "앱 이름과 설명을 입력하고 앱을 생성합니다.",
-      "'Products' 섹션에서 'Video Kit' 기능을 반드시 추가하세요.",
-      "대시보드에 있는 'Client Key'와 'Client Secret'을 복사하여 본 프로그램에 입력합니다.",
-      "연동하기 버튼을 누르고 틱톡 계정 권한을 승인하면 완료됩니다."
+      "1. [틱톡 개발자 센터](https://developers.tiktok.com/)에 접속해서 내 틱톡 아이디로 로그인하세요.",
+      "2. 화면 위쪽 'My Apps'를 누르고 'Connect New App' (새 앱 연결) 버튼을 클릭하세요.",
+      "3. 앱 이름은 자유롭게 적으시고 'Create'를 눌러 앱을 만듭니다.",
+      "4. 왼쪽 메뉴에서 'Products'를 누른 뒤, 'Video Kit' 옆의 'Add' 버튼을 꼭! 눌러주세요.",
+      "5. 이제 'App Details' 화면에 보이는 'Client Key'와 'Client Secret'을 아래 칸에 입력하세요.",
+      "6. '키 저장 및 연동' 버튼을 누르면 끝!"
     ],
-    link: "https://developers.tiktok.com/"
+    link: "https://developers.tiktok.com/console/app"
+  },
+  youtube: {
+    title: "✨ 유튜브(YouTube) 연동 - 80세 할머니도 하는 가이드",
+    steps: [
+      "1. [구글 콘솔](https://console.cloud.google.com/)에서 클라이언트 ID를 만들 때 유형을 반드시 '웹 애플리케이션'으로 선택하세요.",
+      "2. [사용자 인증 정보] 메뉴에서 내 'OAuth 클라이언트 ID'를 클릭하고, 맨 아래 [승인된 리디렉션 URI] 칸에 위 주소를 붙여넣고 저장하세요.",
+      "3. 발급된 '클라이언트 ID'와 '보안 비밀번호'를 아래 칸에 입력하면 끝납니다!"
+    ],
+    link: "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+  },
+  google: {
+    title: "✨ 구글 블로그(Blogger) 연동 가이드",
+    steps: [
+      "1. [구글 콘솔](https://console.cloud.google.com/)에서 클라이언트 ID를 만들 때 유형을 반드시 '웹 애플리케이션'으로 선택하세요.",
+      "2. [사용자 인증 정보] 메뉴 -> 내 'OAuth 클라이언트 ID' 클릭 -> 맨 아래 [승인된 리디렉션 URI] 칸에 위 주소를 붙여넣고 꼭 저장하세요.",
+      "3. 그 다음 [여기(내 블로그 관리자 화면)](https://www.blogger.com/)를 눌러 로그인 후 주소창의 '숫자'를 확인하세요.",
+      "4. 블로그 ID(숫자)와 주소를 아래 칸에 넣고 '저장 및 연동'을 누르면 끝납니다!"
+    ],
+    link: "https://console.cloud.google.com/apis/library/blogger.googleapis.com"
   },
   naver: {
-    title: "네이버 블로그 연동 방법",
+    title: "✨ 네이버 블로그 연동 - 친절한 가이드",
     steps: [
-      "네이버 개발자 센터(Naver Developers)에 접속하여 로그인합니다.",
-      "'Application' -> '애플리케이션 등록' 메뉴로 들어갑니다.",
-      "애플리케이션 이름(예: CCM PRO)을 입력합니다.",
-      "사용 API에서 '네이버 아이디로 로그인'을 선택합니다.",
-      "권한 설정에서 '블로그 글쓰기' 항목을 반드시 체크하세요.",
-      "로그인 오픈 API 서비스 환경에서 'PC 웹'을 선택하고 서비스 URL을 입력합니다. (예: http://localhost:5173)",
-      "발급된 Client ID와 Client Secret을 본 프로그램에 입력합니다."
+      "1. [네이버 개발자 센터](https://developers.naver.com/)에 접속해서 로그인하세요.",
+      "2. 'Application' -> '애플리케이션 등록' 메뉴로 들어갑니다.",
+      "3. 이름 적고, 사용 API에서 '네이버 아이디로 로그인'을 선택하세요.",
+      "4. 권한 설정에서 '블로그 글쓰기'를 꼭 체크해야 합니다.",
+      "5. 서비스 URL에 'http://localhost:3000' (또는 사용 중인 주소)을 적으세요.",
+      "6. 발급된 ID와 Secret을 아래 칸에 입력하세요."
     ],
     link: "https://developers.naver.com/apps/#/register"
   },
-  google: {
-    title: "구글 블로그(Blogger) 연동 방법",
-    steps: [
-      "Google Cloud Console에 접속합니다.",
-      "새 프로젝트를 생성하거나 기존 프로젝트를 선택합니다.",
-      "'API 및 서비스' -> '라이브러리'에서 'Blogger API v3'를 검색해 활성화합니다.",
-      "'OAuth 동의 화면'을 설정하고 '외부' 사용자로 등록합니다.",
-      "'사용자 인증 정보' -> '사용자 인증 정보 만들기' -> 'OAuth 클라이언트 ID'를 생성합니다.",
-      "애플리케이션 유형은 '웹 애플리케이션'으로 선택합니다.",
-      "발급된 클라이언트 ID와 보안 비밀번호를 본 프로그램에 입력합니다."
-    ],
-    link: "https://console.cloud.google.com/"
-  },
   tistory: {
-    title: "티스토리 연동 방법",
+    title: "✨ 티스토리 연동 - 가장 쉬운 가이드",
     steps: [
-      "카카오 디벨로퍼스 또는 티스토리 API 관리 페이지에 접속합니다.",
-      "앱을 등록하고 '티스토리 Open API' 사용 권한을 획득합니다.",
-      "Access Token 발급 가이드에 따라 토큰을 생성합니다.",
-      "발급된 Access Token을 설정창에 입력하여 연동을 완료합니다."
+      "1. [티스토리 API 관리](https://www.tistory.com/guide/api/manage) 페이지에 접속하세요.",
+      "2. 앱을 등록하고 '티스토리 Open API' 사용 권한을 받으세요.",
+      "3. 안내에 따라 'Access Token' (비밀 번호 같은 것)을 발급받으세요.",
+      "4. 발급받은 토큰을 아래 칸에 입력하고 저장하면 완료됩니다."
     ],
     link: "https://www.tistory.com/guide/api/manage"
   }
@@ -115,7 +122,9 @@ export const SettingsPage = ({
   availableModels = AI_ENGINES,
   fetchAvailableModels,
   copyToClipboard,
-  logs = []
+  logs = [],
+  tiktokAccessToken,
+  setTiktokAccessToken
 }: SettingsPageProps) => {
   const [isKeySaved, setIsKeySaved] = useState(false);
   const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
@@ -127,14 +136,16 @@ export const SettingsPage = ({
       return saved ? JSON.parse(saved) : {
         tiktok: { clientKey: '', clientSecret: '' },
         naver: { clientId: '', clientSecret: '' },
-        google: { clientId: '', clientSecret: '' },
+        google: { clientId: '', clientSecret: '', blogId: '', blogUrl: '' },
+        youtube: { clientId: '', clientSecret: '' },
         tistory: { accessToken: '' }
       };
     } catch (e) {
       return {
         tiktok: { clientKey: '', clientSecret: '' },
         naver: { clientId: '', clientSecret: '' },
-        google: { clientId: '', clientSecret: '' },
+        google: { clientId: '', clientSecret: '', blogId: '', blogUrl: '' },
+        youtube: { clientId: '', clientSecret: '' },
         tistory: { accessToken: '' }
       };
     }
@@ -343,8 +354,20 @@ export const SettingsPage = ({
           <h3 className="text-lg font-bold border-b border-white/5 pb-4">플랫폼 연동</h3>
           <div className="space-y-4">
             <PlatformToggle
+              label="유튜브 (YouTube)"
+              status={platforms.youtube}
+              icon={<Youtube className="w-5 h-5 text-[#FF0000]" />}
+              onToggle={() => {
+                if (platforms.youtube === 'connected') togglePlatform('youtube');
+                else setActiveGuide('youtube');
+              }}
+              description="유튜브 채널에 영상을 직접 업로드합니다. Google Cloud Console 설정이 필요합니다."
+              onHelp={() => setActiveGuide('youtube')}
+            />
+            <PlatformToggle
               label="틱톡 (TikTok)"
               status={platforms.tiktok}
+              icon={<Music2 className="w-5 h-5 text-white" />}
               onToggle={() => {
                 if (platforms.tiktok === 'connected') togglePlatform('tiktok');
                 else setActiveGuide('tiktok');
@@ -355,6 +378,7 @@ export const SettingsPage = ({
             <PlatformToggle
               label="네이버 블로그"
               status={platforms.naver}
+              icon={<Share2 className="w-5 h-5 text-[#03C75A]" />}
               onToggle={() => {
                 if (platforms.naver === 'connected') togglePlatform('naver');
                 else setActiveGuide('naver');
@@ -365,6 +389,7 @@ export const SettingsPage = ({
             <PlatformToggle
               label="티스토리"
               status={platforms.tistory}
+              icon={<Globe className="w-5 h-5 text-[#FF5E00]" />}
               onToggle={() => {
                 if (platforms.tistory === 'connected') togglePlatform('tistory');
                 else setActiveGuide('tistory');
@@ -375,6 +400,7 @@ export const SettingsPage = ({
             <PlatformToggle
               label="구글 블로그 (Blogger)"
               status={platforms.google}
+              icon={<FileText className="w-5 h-5 text-[#4285F4]" />}
               onToggle={() => {
                 if (platforms.google === 'connected') togglePlatform('google');
                 else setActiveGuide('google');
@@ -496,8 +522,25 @@ export const SettingsPage = ({
                 </button>
               </div>
 
-              <div className="flex-1 p-8 space-y-8 overflow-y-auto custom-scrollbar">
-                <div className="space-y-4">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-6 custom-scrollbar p-8">
+                  {activeGuide && (
+                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl space-y-2 mb-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-primary uppercase">승인된 리디렉션 URI (복사해서 구글 설정에 넣으세요)</span>
+                        <button 
+                          onClick={() => copyToClipboard?.(window.location.origin)}
+                          className="text-[10px] px-2 py-1 bg-primary text-background rounded-md font-bold hover:scale-105 transition-all"
+                        >
+                          주소 복사하기
+                        </button>
+                      </div>
+                      <code className="block text-xs text-white/80 bg-black/30 p-2 rounded border border-white/5 break-all">
+                        {window.location.origin}
+                      </code>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
                   <p className="text-xs font-bold text-primary uppercase tracking-wider">Step-by-Step 가이드</p>
                   {GUIDES[activeGuide].steps.map((step, index) => (
                     <div key={index} className="flex gap-4">
@@ -534,6 +577,19 @@ export const SettingsPage = ({
                             className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
                           />
                         </div>
+                        <div className="pt-2 border-t border-white/5 mt-4 space-y-2">
+                          <label className="text-[10px] text-primary font-bold ml-1">Access Token (자동 발급 또는 직접 입력)</label>
+                          <input
+                            type="password"
+                            value={tiktokAccessToken || ''}
+                            onChange={(e) => setTiktokAccessToken?.(e.target.value)}
+                            placeholder="인증 후 발급된 엑세스 토큰"
+                            className="w-full bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
+                          />
+                          <p className="text-[9px] text-gray-500 italic px-1">
+                            * 틱톡 인증 페이지에서 승인 후 돌아오면 자동으로 입력되거나, 발급받은 토큰을 직접 넣으시면 됩니다.
+                          </p>
+                        </div>
                       </>
                     )}
                     {activeGuide === 'naver' && (
@@ -560,27 +616,73 @@ export const SettingsPage = ({
                         </div>
                       </>
                     )}
-                    {activeGuide === 'google' && (
+                    {activeGuide === 'youtube' && (
                       <>
                         <div className="space-y-2">
-                          <label className="text-[10px] text-gray-500 ml-1">Client ID</label>
+                          <label className="text-[10px] text-gray-500 ml-1">YouTube Client ID</label>
                           <input
                             type="text"
-                            value={platformKeys.google.clientId}
-                            onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, clientId: e.target.value } }))}
-                            placeholder="구글 클라이언트 ID 입력"
+                            value={platformKeys.youtube?.clientId || ''}
+                            onChange={(e) => setPlatformKeys(prev => ({ ...prev, youtube: { ...prev.youtube, clientId: e.target.value } }))}
+                            placeholder="유튜브 클라이언트 ID 입력"
                             className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[10px] text-gray-500 ml-1">Client Secret</label>
+                          <label className="text-[10px] text-gray-500 ml-1">YouTube Client Secret</label>
+                          <input
+                            type="password"
+                            value={platformKeys.youtube?.clientSecret || ''}
+                            onChange={(e) => setPlatformKeys(prev => ({ ...prev, youtube: { ...prev.youtube, clientSecret: e.target.value } }))}
+                            placeholder="유튜브 클라이언트 시크릿 입력"
+                            className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {activeGuide === 'google' && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-gray-500 ml-1">Blogger Client ID</label>
+                          <input
+                            type="text"
+                            value={platformKeys.google.clientId}
+                            onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, clientId: e.target.value } }))}
+                            placeholder="구글 블로그 클라이언트 ID 입력"
+                            className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-gray-500 ml-1">Blogger Client Secret</label>
                           <input
                             type="password"
                             value={platformKeys.google.clientSecret}
                             onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, clientSecret: e.target.value } }))}
-                            placeholder="구글 클라이언트 시크릿 입력"
+                            placeholder="구글 블로그 클라이언트 시크릿 입력"
                             className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
                           />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <label className="text-[10px] text-primary/70 ml-1">블로그 ID (필수)</label>
+                            <input
+                              type="text"
+                              value={platformKeys.google.blogId || ''}
+                              onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, blogId: e.target.value } }))}
+                              placeholder="예: 123456789"
+                              className="w-full bg-primary/5 border border-primary/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] text-primary/70 ml-1">블로그 주소</label>
+                            <input
+                              type="text"
+                              value={platformKeys.google.blogUrl || ''}
+                              onChange={(e) => setPlatformKeys(prev => ({ ...prev, google: { ...prev.google, blogUrl: e.target.value } }))}
+                              placeholder="example.blogspot.com"
+                              className="w-full bg-primary/5 border border-primary/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none"
+                            />
+                          </div>
                         </div>
                       </>
                     )}
@@ -621,18 +723,53 @@ export const SettingsPage = ({
                 </button>
                 <button
                   onClick={() => {
-                    savePlatformKeys(activeGuide, platformKeys[activeGuide]);
+                    savePlatformKeys(activeGuide as any, platformKeys[activeGuide as keyof typeof platformKeys]);
+                    if (platforms[activeGuide as keyof typeof platforms] === 'disconnected') {
+                      togglePlatform(activeGuide as any);
+                    }
                     setActiveGuide(null);
                   }}
                   className="flex-1 py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all shadow-lg shadow-primary/20"
                 >
-                  키 저장 및 연동
+                  키 저장 및 연동 완료하기
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* 데이터 초기화 섹션 */}
+      <GlassCard className="border-red-500/20 bg-red-500/5 mt-8 mb-20">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-red-500/20 rounded-lg">
+            <Trash2 className="w-5 h-5 text-red-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-red-500">데이터 초기화 및 캐시 삭제</h3>
+            <p className="text-xs text-gray-400">앱이 꼬이거나 이전 작업 데이터가 계속 남을 때 사용하세요. 모든 설정과 작업 내용이 삭제됩니다.</p>
+          </div>
+        </div>
+        
+        <div className="flex justify-end">
+          <button
+            onClick={() => {
+              if (window.confirm("⚠️ 정말로 모든 데이터를 초기화하시겠습니까? 저장된 API 키와 작업 내용이 모두 삭제되며 페이지가 새로고침됩니다.")) {
+                if (onReset) {
+                  onReset();
+                } else {
+                  localStorage.clear();
+                  window.location.reload();
+                }
+              }
+            }}
+            className="px-6 py-2 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4" />
+            모든 데이터 초기화 실행
+          </button>
+        </div>
+      </GlassCard>
     </motion.div>
   );
 };

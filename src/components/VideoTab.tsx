@@ -45,6 +45,7 @@ interface VideoTabProps {
   apiKey: string;
   aiEngine: string;
   isTranslating?: boolean;
+  onRenderComplete?: (blob: Blob, type: string) => void;
 }
 
 export const VideoTab = ({
@@ -79,7 +80,8 @@ export const VideoTab = ({
   logs,
   apiKey,
   aiEngine,
-  isTranslating = false
+  isTranslating = false,
+  onRenderComplete
 }: VideoTabProps) => {
   const [internalIsTranslating, setInternalIsTranslating] = React.useState(false);
   const translationTimeoutRef = React.useRef<any>(null);
@@ -266,8 +268,8 @@ export const VideoTab = ({
                   <label className="block w-full cursor-pointer bg-black/40 border border-white/10 border-dashed rounded-lg p-3 text-center hover:bg-white/10 transition-colors">
                     <Upload className="w-4 h-4 text-gray-400 mx-auto mb-1" />
                     <span className="text-[10px] text-gray-400">
-                      {uploadedAudioName 
-                        ? `현재 음원: ${uploadedAudioName}\n(음질이 낮을 경우 클릭하여 고음질 파일로 교체)` 
+                      {uploadedAudioName
+                        ? `현재 음원: ${uploadedAudioName}\n(음질이 낮을 경우 클릭하여 고음질 파일로 교체)`
                         : '클릭하여 오디오 직접 업로드 (고음질 권장)'}
                     </span>
                     <input type="file" accept="audio/*" onChange={handleVideoAudioUpload} className="hidden" />
@@ -401,6 +403,7 @@ export const VideoTab = ({
                   fadeInDuration={workflow.imageSettings?.['main']?.fadeInDuration ?? 1.5}
                   fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
                   onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, main: p }))}
+                  onRenderComplete={onRenderComplete}
                 />
                 {videoProgressMap.main !== undefined && videoProgressMap.main < 100 && (
                   <div className="mt-2">
@@ -458,6 +461,7 @@ export const VideoTab = ({
                       fadeInDuration={workflow.imageSettings?.['main']?.fadeInDuration ?? 1.5}
                       fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, tiktok: p }))}
+                      onRenderComplete={onRenderComplete}
                     />
                     {videoProgressMap.tiktok !== undefined && videoProgressMap.tiktok < 100 && (
                       <div className="mt-2 w-full">
@@ -466,13 +470,15 @@ export const VideoTab = ({
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => tiktokVideoRef.current?.download()}
-                    className="w-full py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-5 h-5" />
-                    틱톡 영상 다운로드
-                  </button>
+                  <div className="w-full">
+                    <button
+                      onClick={() => tiktokVideoRef.current?.download()}
+                      className="w-full py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-5 h-5" />
+                      틱톡 영상 다운로드
+                    </button>
+                  </div>
                 </div>
               </GlassCard>
             </div>
@@ -491,7 +497,7 @@ export const VideoTab = ({
 
                     <VideoPlayer
                       ref={el => { shortsVideoRefs.current[idx] = el; }}
-                      key={`shorts_${idx + 1}_${getMatchingImage(`shorts_${idx + 1}`)?.url || 'none'}`}
+                      key={`shorts-v1.11.3-${idx}-${highlight.start}-${highlight.duration}-${getMatchingImage(`shorts_${idx + 1}`)?.url || 'none'}`}
                       imageSrc={getMatchingImage(`shorts_${idx + 1}`)?.url}
                       audioSrc={uploadedAudio}
                       lyrics={videoLyrics}
@@ -514,6 +520,7 @@ export const VideoTab = ({
                       fadeInDuration={workflow.imageSettings?.['shorts']?.fadeInDuration ?? 1.5}
                       fadeOutDuration={workflow.imageSettings?.['shorts']?.fadeOutDuration ?? 3}
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, [`shorts_${idx}`]: p }))}
+                      onRenderComplete={onRenderComplete}
                     />
                     {videoProgressMap[`shorts_${idx}`] !== undefined && videoProgressMap[`shorts_${idx}`] < 100 && (
                       <div className="mt-1">

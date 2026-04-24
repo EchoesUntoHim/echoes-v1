@@ -49,7 +49,7 @@ export const CCM_MOODS = [
 export const TEMPOS = ['매우 느림', '느림', '보통', '빠름', '매우 빠름'];
 
 export const LYRICS_STYLES = [
-  '시적인', '직설적인', '서사적인', '은유적인', '대화체', '독백체', '운율이 강조된'
+  '시적인', '직설적인', '서사적인', '은유적인', '대화체', '독백체', '운율이 강조된', '묵상형 (QT)'
 ];
 
 export const VOCAL_OPTIONS: Record<VocalType, string[]> = {
@@ -335,4 +335,47 @@ export const LYRICS_ENGLISH_FONTS = [
   { value: "'Great Vibes', cursive", label: 'Great Vibes' },
   { value: "'Cookie', cursive", label: 'Cookie' },
   { value: "'Sacramento', cursive", label: 'Sacramento' }
+];
+export const VIDEO_MOTIONS = [
+  { value: 'none', label: '움직임: 없음' },
+  { value: 'ken_burns_in', label: '켄 번즈: 확대 (Zoom In)' },
+  { value: 'ken_burns_out', label: '켄 번즈: 축소 (Zoom Out)' },
+  { value: 'pan_left', label: '팬: 왼쪽으로 이동' },
+  { value: 'pan_right', label: '팬: 오른쪽으로 이동' }
+];
+
+export const VIDEO_FILTERS = [
+  { value: 'none', label: '필터: 없음' },
+  { value: 'grayscale', label: '필터: 흑백 (B&W)' },
+  { value: 'sepia', label: '필터: 세피아 (Classic)' },
+  { value: 'warm', label: '필터: 따뜻한 톤' },
+  { value: 'cool', label: '필터: 차가운 톤' },
+  { value: 'vibrant', label: '필터: 선명하게' },
+  { value: 'brightness_pulse', label: '필터: 밝기 미세 파동' }
+];
+
+export const VIDEO_OVERLAYS = [
+  { value: 'none', label: '오버레이: 없음' },
+  { value: 'vignette', label: '오버레이: 비네팅' },
+  { value: 'cinematic_bars', label: '오버레이: 시네마틱 바' },
+  { value: 'film_grain', label: '오버레이: 필름 그레인 (Grain)' },
+  { value: 'light_leak', label: '오버레이: 빛 번짐 (Light Leak)' },
+  { value: 'scratches', label: '오버레이: 먼지 및 스크래치' },
+  { value: 'soft_glow', label: '오버레이: 은은한 빛' },
+  { value: 'vintage_frame', label: '오버레이: 빈티지 프레임' }
+];
+
+export const VIDEO_PARTICLES = [
+  { value: 'none', label: '파티클: 없음' },
+  { value: 'snow', label: '파티클: 하얀 눈송이' },
+  { value: 'petals', label: '파티클: 흩날리는 꽃가루' },
+  { value: 'dust', label: '파티클: 신비로운 빛가루' },
+  { value: 'stars', label: '파티클: 반짝이는 별빛' }
+];
+
+export const LYRICS_EFFECTS = [
+  { value: 'none', label: '가사 효과: 없음' },
+  { value: 'karaoke', label: '가사 효과: 노래방 스타일' },
+  { value: 'glow', label: '가사 효과: 네온 강조' },
+  { value: 'pop', label: '가사 효과: 팝업 줌' }
 ];

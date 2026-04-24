@@ -102,6 +102,7 @@ import { auth, signInWithGoogle, logout, db, handleFirestoreError, OperationType
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import { uploadImageToStorage } from './firebase';
+import { uploadToYouTube, uploadToTikTok } from './services/uploadService';
 
 // --- Constants & Data ---
 
@@ -159,6 +160,10 @@ export default function App() {
   });
   const [isVideoRendering, setIsVideoRendering] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [renderedVideos, setRenderedVideos] = useState<Record<string, Blob>>({});
+  const [youtubeAccessToken, setYoutubeAccessToken] = useState<string | null>(null);
+  const [bloggerAccessToken, setBloggerAccessToken] = useState<string | null>(null);
+  const [tiktokAccessToken, setTiktokAccessToken] = useState<string | null>(() => localStorage.getItem('tiktok_access_token'));
   // Removed lyriaAudio and isLyriaGenerating as they are now in MusicGenerator component
 
   // Removed generateMusicWithLyria as it's now in MusicGenerator component
@@ -210,6 +215,56 @@ export default function App() {
     }
   });
 
+  // 플랫폼 키 및 토큰 동기화 로직
+  useEffect(() => {
+    if (!user) return;
+    const syncPlatformData = async () => {
+      try {
+        const userRef = doc(db, 'users', user.uid, 'settings', 'platforms');
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.tokens) {
+            if (data.tokens.youtube) setYoutubeAccessToken(data.tokens.youtube);
+            if (data.tokens.tiktok) {
+              setTiktokAccessToken(data.tokens.tiktok);
+              localStorage.setItem('tiktok_access_token', data.tokens.tiktok);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Platform data sync error:", err);
+      }
+    };
+    syncPlatformData();
+  }, [user]);
+
+  // 토큰 변경 시 클라우드 저장
+  useEffect(() => {
+    if (!user || (!youtubeAccessToken && !tiktokAccessToken)) return;
+    const saveTokens = async () => {
+      const userRef = doc(db, 'users', user.uid, 'settings', 'platforms');
+      await setDoc(userRef, {
+        tokens: {
+          youtube: youtubeAccessToken,
+          tiktok: tiktokAccessToken
+        },
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    };
+    const timer = setTimeout(saveTokens, 2000);
+    return () => clearTimeout(timer);
+  }, [youtubeAccessToken, tiktokAccessToken, user]);
+
+  useEffect(() => {
+    setPlatforms(prev => ({
+      ...prev,
+      youtube: youtubeAccessToken ? 'connected' : 'disconnected',
+      google: bloggerAccessToken ? 'connected' : 'disconnected',
+      tiktok: tiktokAccessToken ? 'connected' : 'disconnected'
+    }));
+  }, [youtubeAccessToken, bloggerAccessToken, tiktokAccessToken]);
+
   useEffect(() => {
     localStorage.setItem('ai_engine', aiEngine);
   }, [aiEngine]);
@@ -228,6 +283,24 @@ export default function App() {
 
 
 
+  // v1.11.2: 쇼츠 개수 변경 시 하이라이트 데이터 배열 크기 동기화 (NaN 오류 방지)
+  useEffect(() => {
+    setShortsHighlights(prev => {
+      if (prev.length === shortsCount) return prev;
+      if (prev.length < shortsCount) {
+        const extra = Array.from({ length: shortsCount - prev.length }).map((_, i) => ({
+          start: (prev.length + i) * 30, // 30초 간격으로 자동 배정
+          duration: 30
+        }));
+        return [...prev, ...extra];
+      }
+      return prev.slice(0, shortsCount);
+    });
+    localStorage.setItem('echoesuntohim_shortsCount', shortsCount.toString());
+  }, [shortsCount]);
+
+
+
   const togglePlatform = (key: keyof typeof platforms) => {
     if (platforms[key] === 'connected') {
       setPendingPlatform(key);
@@ -239,16 +312,106 @@ export default function App() {
     setIsPlatformLoginModalOpen(true);
   };
 
-  const handlePlatformLoginConfirm = () => {
+  const handlePlatformLoginConfirm = async () => {
     if (!pendingPlatform) return;
 
     const key = pendingPlatform;
     if (platforms[key as keyof typeof platforms] === 'connected') {
+      // 연동 해제
+      if (key === 'youtube') {
+        setYoutubeAccessToken(null);
+      } else if (key === 'google') {
+        setBloggerAccessToken(null);
+      } else if (key === 'tiktok') {
+        setTiktokAccessToken(null);
+        localStorage.removeItem('tiktok_access_token');
+      }
       setPlatforms(prev => ({ ...prev, [key]: 'disconnected' }));
-      addLog(`[${String(key)}] 연동이 해제되었습니다.`);
+      addLog(`🔌 [${String(key)}] 연동이 해제되었습니다.`);
     } else {
-      addLog(`[${String(key)}] 실제 연동 프로세스를 시작해야 합니다. (TODO: 백엔드/Firebase OAuth 구현 필요)`);
-      // TODO: 실제 OAuth 인증 성공 시 상태를 'connected'로 변경하도록 구현해야 합니다.
+      // 실제 연동 프로세스 시작
+      try {
+        if (key === 'youtube' || key === 'google') {
+          addLog("🔑 유튜브 연동을 위해 구글 로그인을 시작합니다...");
+          const savedKeys = localStorage.getItem('echoesuntohim_platform_keys');
+          const keys = savedKeys ? JSON.parse(savedKeys) : null;
+          const targetKeys = key === 'youtube' ? keys?.youtube : keys?.google;
+
+          if (targetKeys && targetKeys.clientId) {
+            addLog("🔑 사용자 정의 ID로 연동을 시작합니다.");
+            const redirectUri = window.location.origin;
+            const scope = encodeURIComponent('openid https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/blogger https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email');
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${targetKeys.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&prompt=select_account&access_type=offline`;
+
+            const authWindow = window.open(authUrl, 'google-auth', 'width=500,height=600');
+
+            const checkToken = setInterval(async () => {
+              try {
+                // 팝업창의 현재 주소 확인 (CORS 에러 방지를 위해 try-catch 내부에서 실행)
+                const popupLocation = authWindow?.location;
+                if (!popupLocation) return;
+
+                const searchParams = new URLSearchParams(popupLocation.search);
+                const hashParams = new URLSearchParams(popupLocation.hash.substring(1));
+                const code = searchParams.get('code') || hashParams.get('code');
+
+                if (code) {
+                  clearInterval(checkToken);
+                  addLog("🔑 인증 코드를 획득했습니다. 토큰으로 교환합니다...");
+
+                  const response = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                      code,
+                      client_id: targetKeys.clientId,
+                      client_secret: targetKeys.clientSecret,
+                      redirect_uri: redirectUri,
+                      grant_type: 'authorization_code',
+                    }),
+                  });
+
+                  const data = await response.json();
+                  if (data.access_token) {
+                    if (key === 'youtube') setYoutubeAccessToken(data.access_token);
+                    else setBloggerAccessToken(data.access_token);
+                    addLog(`✅ [${key === 'youtube' ? '유튜브' : '블로그'}] 연동 성공!`);
+                    authWindow?.close();
+                  } else {
+                    addLog(`❌ 토큰 교환 실패: ${data.error_description || data.error}`);
+                    authWindow?.close();
+                  }
+                }
+              } catch (e) {
+                // 타 도메인(구글)에 있을 때는 여기로 빠집니다. 정상적인 대기 상태입니다.
+              }
+              if (authWindow?.closed) clearInterval(checkToken);
+            }, 500);
+          } else {
+            const result = await signInWithGoogle();
+            setUser(result.user);
+            if (result.accessToken) {
+              if (key === 'youtube') setYoutubeAccessToken(result.accessToken);
+              else setBloggerAccessToken(result.accessToken);
+            }
+          }
+          addLog("✅ 유튜브 연동 성공!");
+        } else if (key === 'tiktok') {
+          const savedKeys = localStorage.getItem('echoesuntohim_platform_keys');
+          const keys = savedKeys ? JSON.parse(savedKeys).tiktok : null;
+          if (!keys || !keys.clientKey) {
+            addLog("🔑 틱톡 연동(Client Key)이 설정 탭에서 먼저 입력되어야 합니다.");
+            setIsPlatformLoginModalOpen(false);
+            return;
+          }
+          addLog("🔑 틱톡 인증 페이지로 이동합니다...");
+          const redirectUri = encodeURIComponent(window.location.origin);
+          const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${keys.clientKey}&scope=video.upload,video.publish&response_type=code&redirect_uri=${redirectUri}`;
+          window.open(authUrl, '_blank');
+        }
+      } catch (err: any) {
+        addLog(`❌ 연동 실패: ${err.message}`);
+      }
     }
     setIsPlatformLoginModalOpen(false);
     setPendingPlatform(null);
@@ -261,6 +424,20 @@ export default function App() {
 
   // Initial load of Suno tracks from Cloud or LocalStorage
   useEffect(() => {
+    // 틱톡 OAuth 콜백 감지
+    const urlParams = new URLSearchParams(window.location.search);
+    const tiktokCode = urlParams.get('code');
+    if (tiktokCode) {
+      addLog("🎫 틱톡 인증 코드가 감지되었습니다. 토큰 교환을 진행하세요.");
+      // URL에서 코드 제거 (히스토리 정리)
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // 여기서 원래는 서버를 통해 Access Token을 교환해야 합니다.
+      // 클라이언트 보안상 실제 시크릿을 노출하지 않기 위해 로그로만 안내하거나, 
+      // 설정한 시크릿을 사용하여 직접 교환을 시도할 수 있습니다.
+      addLog(`ℹ️ 인증 코드: ${tiktokCode.substring(0, 5)}... (설정 탭에서 토큰을 최종 확인해 주세요)`);
+    }
+
     const currentUid = user ? user.uid : 'guest';
     if (loadedUidRef.current === currentUid) return;
 
@@ -1046,7 +1223,7 @@ export default function App() {
 
   const handleHighlightChange = (idx: number, field: 'start' | 'end', newVal: number) => {
     const newHighlights = [...shortsHighlights];
-    const current = newHighlights[idx];
+    const current = newHighlights[idx] || { start: 0, duration: 30 };
     if (field === 'start') {
       const currentEnd = current.start + current.duration;
       newHighlights[idx] = { ...current, start: newVal, duration: Math.max(0, currentEnd - newVal) };
@@ -1062,6 +1239,8 @@ export default function App() {
       return;
     }
 
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     setIsVideoRendering(true);
     addLog("🚀 [대량 내보내기] 모든 영상의 순차적 렌더링을 시작합니다...");
 
@@ -1071,6 +1250,7 @@ export default function App() {
         addLog("🎬 [1/N] 메인 영상 렌더링 시작...");
         await mainVideoRef.current.download();
         addLog("✅ 메인 영상 완료.");
+        await sleep(1000); // 브라우저 다운로드 안정성을 위한 지연
       }
 
       // 2. TikTok/Shorts (Full)
@@ -1078,6 +1258,7 @@ export default function App() {
         addLog("🎬 [2/N] 틱톡 전체 영상 렌더링 시작...");
         await tiktokVideoRef.current.download();
         addLog("✅ 틱톡 전체 영상 완료.");
+        await sleep(1000);
       }
 
       // 3. Sequential Shorts Clips
@@ -1086,15 +1267,113 @@ export default function App() {
           addLog(`🎬 [Shorts] #${i + 1} 렌더링 시작...`);
           await shortsVideoRefs.current[i].download();
           addLog(`✅ 숏츠 #${i + 1} 완료.`);
+          if (i < shortsCount - 1) await sleep(1000);
         }
       }
 
       addLog("🎊 모든 영상 제작 및 다운로드가 완료되었습니다!");
     } catch (error: any) {
       console.error("Bulk rendering failed:", error);
-      addLog(`❌ 대량 내보내기 중 오류 발생: ${error.message}`);
+      addLog(`❌ 대량 내보내기 중단: ${error.message}`);
     } finally {
       setIsVideoRendering(false);
+    }
+  };
+
+  const handleRenderComplete = (blob: Blob, type: string) => {
+    setRenderedVideos(prev => ({ ...prev, [type]: blob }));
+    addLog(`💿 [${type}] 영상 데이터가 메모리에 준비되었습니다. (업로드 가능)`);
+  };
+
+
+  const handleUploadToPlatform = async (platform: 'youtube' | 'tiktok', type: string, index?: number) => {
+    const videoKey = `${type}${index !== undefined ? `_${index}` : ''}`;
+    const videoBlob = renderedVideos[videoKey];
+
+    if (!videoBlob) {
+      addLog(`⚠️ [${platform}] 업로드할 영상 파일이 없습니다. 먼저 렌더링을 완료해주세요.`);
+      return;
+    }
+
+    if (platform === 'youtube') {
+      let currentToken = youtubeAccessToken;
+      if (!currentToken) {
+        addLog("🔑 유튜브 연동이 필요합니다. 구글 로그인을 진행해주세요.");
+        try {
+          const result = await signInWithGoogle();
+          setUser(result.user);
+          if (result.accessToken) {
+            setYoutubeAccessToken(result.accessToken);
+            currentToken = result.accessToken;
+          }
+          addLog("✅ 유튜브 연동 성공!");
+        } catch (err: any) {
+          addLog(`❌ 유튜브 연동 실패: ${err.message}`);
+          return;
+        }
+      }
+
+      addLog(`🚀 [YouTube] '${type}' 영상 업로드 시작...`);
+      try {
+        const metadata = {
+          title: workflow.results.youtubeMetadata?.title || workflow.results.title,
+          description: workflow.results.youtubeMetadata?.description || "",
+          tags: (workflow.results.youtubeMetadata?.tags || "").split(',').map((t: string) => t.trim()),
+          status: workflow.publishSettings?.[`youtubeVisibility_${videoKey}`] || 'public'
+        };
+
+        const result = await uploadToYouTube(
+          videoBlob,
+          metadata,
+          currentToken!,
+          (progress) => {
+            setWorkflow((prev: any) => ({
+              ...prev,
+              progress: { ...prev.progress, youtube: progress }
+            }));
+          }
+        );
+        addLog("✅ 유튜브 업로드 완료!");
+        console.log("YouTube Upload Result:", result);
+      } catch (err: any) {
+        addLog(`❌ 유튜브 업로드 실패: ${err.message}`);
+      }
+    } else if (platform === 'tiktok') {
+      const savedKeys = localStorage.getItem('echoesuntohim_platform_keys');
+      const keys = savedKeys ? JSON.parse(savedKeys).tiktok : null;
+
+      if (!keys || !keys.clientKey) {
+        addLog("🔑 틱톡 연동(Client Key)이 설정 탭에서 필요합니다.");
+        return;
+      }
+
+      let currentToken = tiktokAccessToken;
+      if (!currentToken) {
+        addLog("🔑 틱톡 인증이 필요합니다. 인증 페이지로 이동합니다...");
+        const redirectUri = encodeURIComponent(window.location.origin);
+        const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${keys.clientKey}&scope=video.upload,video.publish&response_type=code&redirect_uri=${redirectUri}`;
+        window.open(authUrl, '_blank');
+        addLog("ℹ️ 인증 완료 후 Redirect된 주소의 'code'를 사용하여 토큰을 발급받아야 합니다.");
+        return;
+      }
+
+      addLog(`🚀 [TikTok] '${type}' 영상 업로드 시작...`);
+      try {
+        await uploadToTikTok(
+          videoBlob,
+          { title: workflow.results.title },
+          currentToken,
+          (progress) => {
+            setWorkflow((prev: any) => ({
+              ...prev,
+              progress: { ...prev.progress, tiktok: progress }
+            }));
+          }
+        );
+        addLog("✅ 틱톡 업로드 성공!");
+      } catch (err: any) {
+        addLog(`❌ 틱톡 업로드 실패: ${err.message}`);
+      }
     }
   };
 
@@ -1631,9 +1910,26 @@ export default function App() {
         Your goal is to define the "Zeitgeist" of the current generation, blending raw vulnerability with polished, sophisticated expression.
       `;
 
+      const reformedMeditationPersona = `
+        You are a profound theologian and spiritual mentor rooted in Reformed Theology (Calvinism). 
+        Your mission is two-fold:
+        1. **Sacred Worship**: Leading people to the majestic glory and sovereignty of God through deep biblical reflection.
+        2. **Shepherding the Lost**: Compassionately reaching out to "lost sheep" with the light of the Gospel, inviting them back to the Lord's grace.
+        
+        Your writing style is intellectually rigorous yet spiritually warm. 
+        You emphasize:
+        - The absolute authority of Scripture.
+        - The sovereignty of God in all aspects of life.
+        - Practical application of theology to daily struggles.
+        
+        When generating "Meditation (QT)" style content:
+        Structure it clearly as: [Bible Verse] -> [Theological Commentary] -> [Life Application] -> [Today's Prayer].
+        Maintain a tone of "Holy Compassion"—reverent toward God and tender toward the broken.
+      `;
+
       const prompt = `
         [SYSTEM ROLE]
-        ${isCCM ? ccmPersona : popPersona}
+        ${workflow.params.lyricsStyle === '묵상형 (QT)' ? reformedMeditationPersona : (isCCM ? ccmPersona : popPersona)}
         
         [TASK]
         Generate a song title and lyrics based on the following parameters:
@@ -1661,6 +1957,7 @@ export default function App() {
             case '대화체': return 'Use natural, spoken language as if talking to someone. Include colloquialisms and a sense of intimacy.';
             case '독백체': return 'A deep internal reflection. Focus on the inner voice and personal realization.';
             case '운율이 강조된': return 'Focus on consistent rhyming schemes and syllable counts. Ensure a strong sense of beat and flow.';
+            case '묵상형 (QT)': return 'Strictly follow the structure: [Bible Verse] -> [Theological Commentary] -> [Life Application] -> [Today\'s Prayer]. Focus on spiritual depth and Reformed perspective.';
             default: return '';
           }
         })()}
@@ -2818,8 +3115,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const resetApp = () => {
+  const resetApp = async () => {
     const apiKey = localStorage.getItem('gemini_api_key');
+    try {
+      await logout(); // v1.11.3: 로그아웃을 먼저 해서 클라우드 동기화 차단
+    } catch (e) {
+      console.error("Logout during reset failed", e);
+    }
     localStorage.clear();
     clearAudioFromDB();
     if (apiKey) {
@@ -2867,8 +3169,14 @@ export default function App() {
             <Zap className="text-background w-5 h-5" fill="currentColor" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.9.0</span>
+            <span className="text-xl font-black tracking-tighter group-hover:text-primary transition-colors leading-none bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Echoes Unto Him</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[7px] font-black text-primary tracking-[0.2em] uppercase opacity-80">AI Vision</span>
+              <div className="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-full flex items-center gap-0.5 shadow-[0_0_10px_rgba(0,255,163,0.1)]">
+                <div className="w-0.5 h-0.5 bg-primary rounded-full animate-pulse" />
+                <span className="text-[7px] font-black text-primary uppercase">v1.11.0 PREMIUM</span>
+              </div>
+            </div>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2897,8 +3205,10 @@ export default function App() {
             <Zap className="text-background w-5 h-5" fill="currentColor" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.9.0</span>
+            <span className="text-xl font-black tracking-tighter group-hover:text-primary transition-colors leading-none bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 whitespace-nowrap">
+              Echoes Unto Him
+            </span>
+            <span className="text-[10px] font-bold text-primary/60 mt-1">1.11.3</span>
           </div>
         </div>
 
@@ -2934,20 +3244,30 @@ export default function App() {
 
         <div className="mt-auto space-y-2">
           {user ? (
-            <div className="px-2 py-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-3 mb-2">
-              <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} alt="User" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold truncate">{user.displayName || '사용자'}</p>
-                <button onClick={() => logout()} className="text-[10px] text-gray-400 hover:text-primary transition-colors">로그아웃</button>
+            <div className="px-2 py-3 bg-white/5 rounded-xl border border-white/10 flex flex-col gap-2 mb-2">
+              <div className="flex items-center gap-3">
+                <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} alt="User" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold truncate">{user.displayName || '사용자'}</p>
+                </div>
               </div>
+              <button
+                onClick={() => logout()}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all rounded-lg text-[10px] font-bold border border-white/5"
+              >
+                로그아웃
+              </button>
             </div>
           ) : (
             <button
               onClick={async () => {
                 try {
-                  await signInWithGoogle();
+                  const result = await signInWithGoogle();
+                  if (result.user) setUser(result.user);
                 } catch (err: any) {
-                  addLog(`❌ 구글 로그인 실패: ${err.message || 'API 키 혹은 권한 문제'}`);
+                  if (err.code !== 'auth/popup-closed-by-user') {
+                    addLog(`❌ 구글 로그인 실패: ${err.message || 'API 키 혹은 권한 문제'}`);
+                  }
                   console.error("Firebase Login Error:", err);
                 }
               }}
@@ -3084,7 +3404,9 @@ export default function App() {
               copyToClipboard={copyToClipboard}
               platforms={platforms}
               togglePlatform={togglePlatform}
+              handleUploadToPlatform={handleUploadToPlatform}
               setIsResetModalOpen={setIsResetModalOpen}
+              onReset={resetApp}
               handleTabChange={handleTabChange}
               logs={logs}
               availableModels={availableModels}
@@ -3112,6 +3434,8 @@ export default function App() {
               logs={logs}
               availableModels={availableModels}
               fetchAvailableModels={fetchAvailableModels}
+              accessToken={bloggerAccessToken}
+              onNewWork={() => handleTabChange('lyrics')}
             />
           )}
 
@@ -3163,6 +3487,8 @@ export default function App() {
               fetchAvailableModels={fetchAvailableModels}
               copyToClipboard={copyToClipboard}
               logs={logs}
+              tiktokAccessToken={tiktokAccessToken}
+              setTiktokAccessToken={setTiktokAccessToken}
             />
           )}
         </AnimatePresence>
@@ -3341,7 +3667,4 @@ export default function App() {
     </div>
   );
 }
-
-// --- Sub-components ---
-
 
