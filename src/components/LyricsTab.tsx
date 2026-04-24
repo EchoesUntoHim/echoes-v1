@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Send, Type as TypeIcon, Music, Copy, RefreshCw, ChevronRight } from 'lucide-react';
+import { Send, Type as TypeIcon, Music, Copy, RefreshCw, ChevronRight, FileText, Globe } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
@@ -81,6 +81,52 @@ export const LyricsTab = ({
 
   return (
     <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
+      {/* v1.9.0: Added Original Lyrics Input Field (Top Empty Area) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <GlassCard className="border-primary/30 bg-primary/5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-primary">
+              <FileText className="w-5 h-5" />
+              <span className="text-sm font-black uppercase tracking-widest">원가사 입력 (타임스탬프 기준)</span>
+            </div>
+          </div>
+          <textarea
+            value={workflow.params.originalLyrics || ''}
+            onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, originalLyrics: e.target.value } }))}
+            placeholder="기존 가사를 가지고 있다면 여기에 입력하세요. 음원 분석 시 이 내용을 바탕으로 정확한 타임스탬프를 매깁니다."
+            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none transition-all h-32 resize-none"
+          />
+        </GlassCard>
+
+        <GlassCard className="border-secondary/30 bg-secondary/5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-secondary">
+              <Globe className="w-5 h-5" />
+              <span className="text-sm font-black uppercase tracking-widest">영어곡 번역 설정</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400">영어곡인가요?</span>
+              <button
+                onClick={() => setWorkflow(prev => ({ ...prev, params: { ...prev.params, isEnglishSong: !prev.params.isEnglishSong } }))}
+                className={cn(
+                  "w-10 h-5 rounded-full transition-all relative",
+                  workflow.params.isEnglishSong ? "bg-secondary" : "bg-gray-700"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-3 h-3 rounded-full bg-white transition-all",
+                  workflow.params.isEnglishSong ? "right-1" : "left-1"
+                )} />
+              </button>
+            </div>
+          </div>
+          <div className="text-[10px] text-gray-400 leading-relaxed">
+            영어곡 모드 활성화 시, 가사 생성 및 번역 방향이 한국어 위주에서 영어 위주로 최적화됩니다.
+            <br />(예: 영어 가사를 한국어로 자동 번역)
+          </div>
+        </GlassCard>
+      </div>
+
       <GlassCard className="border-secondary/30 bg-secondary/5">
         <div className="flex items-center gap-2 text-secondary mb-4">
           <Send className="w-5 h-5" />

@@ -6,7 +6,8 @@ export type VocalType = 'Male' | 'Female' | 'Duet' | 'Choir';
 export type TitlePosition = 'custom' | 'top' | 'middle' | 'bottom';
 export type TitleAlign = 'left' | 'center' | 'right';
 export type LyricsDisplayMode = 'scroll' | 'fade' | 'center' | 'bottom';
-export type TitleEffect = 'none' | 'shadow' | 'glow' | 'outline' | 'glass' | 'neon' | 'gradient' | 'retro' | 'minimal' | 'cyber' | 'glitch' | 'vintage' | 'elegant' | 'bold_shadow' | 'soft_glow';
+export type TitleEffect = 'none' | 'shadow' | 'bold_shadow' | 'glow' | 'soft_glow' | 'neon' | 'gradient' | 'outline' | 'glass' | 'cyber' | 'glitch' | 'retro' | 'vintage' | 'minimal' | 'elegant';
+export type TitleAnimation = 'none' | 'floating' | 'wave' | 'zoom_in' | 'zoom_out' | 'typing' | 'slide_up' | 'blurry' | 'dramatic_zoom';
 
 export interface MusicParams {
   title: string;
@@ -20,6 +21,8 @@ export interface MusicParams {
   instrument: string;
   vocal: string;
   lyricsStyle: string;
+  originalLyrics?: string;
+  isEnglishSong?: boolean;
   songInterpretation?: string;
   userInput?: string;
   musicType?: Target; // Compatibility
@@ -36,6 +39,7 @@ export interface TitleSettings {
   titlePosition: TitlePosition;
   titleAlign: TitleAlign;
   titleEffect: TitleEffect;
+  titleAnimation: TitleAnimation;
   koreanTitleSize: number;
   englishTitleSize: number;
   titleSpacing: number;
@@ -47,6 +51,10 @@ export interface TitleSettings {
   titleYOffset: number;
   koreanColor: string;
   englishColor: string;
+  lyricsFont: string;
+  lyricsColor: string;
+  lyricsKoreanFont: string;
+  lyricsEnglishFont: string;
   lyricsStartTime?: number;
   lyricsScrollEnd?: number;
   lyricsFontSize?: number;
@@ -71,6 +79,7 @@ export const createDefaultSettings = (): TitleSettings => ({
   titlePosition: 'middle',
   titleAlign: 'center',
   titleEffect: 'bold_shadow',
+  titleAnimation: 'none',
   koreanTitleSize: 100,
   englishTitleSize: 100,
   titleSpacing: 0.8,
@@ -82,6 +91,10 @@ export const createDefaultSettings = (): TitleSettings => ({
   titleYOffset: 0,
   koreanColor: '#ffffff',
   englishColor: '#ffffff',
+  lyricsFont: 'sans-serif',
+  lyricsColor: '#ffffff',
+  lyricsKoreanFont: 'sans-serif',
+  lyricsEnglishFont: 'sans-serif',
   lyricsStartTime: 0,
   lyricsScrollEnd: 50,
   lyricsFontSize: 4,
@@ -197,6 +210,9 @@ export interface WorkflowState {
       title: string;
       description: string;
       tags: string;
+    };
+    tiktokMetadata?: {
+      fullContent: string;
     };
     blogTitle?: string; // Added for compatibility
   };

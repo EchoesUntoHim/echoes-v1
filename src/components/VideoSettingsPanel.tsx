@@ -1,8 +1,8 @@
 import React from 'react';
-import { Type as TypeIcon, FileText } from 'lucide-react';
+import { Type as TypeIcon, FileText, Palette, Globe } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TITLE_EFFECTS, KOREAN_FONTS, ENGLISH_FONTS } from '../constants';
-import { TitleSettings, TitlePosition, TitleEffect, TitleAlign } from '../types';
+import { TITLE_EFFECTS, TITLE_ANIMATIONS, KOREAN_FONTS, ENGLISH_FONTS, LYRICS_KOREAN_FONTS, LYRICS_ENGLISH_FONTS } from '../constants';
+import { TitleSettings, TitlePosition, TitleEffect, TitleAnimation, TitleAlign } from '../types';
 
 interface VideoSettingsPanelProps {
   type: string;
@@ -56,6 +56,14 @@ export const VideoSettingsPanel = ({
               className="bg-[#1A1F26] border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white focus:border-primary outline-none cursor-pointer min-w-[85px]"
             >
               {TITLE_EFFECTS.map(effect => <option key={effect.value} value={effect.value}>{effect.label}</option>)}
+            </select>
+
+            <select
+              value={settings.titleAnimation || 'none'}
+              onChange={(e) => onChange({ ...settings, titleAnimation: e.target.value as TitleAnimation })}
+              className="bg-[#1A1F26] border border-[#00FFA3]/30 rounded-lg px-2 py-1 text-[10px] text-[#00FFA3] focus:border-primary outline-none cursor-pointer min-w-[95px]"
+            >
+              {TITLE_ANIMATIONS.map(anim => <option key={anim.value} value={anim.value} className="bg-[#1A1F26]">{anim.label}</option>)}
             </select>
           </div>
 
@@ -175,26 +183,75 @@ export const VideoSettingsPanel = ({
 
       {showLyricsControls && (
         <div className="space-y-2 pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2">
-            <FileText className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[10px] font-bold text-white uppercase tracking-wider">가사 설정</span>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-1">
-            <div className="flex items-center gap-2">
-              <label className="text-[9px] font-bold text-gray-400 uppercase shrink-0">표시</label>
-              <select
-                value={settings.lyricsDisplayMode || 'fade'}
-                onChange={(e) => onChange({ ...settings, lyricsDisplayMode: e.target.value as any })}
-                className="w-full bg-[#1A1F26] border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:border-primary outline-none cursor-pointer"
-              >
-                <option value="scroll">스크롤</option>
-                <option value="fade">페이드</option>
-                <option value="center">중앙</option>
-                <option value="bottom">하단</option>
-              </select>
+          <div className="flex items-center justify-between gap-4 p-1">
+            <div className="flex items-center gap-2 shrink-0">
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[10px] font-bold text-white uppercase tracking-wider">가사 설정</span>
             </div>
 
+            <div className="flex flex-wrap items-center gap-3 flex-1">
+              {/* Lyrics Font Selectors & Global Color */}
+              <div className="flex items-center gap-2 flex-1 min-w-[400px]">
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1 border border-white/10 flex-1 min-w-0">
+                  <span className="text-[9px] text-gray-500 shrink-0">한글</span>
+                  <select
+                    value={settings.lyricsKoreanFont || 'sans-serif'}
+                    onChange={(e) => onChange({ ...settings, lyricsKoreanFont: e.target.value })}
+                    className="flex-1 bg-transparent text-[10px] text-white outline-none cursor-pointer truncate"
+                    style={{ fontFamily: settings.lyricsKoreanFont }}
+                  >
+                    {LYRICS_KOREAN_FONTS.map((font, idx) => (
+                      <option key={`${font.value}-${idx}`} value={font.value} className="bg-[#1A1F26]" style={{ fontFamily: font.value }}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1 border border-white/10 flex-1 min-w-0">
+                  <span className="text-[9px] text-gray-500 shrink-0">영어</span>
+                  <select
+                    value={settings.lyricsEnglishFont || 'sans-serif'}
+                    onChange={(e) => onChange({ ...settings, lyricsEnglishFont: e.target.value })}
+                    className="flex-1 bg-transparent text-[10px] text-white outline-none cursor-pointer truncate"
+                    style={{ fontFamily: settings.lyricsEnglishFont }}
+                  >
+                    {LYRICS_ENGLISH_FONTS.map((font, idx) => (
+                      <option key={`${font.value}-${idx}`} value={font.value} className="bg-[#1A1F26]" style={{ fontFamily: font.value }}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1 bg-white/5 rounded-lg border border-white/10 px-1.5 py-1">
+                  <Palette className="w-3 h-3 text-primary shrink-0" />
+                  <input
+                    type="color"
+                    value={settings.lyricsColor || '#ffffff'}
+                    onChange={(e) => onChange({ ...settings, lyricsColor: e.target.value })}
+                    className="w-4 h-4 rounded cursor-pointer bg-transparent border-none shrink-0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 min-w-[120px]">
+                <label className="text-[9px] font-bold text-gray-400 uppercase shrink-0">모드</label>
+                <select
+                  value={settings.lyricsDisplayMode || 'fade'}
+                  onChange={(e) => onChange({ ...settings, lyricsDisplayMode: e.target.value as any })}
+                  className="w-full bg-[#1A1F26] border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:border-primary outline-none cursor-pointer"
+                >
+                  <option value="scroll">스크롤</option>
+                  <option value="fade">페이드</option>
+                  <option value="center">중앙</option>
+                  <option value="bottom">하단</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-1 p-1">
             <div className="flex items-center gap-2">
               <label className="text-[9px] font-bold text-gray-400 uppercase shrink-0">시작({settings.lyricsStartTime ?? 0}s)</label>
               <input

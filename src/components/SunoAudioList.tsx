@@ -36,27 +36,53 @@ interface SunoAudioListProps {
     user: User | null;
     tracks: SunoTrack[];
     setTracks: React.Dispatch<React.SetStateAction<SunoTrack[]>>;
+    /** 음원 분석 완료 후 오디오 데이터 URL과 파일명을 상위(App)로 전달하는 콜백 */
+    onAudioReady?: (dataUrl: string, name: string) => void;
 }
 
-export const SunoAudioList = ({ 
-    workflow, 
-    setWorkflow, 
-    addLog, 
-    logs, 
-    apiKey, 
+/** 가사에 타임스탬프가 없으면 추정 타임스탬프를 균등 분배하여 추가 */
+const addEstimatedTimestamps = (rawLyrics: string): string => {
+    if (!rawLyrics || rawLyrics === '가사 정보 없음') return rawLyrics;
+    // 이미 타임스탬프가 있으면 그대로 반환
+    if (/\[\d{2}:\d{2}\]/.test(rawLyrics)) return rawLyrics;
+
+    const lines = rawLyrics.split('\n');
+    const nonEmptyCount = lines.filter(l => l.trim()).length;
+    // 기본값: 3분 30초(210초) 기준으로 줄 수에 따라 균등 배분
+    const totalSeconds = 210;
+    const timePerLine = totalSeconds / Math.max(nonEmptyCount, 1);
+
+    let elapsed = 0;
+    return lines.map(line => {
+        if (!line.trim()) return '';
+        const mins = Math.floor(elapsed / 60);
+        const secs = Math.floor(elapsed % 60);
+        const ts = `[${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}]`;
+        elapsed += timePerLine;
+        return `${ts} ${line}`;
+    }).join('\n');
+};
+
+export const SunoAudioList = ({
+    workflow,
+    setWorkflow,
+    addLog,
+    logs,
+    apiKey,
     aiEngine,
     analyzeAudioComprehensively,
     user,
     tracks,
-    setTracks
+    setTracks,
+    onAudioReady
 }: SunoAudioListProps) => {
     const [jsonInput, setJsonInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    
+
     // UI State
     const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
-    
+
     // Player State
     const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
     const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
@@ -183,7 +209,7 @@ export const SunoAudioList = ({
         try {
             setIsAnalyzing(true);
             addLog(`📝 [${track.title}] 곡의 가사를 분석하고 영어 번역을 생성하는 중...`);
-            
+
             const ai = new GoogleGenAI({ apiKey });
             const model = aiEngine;
 
@@ -200,6 +226,7 @@ export const SunoAudioList = ({
                 2. 영어 가사: 한국어 가사와 1:1 라인 매칭이 되도록 영어로 번역하세요. 
                    - [Verse], [Chorus] 등의 섹션 구분자를 반드시 포함하세요.
                    - 한국어 가사 한 줄당 영어 가사 한 줄이 나오도록 정확히 매칭하세요.
+                   - 모든 가사 줄의 시작점에 [00:00] 형식의 추정 타임스탬프를 달아주세요.
                 3. 곡 분석: 이 곡의 분위기(Mood), 장르, 그리고 예상되는 BPM과 Key를 추측해서 작성하세요.
 
                 Response Format (JSON):
@@ -223,20 +250,20 @@ export const SunoAudioList = ({
 
             const text = response.text;
             if (!text) throw new Error("AI 응답이 없습니다.");
-            
+
             // Clean JSON: More robust extraction to handle conversational text
             let cleanedText = text;
             const startIdx = text.indexOf('{');
             const endIdx = text.lastIndexOf('}');
-            
+
             if (startIdx !== -1 && endIdx !== -1) {
                 cleanedText = text.substring(startIdx, endIdx + 1);
             } else {
                 cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
             }
-            
+
             const analysis = JSON.parse(cleanedText);
-            
+
             addLog(`✅ 분석 완료: [${analysis.finalTitle}]`);
             return analysis;
         } catch (error: any) {
@@ -253,11 +280,11 @@ export const SunoAudioList = ({
             addLog("⚠️ Suno 데이터를 먼저 붙여넣어주세요.");
             return;
         }
-        
+
         setIsLoading(true);
         try {
             let data = JSON.parse(jsonInput);
-            
+
             // Deep search to find the array of tracks regardless of Suno's wrapper format
             const findArray = (obj: any): any[] | null => {
                 if (Array.isArray(obj)) {
@@ -273,10 +300,10 @@ export const SunoAudioList = ({
 
             const foundArray = findArray(data);
             if (foundArray) data = foundArray;
-            
+
             if (Array.isArray(data)) {
                 const validTracks = data.filter(t => t.audio_url);
-                
+
                 if (validTracks.length === 0) {
                     addLog("⚠️ 입력된 데이터에서 유효한 곡 정보를 찾을 수 없습니다. 형식을 확인해주세요.");
                     setJsonInput('');
@@ -285,7 +312,7 @@ export const SunoAudioList = ({
                 }
 
                 setJsonInput('');
-                
+
                 if (replaceExisting) {
                     setTracks(validTracks);
                     addLog(`🔄 리스트 전체 동기화 완료! (${validTracks.length}곡으로 교체되었습니다.)`);
@@ -305,12 +332,12 @@ export const SunoAudioList = ({
                                 added++;
                             }
                         });
-                        
+
                         addLog(`✅ Suno 데이터 추가 완료! (신규 ${added}곡 추가, 기존 ${updated}곡 업데이트)`);
                         return updatedTracks;
                     });
                 }
-                
+
                 if (validTracks.length > 0 && !selectedTrackId) {
                     setSelectedTrackId(validTracks[0].id);
                 }
@@ -328,7 +355,7 @@ export const SunoAudioList = ({
     const handleDownload = async (track: SunoTrack) => {
         try {
             addLog(`📥 [${track.title}] 음원 다운로드 준비 중...`);
-            
+
             // Use proxy logic to bypass CORS
             let finalAudioUrl = track.audio_url;
             // Support all suno cdn domains (cdn1, cdn2, cdn3, etc.)
@@ -340,16 +367,16 @@ export const SunoAudioList = ({
 
             const response = await fetch(finalAudioUrl);
             if (!response.ok) throw new Error("파일을 불러오지 못했습니다.");
-            
+
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
-            
+
             // MIME 타입에 따라 확장자 결정 (기본값 mp3)
             let extension = 'mp3';
             if (blob.type.includes('wav')) extension = 'wav';
             else if (blob.type.includes('mpeg')) extension = 'mp3';
             else if (blob.type.includes('audio/x-m4a')) extension = 'm4a';
-            
+
             const link = document.createElement('a');
             link.href = url;
             // Clean filename: remove invalid characters
@@ -359,7 +386,7 @@ export const SunoAudioList = ({
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            
+
             addLog(`✅ 다운로드 완료: ${safeTitle}.mp3`);
         } catch (error) {
             console.error("Download error:", error);
@@ -369,16 +396,16 @@ export const SunoAudioList = ({
 
     const sendToWorkspace = async (track: SunoTrack) => {
         setIsAnalyzing(true);
-        
+
         // 0. Parse Target and Clean Title
         const rawTitle = track.title || 'Untitled';
         let target: '대중음악' | 'CCM' = '대중음악';
         if (rawTitle.includes('[CCM]')) target = 'CCM';
         else if (rawTitle.includes('[대중음악]')) target = '대중음악';
-        
+
         const cleanTitle = rawTitle.replace(/\[CCM\]|\[대중음악\]/g, '').trim();
         addLog(`🔄 [${cleanTitle}] (${target}) 곡 분석 및 싱크 정보 생성 중...`);
-        
+
         try {
             // 1. Fetch audio via proxy to bypass CORS
             let proxyUrl = track.audio_url;
@@ -391,19 +418,29 @@ export const SunoAudioList = ({
 
             const response = await fetch(proxyUrl);
             if (!response.ok) throw new Error("음원 파일을 가져오는데 실패했습니다.");
-            
+
             const blob = await response.blob();
             // Use clean title for the file name
             const file = new File([blob], `${cleanTitle}.mp3`, { type: "audio/mpeg" });
 
-            // 2. Call the comprehensive analyzer (Gemini)
+            // 2-a. 오디오 데이터를 VideoTab으로 전달 (음원 carry-over)
+            if (onAudioReady) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result as string;
+                    onAudioReady(dataUrl, `${cleanTitle}.mp3`);
+                };
+                reader.readAsDataURL(blob);
+            }
+
+            // 2-b. Call the comprehensive analyzer (Gemini)
             // This will handle lyrics, translation, and timestamps!
             // Pass the original lyrics (prompt) to improve sync accuracy
             await analyzeAudioComprehensively(file, { referenceLyrics: track.metadata?.prompt });
-            
+
             // 3. Post-process: Set the correct target and cleaned titles
             const [kTitle, eTitle] = cleanTitle.includes('_') ? cleanTitle.split('_') : [cleanTitle, ''];
-            
+
             setWorkflow((prev: any) => ({
                 ...prev,
                 params: {
@@ -424,7 +461,7 @@ export const SunoAudioList = ({
         } catch (error: any) {
             console.error("Analysis/Sync Error:", error);
             addLog(`⚠️ 음원 직접 분석에 실패했습니다. (텍스트 분석으로 전환합니다)`);
-            
+
             // Fallback to text-only analysis
             const analysis = await analyzeSunoTrack(track);
             const finalTitle = analysis?.finalTitle || cleanTitle;
@@ -443,8 +480,9 @@ export const SunoAudioList = ({
                     ...prev.results,
                     audioFile: track.audio_url,
                     title: finalTitle,
-                    lyrics: track.metadata?.prompt || '가사 정보 없음',
-                    englishLyrics: analysis?.englishLyrics || '',
+                    // 폴백 분석 시에도 가사마다 추정 타임스탬프 추가
+                    lyrics: addEstimatedTimestamps(track.metadata?.prompt || '가사 정보 없음'),
+                    englishLyrics: addEstimatedTimestamps(analysis?.englishLyrics || ''),
                     intent: analysis?.intent || ''
                 }
             }));
@@ -502,7 +540,7 @@ export const SunoAudioList = ({
                         className="w-full h-16 bg-[#1A1F26] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none font-mono custom-scrollbar"
                     />
                     <div className="flex gap-2">
-                        <button 
+                        <button
                             onClick={() => importFromJson(false)}
                             disabled={!jsonInput || isLoading}
                             className="flex-1 bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
@@ -510,7 +548,7 @@ export const SunoAudioList = ({
                             <Save className="w-4 h-4" />
                             새 곡만 추가
                         </button>
-                        <button 
+                        <button
                             onClick={() => importFromJson(true)}
                             disabled={!jsonInput || isLoading}
                             className="flex-1 bg-primary text-background py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
@@ -528,8 +566,8 @@ export const SunoAudioList = ({
                 <GlassCard className="flex-[3] p-4 flex flex-col max-h-[700px]">
                     <div className="flex justify-between items-center mb-4 px-2">
                         <div className="flex items-center gap-3">
-                            <input 
-                                type="checkbox" 
+                            <input
+                                type="checkbox"
                                 checked={tracks.length > 0 && selectedIds.size === tracks.length}
                                 onChange={toggleSelectAll}
                                 className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary"
@@ -538,7 +576,7 @@ export const SunoAudioList = ({
                         </div>
                         <div className="flex gap-2">
                             {selectedIds.size > 0 && (
-                                <button 
+                                <button
                                     onClick={handleDeleteSelected}
                                     className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 transition-all flex items-center gap-1"
                                 >
@@ -546,7 +584,7 @@ export const SunoAudioList = ({
                                     선택 삭제 ({selectedIds.size})
                                 </button>
                             )}
-                            <button 
+                            <button
                                 onClick={handleClearAll}
                                 className="text-xs bg-white/5 hover:bg-white/10 text-gray-400 px-3 py-1.5 rounded-lg border border-white/10 transition-all"
                             >
@@ -554,7 +592,7 @@ export const SunoAudioList = ({
                             </button>
                         </div>
                     </div>
-                    
+
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
                         <AnimatePresence>
                             {/* CCM Group */}
@@ -564,9 +602,9 @@ export const SunoAudioList = ({
                                     const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
                                     return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
                                 });
-                                
+
                                 if (ccmTracks.length === 0) return null;
-                                
+
                                 return (
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
@@ -574,7 +612,7 @@ export const SunoAudioList = ({
                                             <div className="h-[1px] flex-1 bg-gradient-to-r from-primary/30 to-transparent" />
                                         </div>
                                         {ccmTracks.map(track => (
-                                            <motion.div 
+                                            <motion.div
                                                 key={track.id}
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
@@ -582,14 +620,14 @@ export const SunoAudioList = ({
                                                 onClick={() => setSelectedTrackId(track.id)}
                                                 className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
                                             >
-                                                <input 
+                                                <input
                                                     type="checkbox"
                                                     checked={selectedIds.has(track.id)}
                                                     onClick={(e) => toggleSelect(e, track.id)}
-                                                    onChange={() => {}}
+                                                    onChange={() => { }}
                                                     className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
                                                 />
-                                                <div 
+                                                <div
                                                     className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
                                                     onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
                                                 >
@@ -606,7 +644,7 @@ export const SunoAudioList = ({
                                                     <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
                                                     <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={(e) => handleDelete(e, track.id)}
                                                     className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
                                                     title="목록에서 삭제"
@@ -626,9 +664,9 @@ export const SunoAudioList = ({
                                     const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
                                     return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
                                 });
-                                
+
                                 if (popTracks.length === 0) return null;
-                                
+
                                 return (
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
@@ -636,7 +674,7 @@ export const SunoAudioList = ({
                                             <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent" />
                                         </div>
                                         {popTracks.map(track => (
-                                            <motion.div 
+                                            <motion.div
                                                 key={track.id}
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
@@ -644,14 +682,14 @@ export const SunoAudioList = ({
                                                 onClick={() => setSelectedTrackId(track.id)}
                                                 className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
                                             >
-                                                <input 
+                                                <input
                                                     type="checkbox"
                                                     checked={selectedIds.has(track.id)}
                                                     onClick={(e) => toggleSelect(e, track.id)}
-                                                    onChange={() => {}}
+                                                    onChange={() => { }}
                                                     className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
                                                 />
-                                                <div 
+                                                <div
                                                     className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
                                                     onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
                                                 >
@@ -668,7 +706,7 @@ export const SunoAudioList = ({
                                                     <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
                                                     <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={(e) => handleDelete(e, track.id)}
                                                     className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
                                                     title="목록에서 삭제"
@@ -702,7 +740,7 @@ export const SunoAudioList = ({
                 <GlassCard className="flex-[2] p-6 flex flex-col h-[700px] sticky top-8">
                     {selectedTrack ? (
                         <AnimatePresence mode="wait">
-                            <motion.div 
+                            <motion.div
                                 key={selectedTrack.id}
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -716,7 +754,7 @@ export const SunoAudioList = ({
                                         ) : (
                                             <div className="w-full h-full bg-black/40 flex items-center justify-center"><Music className="w-16 h-16 text-gray-600" /></div>
                                         )}
-                                        <div 
+                                        <div
                                             className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer backdrop-blur-sm"
                                             onClick={() => handlePlayToggle(selectedTrack)}
                                         >
@@ -733,7 +771,7 @@ export const SunoAudioList = ({
                                         className="flex-1 bg-primary hover:bg-primary/80 text-background font-black py-4 rounded-xl shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.5)] transition-all flex justify-center items-center gap-2 hover:-translate-y-1 disabled:opacity-50"
                                     >
                                         {isAnalyzing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
-                                        {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'} 
+                                        {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'}
                                         {!isAnalyzing && <ChevronRight className="w-5 h-5" />}
                                     </button>
                                     <button
@@ -767,7 +805,7 @@ export const SunoAudioList = ({
             {/* Global Bottom Player */}
             <AnimatePresence>
                 {playingTrack && (
-                    <motion.div 
+                    <motion.div
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 100, opacity: 0 }}
@@ -794,14 +832,14 @@ export const SunoAudioList = ({
                         <div className="flex-1 max-w-xl mx-auto flex flex-col items-center justify-center px-4">
                             <div className="flex items-center gap-5 mb-1.5">
                                 <button className="text-gray-500 hover:text-white transition-colors"><SkipBack className="w-4 h-4 fill-current" /></button>
-                                <button 
+                                <button
                                     onClick={() => handlePlayToggle(playingTrack)}
                                     className="w-9 h-9 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl"
                                 >
                                     {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                                 </button>
                                 <button className="text-gray-500 hover:text-white transition-colors"><SkipForward className="w-4 h-4 fill-current" /></button>
-                                <button 
+                                <button
                                     onClick={() => handleDownload(playingTrack)}
                                     className="text-gray-500 hover:text-primary transition-colors ml-2"
                                     title="현재 곡 다운로드"
@@ -809,19 +847,19 @@ export const SunoAudioList = ({
                                     <Download className="w-4 h-4" />
                                 </button>
                             </div>
-                            
+
                             <div className="w-full flex items-center gap-3 text-[10px] text-gray-400 font-mono">
                                 <span className="w-8 text-right">{formatTime(currentTime)}</span>
                                 <div className="flex-1 h-1 bg-white/10 rounded-full relative group cursor-pointer overflow-hidden">
-                                    <input 
-                                        type="range" 
-                                        min="0" 
-                                        max={duration || 100} 
-                                        value={currentTime} 
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={duration || 100}
+                                        value={currentTime}
                                         onChange={handleSeek}
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
-                                    <div 
+                                    <div
                                         className="absolute top-0 left-0 h-full bg-primary pointer-events-none group-hover:bg-white transition-colors"
                                         style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                                     />
@@ -834,13 +872,13 @@ export const SunoAudioList = ({
                         <div className="w-1/4 flex justify-end items-center gap-3 hidden md:flex">
                             <Volume2 className="w-4 h-4 text-gray-500" />
                             <div className="w-20 h-1 bg-white/10 rounded-full relative overflow-hidden group">
-                                <input 
-                                    type="range" 
-                                    min="0" 
-                                    max="1" 
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
                                     step="0.01"
                                     defaultValue="1"
-                                    onChange={(e) => { if(audioElement) audioElement.volume = Number(e.target.value); }}
+                                    onChange={(e) => { if (audioElement) audioElement.volume = Number(e.target.value); }}
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                 />
                                 <div className="absolute top-0 left-0 h-full bg-gray-500 group-hover:bg-primary pointer-events-none w-full" />

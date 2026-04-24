@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Settings, Zap, Upload, CheckCircle2, FileText, Download, Music, 
-  AlertCircle, HelpCircle, X, ExternalLink, Youtube, Info, Video 
+import {
+  Settings, Zap, Upload, CheckCircle2, FileText, Download, Music,
+  AlertCircle, HelpCircle, X, ExternalLink, Youtube, Info, Video
 } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { MetadataCard } from './MetadataCard';
@@ -10,12 +10,12 @@ import { PlatformToggle } from './PlatformToggle';
 import { ProgressBar } from './ProgressBar';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
-import { 
-  AI_ENGINES, 
-  TARGETS, 
-  POP_SUB_GENRES, 
-  CCM_SUB_GENRES, 
-  POP_MOODS, 
+import {
+  AI_ENGINES,
+  TARGETS,
+  POP_SUB_GENRES,
+  CCM_SUB_GENRES,
+  POP_MOODS,
   CCM_MOODS,
   BLOG_STYLES
 } from '../constants';
@@ -53,14 +53,14 @@ interface PublishTabProps {
   setWorkflow: React.Dispatch<React.SetStateAction<any>>;
   aiEngine: string;
   setAiEngine: (engine: string) => void;
-  generateYoutubeMetadata: () => Promise<void>;
+  generatePlatformMetadata: () => Promise<void>;
   copyToClipboard: (text: string) => void;
   platforms: any;
   togglePlatform: (platform: string) => void;
   setIsResetModalOpen: (isOpen: boolean) => void;
   handleTabChange: (tab: string) => void;
   logs: string[];
-  availableModels?: {value: string, label: string, type?: string}[];
+  availableModels?: { value: string, label: string, type?: string }[];
   fetchAvailableModels?: () => void;
   shortsCount: number;
 }
@@ -70,7 +70,7 @@ export const PublishTab = ({
   setWorkflow,
   aiEngine,
   setAiEngine,
-  generateYoutubeMetadata,
+  generatePlatformMetadata,
   copyToClipboard,
   platforms,
   togglePlatform,
@@ -82,13 +82,14 @@ export const PublishTab = ({
   shortsCount
 }: PublishTabProps) => {
   const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
+  const [isStrategyVisible, setIsStrategyVisible] = useState(true);
 
   const renderUploadSlot = (platform: 'youtube' | 'tiktok', label: string, type: 'main' | 'tiktok' | 'shorts', index?: number) => {
     const isYoutube = platform === 'youtube';
     const accentColor = isYoutube ? 'red-500' : 'primary';
     const visibilityKey = `${platform}Visibility_${type}${index !== undefined ? `_${index}` : ''}`;
     const scheduleKey = `${platform}Schedule_${type}${index !== undefined ? `_${index}` : ''}`;
-    
+
     return (
       <div key={`${platform}-${type}-${index}`} className="p-4 bg-black/40 rounded-xl border border-white/5 space-y-3">
         <div className="flex items-center justify-between">
@@ -98,16 +99,16 @@ export const PublishTab = ({
           </div>
           <div className="flex gap-1">
             {(isYoutube ? ['public', 'private', 'scheduled'] : ['PUBLIC', 'PRIVATE', 'FRIENDS']).map((v) => (
-              <button 
+              <button
                 key={v}
-                onClick={() => setWorkflow((prev: any) => ({ 
-                  ...prev, 
-                  publishSettings: { ...prev.publishSettings, [visibilityKey]: v } 
+                onClick={() => setWorkflow((prev: any) => ({
+                  ...prev,
+                  publishSettings: { ...prev.publishSettings, [visibilityKey]: v }
                 }))}
                 className={cn(
                   "px-2 py-1 rounded text-[9px] font-bold border transition-all",
-                  (workflow.publishSettings?.[visibilityKey] || (isYoutube ? 'public' : 'PUBLIC')) === v 
-                    ? `bg-${accentColor} text-${isYoutube ? 'white' : 'background'} border-${accentColor}` 
+                  (workflow.publishSettings?.[visibilityKey] || (isYoutube ? 'public' : 'PUBLIC')) === v
+                    ? `bg-${accentColor} text-${isYoutube ? 'white' : 'background'} border-${accentColor}`
                     : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
                 )}
               >
@@ -120,24 +121,24 @@ export const PublishTab = ({
         {(workflow.publishSettings?.[visibilityKey] === 'private' || workflow.publishSettings?.[visibilityKey] === 'PRIVATE' || workflow.publishSettings?.[visibilityKey] === 'scheduled') && (
           <div className="flex items-center gap-2 p-2 bg-black/60 rounded-lg border border-white/10">
             <span className="text-[9px] text-gray-500 shrink-0 font-bold uppercase">Schedule:</span>
-            <input 
-              type="datetime-local" 
+            <input
+              type="datetime-local"
               className="bg-transparent text-[10px] text-white outline-none w-full"
-              onChange={(e) => setWorkflow((prev: any) => ({ 
-                ...prev, 
-                publishSettings: { ...prev.publishSettings, [scheduleKey]: e.target.value } 
+              onChange={(e) => setWorkflow((prev: any) => ({
+                ...prev,
+                publishSettings: { ...prev.publishSettings, [scheduleKey]: e.target.value }
               }))}
             />
           </div>
         )}
 
 
-        <button 
+        <button
           onClick={() => alert(`${label} 업로드 API 연동 필요`)}
           className={cn(
             "w-full py-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-2",
-            isYoutube 
-              ? "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/10" 
+            isYoutube
+              ? "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/10"
               : "bg-primary text-background hover:neon-glow-primary shadow-lg shadow-primary/10"
           )}
         >
@@ -173,13 +174,13 @@ export const PublishTab = ({
               ))}
             </select>
           </div>
-          <button 
-            onClick={generateYoutubeMetadata}
+          <button
+            onClick={generatePlatformMetadata}
             disabled={workflow.progress.youtube > 0 && workflow.progress.youtube < 100}
             className="bg-primary text-background px-6 py-2 rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Zap className="w-4 h-4" />
-            AI 메타데이터 생성 (플랫폼 최적화)
+            AI 메타데이터 생성 (플랫폼별 최적화)
           </button>
           {workflow.progress.youtube > 0 && <div className="w-full"><ProgressBar progress={workflow.progress.youtube} /></div>}
         </div>
@@ -199,8 +200,8 @@ export const PublishTab = ({
                 }}
                 className={cn(
                   "flex-1 py-2 rounded-xl font-bold border transition-all",
-                  workflow.params.target === t 
-                    ? "bg-primary text-background border-primary" 
+                  workflow.params.target === t
+                    ? "bg-primary text-background border-primary"
                     : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
                 )}
               >
@@ -211,7 +212,7 @@ export const PublishTab = ({
         </div>
         <div>
           <label className="text-sm font-medium text-gray-400 mb-2 block">세부 장르</label>
-          <select 
+          <select
             value={workflow.params.subGenre}
             onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, subGenre: e.target.value } }))}
             className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-2 outline-none text-white appearance-none cursor-pointer"
@@ -234,10 +235,39 @@ export const PublishTab = ({
         </div>
       </GlassCard>
 
-      <div className="grid grid-cols-1 gap-6">
-        <MetadataCard title="업로드 제목" content={workflow.results.youtubeMetadata?.title || ''} onCopy={copyToClipboard} />
-        <MetadataCard title="본문 및 해시태그" content={workflow.results.youtubeMetadata?.description || ''} onCopy={copyToClipboard} isTextArea />
-        <MetadataCard title="추천 태그" content={workflow.results.youtubeMetadata?.tags || ''} onCopy={copyToClipboard} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-2">
+        {/* YouTube Metadata Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-2 bg-red-500/10 rounded-xl border border-red-500/20">
+            <Youtube className="w-5 h-5 text-red-500" />
+            <h3 className="font-black text-red-500 text-sm uppercase tracking-widest">YouTube Optimal Strategy</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <MetadataCard title="유튜브 업로드 제목" content={workflow.results.youtubeMetadata?.title || ''} onCopy={copyToClipboard} />
+            <MetadataCard title="본문 설명 (SEO 최적화)" content={workflow.results.youtubeMetadata?.description || ''} onCopy={copyToClipboard} isTextArea />
+            <MetadataCard title="유튜브 추천 태그" content={workflow.results.youtubeMetadata?.tags || ''} onCopy={copyToClipboard} />
+          </div>
+        </div>
+
+        {/* TikTok Metadata Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-xl border border-primary/20">
+            <Zap className="w-5 h-5 text-primary" />
+            <h3 className="font-black text-primary text-sm uppercase tracking-widest">TikTok Viral Strategy</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <MetadataCard
+              title="틱톡 통합 설명 (한번에 복사)"
+              content={workflow.results.tiktokMetadata?.fullContent || ''}
+              onCopy={copyToClipboard}
+              isTextArea
+            />
+            <p className="text-[10px] text-gray-500 px-2 leading-relaxed">
+              * 틱톡은 제목 없이 하나의 설명 칸만 존재합니다. <br />
+              위 상자에는 캡션, 줄바꿈, 해시태그가 모두 포함되어 있어 한번에 복사해서 사용하기 좋습니다.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -248,16 +278,16 @@ export const PublishTab = ({
               <Youtube className="w-6 h-6" /> 유튜브 업로드
             </h3>
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={() => setActiveGuide('youtube')}
                 className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 transition-colors"
               >
                 <HelpCircle className="w-3 h-3" /> 연동 도움말
               </button>
-              <PlatformToggle 
-                label="" 
+              <PlatformToggle
+                label=""
                 description="유튜브 자동 업로드"
-                status={platforms.youtube} 
+                status={platforms.youtube}
                 onToggle={() => togglePlatform('youtube')}
               />
             </div>
@@ -277,16 +307,16 @@ export const PublishTab = ({
               <Zap className="w-6 h-6" /> 틱톡 업로드
             </h3>
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={() => setActiveGuide('tiktok')}
                 className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 transition-colors"
               >
                 <HelpCircle className="w-3 h-3" /> 연동 도움말
               </button>
-              <PlatformToggle 
-                label="" 
+              <PlatformToggle
+                label=""
                 description="틱톡 자동 업로드"
-                status={platforms.tiktok} 
+                status={platforms.tiktok}
                 onToggle={() => togglePlatform('tiktok')}
               />
             </div>
@@ -311,81 +341,104 @@ export const PublishTab = ({
       </GlassCard>
 
       {/* Draggable Optimal Time Info Card - Detailed version */}
-      <motion.div 
-        drag
-        dragConstraints={{ left: -500, right: 20, top: -600, bottom: 20 }}
-        initial={{ x: 20, y: -20 }}
-        className="fixed bottom-10 right-10 z-[100] cursor-move"
-      >
-        <GlassCard className="w-80 p-5 border-primary/30 bg-[#1A1F26]/90 backdrop-blur-2xl shadow-2xl relative group overflow-hidden max-h-[500px] flex flex-col">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
-          <div className="flex items-center justify-between mb-4 shrink-0">
-            <h4 className="text-[12px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
-              <Zap className="w-4 h-4" /> 2026 업로드 최적화 전략
-            </h4>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <Info className="w-3.5 h-3.5 text-primary/50" />
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
-            {/* Daily Detailed Schedule */}
-            <div className="space-y-3">
-              {[
-                { day: '월요일 (Mon)', long: '06:00 - 07:00', shorts: '19:00 - 21:00', note: '한 주를 시작하는 새벽 묵상 공략' },
-                { day: '화요일 (Tue)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '일상 속 잔잔한 위로와 휴식' },
-                { day: '수요일 (Wed)', long: '16:00 - 18:00', shorts: '19:00 - 21:00', note: '삼일 밤 기도회 전후 영적 충전' },
-                { day: '목요일 (Thu)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '주말을 기다리는 감성 음악' },
-                { day: '금요일 (Fri)', long: '17:00 - 18:00', shorts: '20:00 - 22:00', note: '금요 철야 및 감성 클릭률 최고조' },
-                { day: '토요일 (Sat)', long: '10:00 - 13:00', shorts: '11:00 / 14:00 / 21:00', note: '주말 오전의 여유로운 묵상' },
-                { day: '일요일 (Sun)', long: '08:00 - 10:00', shorts: '19:00 - 21:00', note: '예배 이동 시간 찬양 수요 폭발' },
-              ].map((item, idx) => (
-                <div key={idx} className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 group hover:border-primary/30 transition-all">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-primary uppercase">{item.day}</span>
-                    <span className="text-[8px] text-gray-500 italic">{item.note}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-gray-500 uppercase font-bold">Long-form</span>
-                      <span className="text-[10px] text-white font-black">{item.long}</span>
+      <AnimatePresence>
+        {isStrategyVisible ? (
+          <motion.div
+            key="strategy-guide"
+            drag
+            dragConstraints={{ left: -500, right: 20, top: -600, bottom: 20 }}
+            initial={{ x: 20, y: 100, opacity: 0 }}
+            animate={{ x: 20, y: -20, opacity: 1 }}
+            exit={{ x: 100, opacity: 0, scale: 0.8 }}
+            className="fixed bottom-10 right-10 z-[100] cursor-move"
+          >
+            <GlassCard className="w-80 p-5 border-primary/30 bg-[#1A1F26]/90 backdrop-blur-2xl shadow-2xl relative group overflow-hidden max-h-[500px] flex flex-col">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <h4 className="text-[12px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
+                  <Zap className="w-4 h-4" /> 2026 업로드 최적화 전략
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsStrategyVisible(false)}
+                    className="p-1 hover:bg-white/10 rounded-lg transition-all text-gray-500 hover:text-white"
+                    title="숨기기"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+                {/* Daily Detailed Schedule */}
+                <div className="space-y-3">
+                  {[
+                    { day: '월요일 (Mon)', long: '06:00 - 07:00', shorts: '19:00 - 21:00', note: '한 주를 시작하는 새벽 묵상 공략' },
+                    { day: '화요일 (Tue)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '일상 속 잔잔한 위로와 휴식' },
+                    { day: '수요일 (Wed)', long: '16:00 - 18:00', shorts: '19:00 - 21:00', note: '삼일 밤 기도회 전후 영적 충전' },
+                    { day: '목요일 (Thu)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '주말을 기다리는 감성 음악' },
+                    { day: '금요일 (Fri)', long: '17:00 - 18:00', shorts: '20:00 - 22:00', note: '금요 철야 및 감성 클릭률 최고조' },
+                    { day: '토요일 (Sat)', long: '10:00 - 13:00', shorts: '11:00 / 14:00 / 21:00', note: '주말 오전의 여유로운 묵상' },
+                    { day: '일요일 (Sun)', long: '08:00 - 10:00', shorts: '19:00 - 21:00', note: '예배 이동 시간 찬양 수요 폭발' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 group hover:border-primary/30 transition-all">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-primary uppercase">{item.day}</span>
+                        <span className="text-[8px] text-gray-500 italic">{item.note}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[8px] text-gray-500 uppercase font-bold">Long-form</span>
+                          <span className="text-[10px] text-white font-black">{item.long}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5 border-l border-white/10 pl-2">
+                          <span className="text-[8px] text-gray-500 uppercase font-bold">Shorts</span>
+                          <span className="text-[10px] text-white font-black">{item.shorts}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-0.5 border-l border-white/10 pl-2">
-                      <span className="text-[8px] text-gray-500 uppercase font-bold">Shorts</span>
-                      <span className="text-[10px] text-white font-black">{item.shorts}</span>
-                    </div>
+                  ))}
+                </div>
+
+                {/* 3. Optimization Strategy */}
+                <div className="p-3 bg-primary/10 rounded-xl border border-primary/20 space-y-2">
+                  <h5 className="text-[10px] font-black text-primary uppercase flex items-center gap-1.5">
+                    <Zap className="w-3 h-3" /> 2026 알고리즘 필살기
+                  </h5>
+                  <div className="space-y-2 text-[9px] leading-relaxed">
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">1. "2-3시간 선행 업로드":</span> 인덱싱을 위해 피크 타임 2-3시간 전 예약 게시.
+                    </p>
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">2. "고화질 처리 시간":</span> 4K는 최소 5시간 전 비공개 업로드 필수.
+                    </p>
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">3. "시즌 특수성":</span> 절기 2주 전부터 콘텐츠 업로드로 상단 선점.
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            {/* 3. Optimization Strategy */}
-            <div className="p-3 bg-primary/10 rounded-xl border border-primary/20 space-y-2">
-              <h5 className="text-[10px] font-black text-primary uppercase flex items-center gap-1.5">
-                <Zap className="w-3 h-3" /> 2026 알고리즘 필살기
-              </h5>
-              <div className="space-y-2 text-[9px] leading-relaxed">
-                <p className="text-gray-300">
-                  <span className="text-white font-bold">1. "2-3시간 선행 업로드":</span> 인덱싱을 위해 피크 타임 2-3시간 전 예약 게시.
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-white font-bold">2. "고화질 처리 시간":</span> 4K는 최소 5시간 전 비공개 업로드 필수.
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-white font-bold">3. "시즌 특수성":</span> 절기 2주 전부터 콘텐츠 업로드로 상단 선점.
+              <div className="mt-4 pt-3 border-t border-white/5 shrink-0">
+                <p className="text-[8px] text-gray-500 italic text-center">
+                  * 드래그하여 위치 이동이 가능합니다.
                 </p>
               </div>
-            </div>
-          </div>
-          
-          <div className="mt-4 pt-3 border-t border-white/5 shrink-0">
-            <p className="text-[8px] text-gray-500 italic text-center">
-              * 드래그하여 위치 이동이 가능합니다.
-            </p>
-          </div>
-        </GlassCard>
-      </motion.div>
+            </GlassCard>
+          </motion.div>
+        ) : (
+          <motion.button
+            key="show-strategy-btn"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            onClick={() => setIsStrategyVisible(true)}
+            className="fixed bottom-10 right-10 z-[100] p-4 bg-primary text-background rounded-full shadow-lg hover:neon-glow-primary transition-all flex items-center gap-2 font-black text-xs"
+          >
+            <Zap className="w-4 h-4" />
+            2026 전략 가이드
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <Terminal logs={logs} />
 
@@ -422,7 +475,7 @@ export const PublishTab = ({
                   ))}
                 </div>
                 <div className="pt-4">
-                  <a 
+                  <a
                     href={GUIDES[activeGuide].link}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -434,7 +487,7 @@ export const PublishTab = ({
                 </div>
               </div>
               <div className="p-6 bg-black/20 border-t border-white/5">
-                <button 
+                <button
                   onClick={() => setActiveGuide(null)}
                   className="w-full py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all"
                 >

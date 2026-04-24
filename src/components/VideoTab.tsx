@@ -112,6 +112,7 @@ export const VideoTab = ({
       if (saved) {
         try {
           const tracks = JSON.parse(saved);
+          if (!Array.isArray(tracks)) return;
           const currentTitle = workflow.params.title || workflow.params.koreanTitle || '';
           const match = tracks.find((t: any) => t.title === currentTitle && t.generatedImages && t.generatedImages.length > 0);
           if (match) {
@@ -130,6 +131,8 @@ export const VideoTab = ({
       }
     }
   }, [workflow.params.title, workflow.params.koreanTitle, workflow.results.images?.length]);
+
+  const [videoProgressMap, setVideoProgressMap] = React.useState<Record<string, number>>({});
 
   return (
     <motion.div key="video" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
@@ -177,7 +180,7 @@ export const VideoTab = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-4">
 
-              {workflow.results.images.length === 0 && (
+              {(!workflow.results.images || workflow.results.images.length === 0) && (
                 <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-red-400 shrink-0" />
@@ -195,7 +198,7 @@ export const VideoTab = ({
                 <div className="flex flex-wrap justify-between items-center gap-2">
                   <h3 className="text-xs font-bold text-primary flex items-center gap-1 shrink-0"><ImageIcon className="w-3 h-3" /> 1. 이미지 소스</h3>
                   <div className="flex flex-wrap items-center gap-4">
-                    <span className="text-[10px] text-gray-400">이미지: <span className={workflow.results.images.length > 0 ? "text-primary font-bold" : "text-red-400 font-bold"}>{workflow.results.images.length}</span>장</span>
+                    <span className="text-[10px] text-gray-400">이미지: <span className={(workflow.results.images?.length || 0) > 0 ? "text-primary font-bold" : "text-red-400 font-bold"}>{workflow.results.images?.length || 0}</span>장</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 shrink-0">숏츠 개수:</span>
                       <input
@@ -263,7 +266,9 @@ export const VideoTab = ({
                   <label className="block w-full cursor-pointer bg-black/40 border border-white/10 border-dashed rounded-lg p-3 text-center hover:bg-white/10 transition-colors">
                     <Upload className="w-4 h-4 text-gray-400 mx-auto mb-1" />
                     <span className="text-[10px] text-gray-400">
-                      {uploadedAudioName ? `파일: ${uploadedAudioName} (클릭하여 변경)` : '클릭하여 오디오 직접 업로드'}
+                      {uploadedAudioName 
+                        ? `현재 음원: ${uploadedAudioName}\n(음질이 낮을 경우 클릭하여 고음질 파일로 교체)` 
+                        : '클릭하여 오디오 직접 업로드 (고음질 권장)'}
                     </span>
                     <input type="file" accept="audio/*" onChange={handleVideoAudioUpload} className="hidden" />
                   </label>
@@ -338,7 +343,7 @@ export const VideoTab = ({
                 <div className="flex flex-col justify-center items-center">
                   <button
                     onClick={handleDownloadAll}
-                    disabled={isVideoRendering || !uploadedAudio || workflow.results.images.length === 0}
+                    disabled={isVideoRendering || !uploadedAudio || (workflow.results.images?.length || 0) === 0}
                     className="w-full bg-primary text-background py-3 rounded-xl font-black shadow-lg hover:neon-glow-primary transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isVideoRendering ? (
@@ -354,7 +359,12 @@ export const VideoTab = ({
                     )}
                   </button>
                 </div>
-                {isVideoRendering && <ProgressBar progress={workflow.progress.video || 50} />}
+                {isVideoRendering && (
+                  <div className="space-y-1">
+                    <ProgressBar progress={Object.values(videoProgressMap).reduce((a, b) => a + b, 0) / (2 + shortsCount)} />
+                    <p className="text-[10px] text-center text-primary font-bold animate-pulse">전체 공정 진행 중...</p>
+                  </div>
+                )}
 
               </GlassCard>
             </div>
@@ -381,21 +391,28 @@ export const VideoTab = ({
                   title={workflow.results.title}
                   koreanTitle={workflow.params.koreanTitle}
                   englishTitle={workflow.params.englishTitle}
-                  titleSettings={workflow.imageSettings['main']}
-                  showTitle={workflow.imageSettings['main']?.showTitleOverlay ?? true}
-                  lyricsStartTime={workflow.imageSettings['main']?.lyricsStartTime ?? 0}
-                  lyricsScrollEnd={workflow.imageSettings['main']?.lyricsScrollEnd ?? 50}
-                  lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
+                  titleSettings={workflow.imageSettings?.['main'] || createDefaultSettings()}
+                  showTitle={workflow.imageSettings?.['main']?.showTitleOverlay ?? true}
+                  lyricsStartTime={workflow.imageSettings?.['main']?.lyricsStartTime ?? 0}
+                  lyricsScrollEnd={workflow.imageSettings?.['main']?.lyricsScrollEnd ?? 50}
+                  lyricsFontSize={workflow.imageSettings?.['main']?.lyricsFontSize ?? 4}
                   addLog={addLog}
                   originalFileName={uploadedAudioName}
-                  fadeInDuration={workflow.imageSettings['main']?.fadeInDuration ?? 1.5}
-                  fadeOutDuration={workflow.imageSettings['main']?.fadeOutDuration ?? 3}
+                  fadeInDuration={workflow.imageSettings?.['main']?.fadeInDuration ?? 1.5}
+                  fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
+                  onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, main: p }))}
                 />
-                {workflow.results.images.length > 0 && (
+                {videoProgressMap.main !== undefined && videoProgressMap.main < 100 && (
+                  <div className="mt-2">
+                    <ProgressBar progress={videoProgressMap.main} />
+                    <p className="text-[10px] text-primary text-center mt-1">메인 영상 인코딩 중... {videoProgressMap.main}%</p>
+                  </div>
+                )}
+                {(workflow.results.images?.length || 0) > 0 && (
                   <div className="space-y-4">
                     <VideoSettingsPanel
                       type="main"
-                      settings={workflow.imageSettings['main']}
+                      settings={workflow.imageSettings?.['main'] || createDefaultSettings()}
                       onChange={(newSettings) => setWorkflow(prev => ({
                         ...prev,
                         imageSettings: { ...prev.imageSettings, main: newSettings }
@@ -431,16 +448,23 @@ export const VideoTab = ({
                       title={workflow.results.title}
                       koreanTitle={workflow.params.koreanTitle}
                       englishTitle={workflow.params.englishTitle}
-                      titleSettings={workflow.imageSettings['main']}
-                      showTitle={workflow.imageSettings['main']?.showTitleOverlay ?? true}
-                      lyricsStartTime={workflow.imageSettings['main']?.lyricsStartTime ?? 0}
-                      lyricsScrollEnd={workflow.imageSettings['main']?.lyricsScrollEnd ?? 50}
-                      lyricsFontSize={workflow.imageSettings['main']?.lyricsFontSize ?? 4}
+                      titleSettings={workflow.imageSettings?.['main'] || createDefaultSettings()}
+                      showTitle={workflow.imageSettings?.['main']?.showTitleOverlay ?? true}
+                      lyricsStartTime={workflow.imageSettings?.['main']?.lyricsStartTime ?? 0}
+                      lyricsScrollEnd={workflow.imageSettings?.['main']?.lyricsScrollEnd ?? 50}
+                      lyricsFontSize={workflow.imageSettings?.['main']?.lyricsFontSize ?? 4}
                       addLog={addLog}
                       originalFileName={uploadedAudioName}
-                      fadeInDuration={workflow.imageSettings['main']?.fadeInDuration ?? 1.5}
-                      fadeOutDuration={workflow.imageSettings['main']?.fadeOutDuration ?? 3}
+                      fadeInDuration={workflow.imageSettings?.['main']?.fadeInDuration ?? 1.5}
+                      fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
+                      onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, tiktok: p }))}
                     />
+                    {videoProgressMap.tiktok !== undefined && videoProgressMap.tiktok < 100 && (
+                      <div className="mt-2 w-full">
+                        <ProgressBar progress={videoProgressMap.tiktok} />
+                        <p className="text-[10px] text-primary text-center mt-1">틱톡 영상 인코딩 중... {videoProgressMap.tiktok}%</p>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => tiktokVideoRef.current?.download()}
@@ -480,16 +504,22 @@ export const VideoTab = ({
                       title={workflow.results.title}
                       koreanTitle={workflow.params.koreanTitle}
                       englishTitle={workflow.params.englishTitle}
-                      titleSettings={workflow.imageSettings['shorts']}
-                      showTitle={workflow.imageSettings['shorts']?.showTitleOverlay ?? true}
-                      lyricsStartTime={workflow.imageSettings['shorts']?.lyricsStartTime ?? 0}
-                      lyricsScrollEnd={workflow.imageSettings['shorts']?.lyricsScrollEnd ?? 50}
-                      lyricsFontSize={workflow.imageSettings['shorts']?.lyricsFontSize ?? 4}
+                      titleSettings={workflow.imageSettings?.['shorts'] || createDefaultSettings()}
+                      showTitle={workflow.imageSettings?.['shorts']?.showTitleOverlay ?? true}
+                      lyricsStartTime={workflow.imageSettings?.['shorts']?.lyricsStartTime ?? 0}
+                      lyricsScrollEnd={workflow.imageSettings?.['shorts']?.lyricsScrollEnd ?? 50}
+                      lyricsFontSize={workflow.imageSettings?.['shorts']?.lyricsFontSize ?? 4}
                       addLog={addLog}
                       originalFileName={uploadedAudioName}
-                      fadeInDuration={workflow.imageSettings['shorts']?.fadeInDuration ?? 1.5}
-                      fadeOutDuration={workflow.imageSettings['shorts']?.fadeOutDuration ?? 3}
+                      fadeInDuration={workflow.imageSettings?.['shorts']?.fadeInDuration ?? 1.5}
+                      fadeOutDuration={workflow.imageSettings?.['shorts']?.fadeOutDuration ?? 3}
+                      onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, [`shorts_${idx}`]: p }))}
                     />
+                    {videoProgressMap[`shorts_${idx}`] !== undefined && videoProgressMap[`shorts_${idx}`] < 100 && (
+                      <div className="mt-1">
+                        <ProgressBar progress={videoProgressMap[`shorts_${idx}`]} />
+                      </div>
+                    )}
 
                     <div className="flex flex-col gap-1 py-1">
                       <TimeInput
@@ -519,7 +549,7 @@ export const VideoTab = ({
             <div className="mt-6 border-t border-white/5 pt-4">
               <VideoSettingsPanel
                 type="shorts"
-                settings={workflow.imageSettings['shorts'] || createDefaultSettings()}
+                settings={workflow.imageSettings?.['shorts'] || createDefaultSettings()}
                 onChange={(newSettings) => setWorkflow(prev => ({
                   ...prev,
                   imageSettings: { ...prev.imageSettings, shorts: newSettings }
@@ -530,7 +560,7 @@ export const VideoTab = ({
         </div>
       </div>
 
-      {workflow.progress.video === 100 && (
+      {workflow.progress?.video === 100 && (
         <div className="space-y-8 pt-8">
           <div className="flex justify-center">
             <button onClick={() => handleTabChange('publish')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">

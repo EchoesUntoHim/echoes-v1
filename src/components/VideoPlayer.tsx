@@ -5,8 +5,46 @@ import {
   Download,
   Maximize
 } from 'lucide-react';
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 import { cn } from '../lib/utils';
 import { TitleSettings } from '../types';
+
+let ffmpeg: any = null;
+let ffmpegLoadingPromise: Promise<any> | null = null;
+
+const loadFFmpeg = async (addLog?: (msg: string) => void) => {
+  if (ffmpeg && ffmpeg.isLoaded()) return ffmpeg;
+  if (ffmpegLoadingPromise) return ffmpegLoadingPromise;
+  
+  ffmpegLoadingPromise = (async () => {
+    if (addLog) addLog("🛡️ FFmpeg v0.11 안정 버전 초기화 중...");
+    
+    try {
+      if (!ffmpeg) {
+        ffmpeg = createFFmpeg({
+          log: true,
+          corePath: '/ffmpeg/ffmpeg-core.js',
+          logger: ({ message }) => {
+            if (addLog) addLog(`[FFmpeg] ${message}`);
+          }
+        });
+      }
+
+      if (addLog) addLog("📦 로컬 엔진 로드 중 (/ffmpeg/ffmpeg-core.js)...");
+      await ffmpeg.load();
+      
+      if (addLog) addLog("✅ FFmpeg 안정 버전 로드 완료 (Local)");
+      return ffmpeg;
+    } catch (err: any) {
+      if (addLog) addLog(`❌ FFmpeg 초기화 오류: ${err.message}`);
+      if (addLog) addLog("💡 페이지를 새로고침(F5) 후 다시 시도해 보세요.");
+      ffmpegLoadingPromise = null;
+      throw err;
+    }
+  })();
+
+  return ffmpegLoadingPromise;
+};
 
 interface VideoPlayerProps {
   imageSrc: string | null;
@@ -31,6 +69,7 @@ interface VideoPlayerProps {
   originalFileName?: string;
   fadeInDuration?: number;
   fadeOutDuration?: number;
+  onProgress?: (progress: number) => void;
 }
 
 export const VideoPlayer = forwardRef(({
@@ -55,7 +94,8 @@ export const VideoPlayer = forwardRef(({
   addLog,
   originalFileName = "",
   fadeInDuration = 0,
-  fadeOutDuration = 0
+  fadeOutDuration = 0,
+  onProgress
 }: any, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,16 +104,21 @@ export const VideoPlayer = forwardRef(({
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
 
   useImperativeHandle(ref, () => ({
     download: handleDownload,
     isPlaying: isPlaying,
-    isRecording: isRecording
+    isRecording: isRecording,
+    renderProgress: renderProgress
   }));
 
   const parsedLyrics = useMemo(() => {
-    // 1. Prioritize structured timedLyrics if provided
-    if (timedLyrics && timedLyrics.length > 0) {
+    const timeRegex = /\[(\d{2}):(\d{2})\]/;
+    // v1.9.0: 가사 텍스트에 타임스탬프가 있는 경우 이를 최우선 소스로 사용 (편집창 싱크 보장)
+    const hasTimestampsInLyrics = lyrics && typeof lyrics === 'string' && timeRegex.test(lyrics);
+
+    if (!hasTimestampsInLyrics && Array.isArray(timedLyrics) && timedLyrics.length > 0) {
       const flat: string[] = [];
       const pairs: { kor: string; eng: string }[] = [];
 
@@ -96,10 +141,9 @@ export const VideoPlayer = forwardRef(({
 
     if (!lyrics && !englishLyrics) return { flat: [], pairs: [], timedLines: [] };
 
-    const timeRegex = /\[(\d{2}):(\d{2})\]/;
 
     const parseTimedLines = (text: string) => {
-      const lines = text.split('\n');
+      const lines = (text || '').split('\n');
       let currentSectionTime = 0;
       const result: { time: number; text: string }[] = [];
 
@@ -137,8 +181,8 @@ export const VideoPlayer = forwardRef(({
       });
     }
 
-    const korLines = lyrics.split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
-    const engLines = englishLyrics.split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
+    const korLines = (lyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
+    const engLines = (englishLyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
 
     const flat: string[] = [];
     const pairs: { kor: string; eng: string }[] = [];
@@ -155,100 +199,73 @@ export const VideoPlayer = forwardRef(({
     return { flat, pairs, timedLines };
   }, [lyrics, englishLyrics, timedLyrics]);
 
-  useEffect(() => {
-    if (audioRef.current && !isPlaying) {
-      audioRef.current.currentTime = startTime;
+  const drawFrame = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, img: HTMLImageElement, currentAudioTime: number) => {
+    if (!ctx || !canvas || !img) return;
+
+    const segmentTime = Math.max(0, currentAudioTime - startTime);
+    
+    // Clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background
+    const imgAspect = img.width / img.height;
+    const canvasAspect = canvas.width / canvas.height;
+    let drawWidth, drawHeight;
+    if (canvasAspect > imgAspect) {
+      drawWidth = canvas.width;
+      drawHeight = canvas.width / imgAspect;
+    } else {
+      drawHeight = canvas.height;
+      drawWidth = canvas.height * imgAspect;
     }
-  }, [startTime, isPlaying]);
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    ctx.restore();
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const audio = audioRef.current;
-    if (!canvas || !audio || !imageSrc) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (titleSettings && titleSettings.showTitleOverlay !== false) {
+      const { animation = 'none', spacing = 1.2, xOffset = 0, yOffset = 0 } = titleSettings;
+      
+      const titleDuration = titleSettings.titleDuration || 5;
+      const titleFade = titleSettings.titleFade || 0.5;
+      
+      const elapsed = currentAudioTime - startTime;
+      const isPrePlay = !isPlaying && elapsed <= 0.1;
+      
+      let titleOpacity = 0;
+      if (isPrePlay) {
+        titleOpacity = 1;
+      } else if (elapsed < titleDuration) {
+        if (elapsed < titleFade) titleOpacity = elapsed / titleFade;
+        else if (elapsed > titleDuration - titleFade) titleOpacity = (titleDuration - elapsed) / titleFade;
+        else titleOpacity = 1;
+      }
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = imageSrc;
+      if (titleOpacity > 0 && (koreanTitle || title)) {
+        let animY = 0;
+        let animScale = 1;
+        let animBlur = 0;
+        let typingProgress = 1;
 
-    let animationFrameId: number;
-    let lastRenderTime = -1;
-
-    const render = () => {
-      const currentAudioTime = audio.currentTime;
-      const segmentTime = currentAudioTime - (startTime || 0);
-
-      if (duration && currentAudioTime >= startTime + duration) {
-        if (isPlaying) {
-          audio.pause();
-          setIsPlaying(false);
-          if (onEnded) onEnded();
+        if (!isPrePlay && animation !== 'none') {
+          const fadeIn = titleFade;
+          if (animation === 'floating') animY = Math.sin(segmentTime * 2) * 10;
+          else if (animation === 'wave') animY = Math.sin(segmentTime * 3) * 15;
+          else if (animation === 'zoom_in') animScale = 0.95 + (Math.min(1, elapsed / 5) * 0.1);
+          else if (animation === 'zoom_out') animScale = 1.05 - (Math.min(1, elapsed / 5) * 0.1);
+          else if (animation === 'slide_up') { if (fadeIn > 0 && elapsed < fadeIn) animY = 30 * (1 - (elapsed / fadeIn)); }
+          else if (animation === 'blurry') { if (fadeIn > 0 && elapsed < fadeIn) animBlur = 15 * (1 - (elapsed / fadeIn)); }
+          else if (animation === 'typing') typingProgress = fadeIn > 0 ? Math.min(1, elapsed / (fadeIn * 1.5)) : 1;
+          else if (animation === 'dramatic_zoom') { if (fadeIn > 0 && elapsed < fadeIn) animScale = 0.5 + (0.5 * (elapsed / fadeIn)); }
         }
-        // Do not return here to keep the loop alive for manual seeking
-      }
-
-      // GPU 최적화: 오디오 시간이 변경되지 않았으면(일시정지 상태) 무거운 그리기 연산 생략
-      if (currentAudioTime === lastRenderTime) {
-        animationFrameId = requestAnimationFrame(render);
-        return;
-      }
-      lastRenderTime = currentAudioTime;
-
-      // v1.5.6: 개별 설정 기반 오디오 페이드
-      const audioFadeIn = fadeInDuration; 
-      const audioFadeOut = fadeOutDuration;
-
-      if (segmentTime < audioFadeIn) {
-        audio.volume = Math.min(1, segmentTime / audioFadeIn);
-      } else if (duration && currentAudioTime >= startTime + duration - audioFadeOut) {
-        const fadeOutProgress = (currentAudioTime - (startTime + duration - audioFadeOut)) / audioFadeOut;
-        audio.volume = Math.max(0, 1 - fadeOutProgress);
-      } else {
-        audio.volume = 1;
-      }
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const validAudioDuration = !isNaN(audio.duration) && audio.duration > 0 ? audio.duration : 100;
-      const totalDuration = duration || validAudioDuration;
-      const progress = totalDuration > 0 ? Math.max(0, currentAudioTime - startTime) / totalDuration : 0;
-      const scale = 1.0 + (progress * 0.1);
-
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.scale(scale, scale);
-      const imgAspect = img.width / img.height;
-      const canvasAspect = canvas.width / canvas.height;
-      let drawWidth, drawHeight;
-      if (canvasAspect > imgAspect) {
-        drawWidth = canvas.width;
-        drawHeight = canvas.width / imgAspect;
-      } else {
-        drawHeight = canvas.height;
-        drawWidth = canvas.height * imgAspect;
-      }
-      ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      ctx.restore();
-
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw Title
-      if (showTitle && titleSettings) {
-        const xOffset = titleSettings.titleXOffset || 0;
-        const yOffset = titleSettings.titleYOffset || 0;
-        const spacing = titleSettings.titleSpacing !== undefined ? titleSettings.titleSpacing : 0.8;
 
         let x = canvas.width / 2 + (xOffset * (canvas.width / 100));
-        let y = canvas.height / 2 + (yOffset * (canvas.height / 100));
+        let y = canvas.height / 2 + (yOffset * (canvas.height / 100)) + animY;
 
-        if (titleSettings.titlePosition === 'top') y = canvas.height * 0.2 + (yOffset * (canvas.height / 100));
-        if (titleSettings.titlePosition === 'bottom') y = canvas.height * 0.8 + (yOffset * (canvas.height / 100));
+        if (titleSettings.titlePosition === 'top') y = canvas.height * 0.2 + (yOffset * (canvas.height / 100)) + animY;
+        if (titleSettings.titlePosition === 'bottom') y = canvas.height * 0.8 + (yOffset * (canvas.height / 100)) + animY;
 
         ctx.textBaseline = 'middle';
-
-        // Handle Alignment
         if (titleSettings.titleAlign === 'left') {
           ctx.textAlign = 'left';
           x = canvas.width * 0.1 + (xOffset * (canvas.width / 100));
@@ -259,104 +276,77 @@ export const VideoPlayer = forwardRef(({
           ctx.textAlign = 'center';
         }
 
-        const applyEffect = (text: string, tx: number, ty: number, size: number, color: string) => {
+        const applyEffect = (text: string, tx: number, ty: number, size: number, color: string, currentOpacity: number) => {
+          if (!text) return;
           ctx.save();
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
+          ctx.globalAlpha = Math.max(0, Math.min(1, currentOpacity));
+          if (animBlur > 0) ctx.filter = `blur(${animBlur}px)`;
+          ctx.translate(tx, ty);
+          if (animScale !== 1) ctx.scale(animScale, animScale);
+          ctx.translate(-tx, -ty);
 
-          if (titleSettings.titleEffect === 'shadow') {
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 3;
-            ctx.shadowOffsetY = 3;
-          } else if (titleSettings.titleEffect === 'bold_shadow') {
-            ctx.shadowColor = 'rgba(0,0,0,1)';
-            ctx.shadowBlur = 25;
-            ctx.shadowOffsetX = 6;
-            ctx.shadowOffsetY = 6;
-          } else if (titleSettings.titleEffect === 'glow') {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 40;
-          } else if (titleSettings.titleEffect === 'soft_glow') {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 15;
-          } else if (titleSettings.titleEffect === 'neon') {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 50;
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.strokeText(text, tx, ty);
-          } else if (titleSettings.titleEffect === 'cyber') {
-            ctx.shadowColor = '#ff00ff';
-            ctx.shadowBlur = 30;
-            ctx.fillStyle = '#00ffff';
-            ctx.fillText(text, tx - 2, ty - 2);
-            ctx.shadowColor = '#00ffff';
-            ctx.fillStyle = color;
-          } else if (titleSettings.titleEffect === 'glitch') {
-            ctx.fillStyle = '#ff0000';
-            ctx.fillText(text, tx - 4, ty);
-            ctx.fillStyle = '#0000ff';
-            ctx.fillText(text, tx + 4, ty);
-            ctx.fillStyle = color;
-          } else if (titleSettings.titleEffect === 'gradient') {
-            const grad = ctx.createLinearGradient(tx - size, ty, tx + size, ty);
-            grad.addColorStop(0, color);
-            grad.addColorStop(0.5, '#ffffff');
-            grad.addColorStop(1, color);
-            ctx.fillStyle = grad;
-          } else if (titleSettings.titleEffect === 'outline') {
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = size * 0.1;
-            ctx.strokeText(text, tx, ty);
-            ctx.fillStyle = color;
-          } else {
-            ctx.fillStyle = color;
-          }
+          const progress = Math.max(0, Math.min(1, typingProgress));
+          const displayText = animation === 'typing' ? text.substring(0, Math.ceil(text.length * progress)) : text;
+          if (!displayText) { ctx.restore(); return; }
 
-          if (titleSettings.titleEffect !== 'gradient' && titleSettings.titleEffect !== 'cyber' && titleSettings.titleEffect !== 'glitch') {
-            ctx.fillStyle = color;
-          }
+          const currentEffect = titleSettings.titleEffect || 'none';
+          if (currentEffect === 'shadow') { ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 15; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3; }
+          else if (currentEffect === 'bold_shadow') { ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 25; ctx.shadowOffsetX = 6; ctx.shadowOffsetY = 6; }
+          else if (currentEffect === 'glow') { ctx.shadowColor = color; ctx.shadowBlur = 40; }
+          else if (currentEffect === 'soft_glow') { ctx.shadowColor = color; ctx.shadowBlur = 15; }
+          else if (currentEffect === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = 50; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeText(displayText, tx, ty); }
+          else if (currentEffect === 'outline') { ctx.strokeStyle = '#000000'; ctx.lineWidth = 6; ctx.strokeText(displayText, tx, ty); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeText(displayText, tx, ty); }
+          else if (currentEffect === 'gradient') { const grad = ctx.createLinearGradient(tx - size, ty, tx + size, ty); grad.addColorStop(0, color); grad.addColorStop(0.5, '#ffffff'); grad.addColorStop(1, color); ctx.fillStyle = grad; }
+          else if (currentEffect === 'glass') { ctx.shadowColor = 'rgba(255,255,255,0.3)'; ctx.shadowBlur = 20; ctx.fillStyle = 'rgba(255,255,255,0.8)'; }
+          else if (currentEffect === 'cyber') { ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 30; ctx.fillStyle = '#00ffff'; ctx.fillText(displayText, tx - 2, ty - 2); ctx.shadowColor = '#00ffff'; ctx.fillStyle = color; }
+          else if (currentEffect === 'glitch') { ctx.fillStyle = '#ff0000'; ctx.fillText(displayText, tx - 4, ty); ctx.fillStyle = '#0000ff'; ctx.fillText(displayText, tx + 4, ty); ctx.fillStyle = color; }
+          else if (currentEffect === 'retro') { ctx.shadowColor = '#ffae00'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4; }
+          else if (currentEffect === 'vintage') { ctx.fillStyle = '#f4e4bc'; ctx.shadowColor = '#2c1e1e'; ctx.shadowBlur = 2; }
+          else if (currentEffect === 'elegant') { ctx.shadowColor = 'rgba(255,215,0,0.3)'; ctx.shadowBlur = 10; }
 
-          ctx.fillText(text, tx, ty);
+          if (currentEffect !== 'gradient' && currentEffect !== 'cyber' && currentEffect !== 'glass') ctx.fillStyle = color;
+          ctx.fillText(displayText, tx, ty);
           ctx.restore();
         };
 
         const korSize = (titleSettings.koreanTitleSize / 100) * canvas.width * 0.08;
         ctx.font = `900 ${korSize}px ${titleSettings.koreanFont || 'sans-serif'}`;
-        applyEffect(koreanTitle || title, x, y, korSize, titleSettings.koreanColor || '#ffffff');
+        applyEffect(koreanTitle || title, x, y, korSize, titleSettings.koreanColor || '#ffffff', titleOpacity);
 
         if (englishTitle) {
           const engSize = (titleSettings.englishTitleSize / 100) * canvas.width * 0.05;
+          const engOpacity = titleOpacity * 0.9;
+          const engYOffset = korSize * spacing;
           ctx.font = `700 ${engSize}px ${titleSettings.englishFont || 'sans-serif'}`;
-          applyEffect(englishTitle, x, y + korSize * spacing, engSize, titleSettings.englishColor || '#ffffff');
+          let engAnimY = 0;
+          if (animation === 'wave') engAnimY = Math.sin(segmentTime * 3 + 1) * 15;
+          applyEffect(englishTitle, x, y + engYOffset + engAnimY, engSize, titleSettings.englishColor || '#ffffff', engOpacity);
         }
       } else if (showTitle && title) {
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `bold ${canvas.width * 0.06}px sans-serif`;
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 10;
-        ctx.fillText(title, canvas.width / 2, canvas.height * 0.15);
-        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `bold ${canvas.width * 0.06}px sans-serif`;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 10; ctx.fillText(title, canvas.width / 2, canvas.height * 0.15); ctx.shadowBlur = 0;
       }
 
-      if (parsedLyrics.flat.length > 0 && segmentTime >= lyricsStartTime) {
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.font = `bold ${canvas.width * (lyricsFontSize / 100)}px sans-serif`;
+      if (parsedLyrics.flat.length > 0 && segmentTime >= (lyricsStartTime || 0)) {
+        const lKorFont = titleSettings.lyricsKoreanFont || 'sans-serif';
+        const lEngFont = titleSettings.lyricsEnglishFont || 'sans-serif';
+        const lColor = titleSettings.lyricsColor || '#ffffff';
+        const hexToRgba = (hex: string, alpha: number) => {
+          if (!hex.startsWith('#')) return `rgba(255, 255, 255, ${alpha})`;
+          const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        };
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        ctx.font = `bold ${canvas.width * (lyricsFontSize / 100)}px ${lKorFont}`;
 
         const displayMode = titleSettings?.lyricsDisplayMode || 'scroll';
-        const validAudioDuration = audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity ? audio.duration : 100;
-        const totalDuration = duration || validAudioDuration;
-        const lyricsDuration = totalDuration - lyricsStartTime;
-        const lyricsProgress = lyricsDuration > 0 ? (segmentTime - lyricsStartTime) / lyricsDuration : 0;
+        const totalVideoDuration = duration || audioDuration || 100;
+        const lyricsDuration = totalVideoDuration - (lyricsStartTime || 0);
+        const lyricsProgress = lyricsDuration > 0 ? (segmentTime - (lyricsStartTime || 0)) / lyricsDuration : 0;
 
         if (displayMode === 'scroll') {
           const lineSpacing = canvas.height * (lyricsFontSize / 40);
-          const endPosition = canvas.height * (lyricsScrollEnd / 100);
+          const endPosition = canvas.height * ((lyricsScrollEnd || 50) / 100);
           const startOffset = canvas.height * 0.8;
           const totalScrollDistance = startOffset - endPosition + ((parsedLyrics.flat.length - 1) * lineSpacing);
           const currentYOffset = lyricsProgress * totalScrollDistance;
@@ -365,100 +355,102 @@ export const VideoPlayer = forwardRef(({
             if (!line) return;
             const startY = startOffset + (index * lineSpacing);
             const y = startY - currentYOffset;
-
-            const fadeOutEnd = endPosition;
-            const fadeOutStart = endPosition + (canvas.height * 0.15);
-            const fadeInStart = canvas.height * 0.9;
-            const fadeInEnd = canvas.height * 0.8;
-
+            const fadeOutEnd = endPosition, fadeOutStart = endPosition + (canvas.height * 0.15);
+            const fadeInStart = canvas.height * 0.9, fadeInEnd = canvas.height * 0.8;
             let opacity = 1;
-            if (y < fadeOutEnd) opacity = 0;
-            else if (y < fadeOutStart) opacity = (y - fadeOutEnd) / (fadeOutStart - fadeOutEnd);
-
-            if (y > fadeInStart) opacity = 0;
-            else if (y > fadeInEnd) opacity = Math.min(opacity, (fadeInStart - y) / (fadeInStart - fadeInEnd));
-
+            if (y < fadeOutEnd) opacity = 0; else if (y < fadeOutStart) opacity = (y - fadeOutEnd) / (fadeOutStart - fadeOutEnd);
+            if (y > fadeInStart) opacity = 0; else if (y > fadeInEnd) opacity = Math.min(opacity, (fadeInStart - y) / (fadeInStart - fadeInEnd));
             if (y > 0 && y < canvas.height && opacity > 0) {
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-              ctx.shadowColor = 'rgba(0,0,0,0.8)';
-              ctx.shadowBlur = 10;
-              ctx.fillText(line, canvas.width / 2, y);
-              ctx.shadowBlur = 0;
+              ctx.fillStyle = hexToRgba(lColor, opacity); ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 10; ctx.fillText(line, canvas.width / 2, y); ctx.shadowBlur = 0;
             }
           });
         } else {
-          // Fade, Center, Bottom modes
           let currentPair;
-          let pairProgress = 0;
-          let nextTime = totalDuration;
-
+          const totalDur = duration || audioDuration || 100;
           if (parsedLyrics.timedLines && parsedLyrics.timedLines.length > 0) {
             const lines = parsedLyrics.timedLines;
             let activeIdx = 0;
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].time <= currentAudioTime) {
-                activeIdx = i;
-              } else {
-                break;
-              }
-            }
+            for (let i = 0; i < lines.length; i++) { if (lines[i].time <= currentAudioTime) activeIdx = i; else break; }
             currentPair = lines[activeIdx];
-
-            nextTime = lines[activeIdx + 1]?.time || totalDuration;
-            const lineDuration = nextTime - lines[activeIdx].time;
-            pairProgress = lineDuration > 0 ? (currentAudioTime - lines[activeIdx].time) / lineDuration : 0;
           } else {
             const pairCount = parsedLyrics.pairs.length;
             const pairIndex = Math.min(pairCount - 1, Math.floor(lyricsProgress * pairCount));
-            const p = parsedLyrics.pairs[pairIndex];
-            if (p) {
-              currentPair = { kor: p.kor, eng: p.eng };
-              pairProgress = (lyricsProgress * pairCount) % 1;
-              // For non-timed lyrics, nextTime is approximated by pair progress
-              nextTime = startTime + lyricsStartTime + (lyricsDuration * ((pairIndex + 1) / pairCount));
-            }
+            currentPair = parsedLyrics.pairs[pairIndex];
           }
-
           if (currentPair) {
             let opacity = 1;
-
             if (displayMode === 'fade') {
               const fadeDur = 0.5;
-              const timeSinceStart = currentAudioTime - currentPair.time;
-              const timeUntilEnd = nextTime - currentAudioTime;
-              // v1.5.2: 숏츠(시작시간) 이전 자막은 페이드인 생략하여 즉시 표시
-              if (timeSinceStart < fadeDur && currentPair.time > startTime) {
-                opacity = timeSinceStart / fadeDur;
-              } else if (timeUntilEnd < fadeDur) {
-                opacity = timeUntilEnd / fadeDur;
-              }
+              const timeSinceStart = currentAudioTime - (currentPair.time || 0);
+              if (timeSinceStart < fadeDur && (currentPair.time || 0) > startTime) opacity = timeSinceStart / fadeDur;
             }
-
             const lineSpacing = canvas.height * (lyricsFontSize / 40);
             let baseY = canvas.height * 0.8;
             if (displayMode === 'center') baseY = canvas.height * 0.5;
             if (displayMode === 'bottom') baseY = canvas.height * 0.9;
-
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 10;
-
-            if (currentPair.kor) {
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-              ctx.fillText(currentPair.kor, canvas.width / 2, baseY);
-            }
-            if (currentPair.eng) {
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
-              ctx.font = `bold ${canvas.width * (lyricsFontSize * 0.7 / 100)}px sans-serif`;
-              ctx.fillText(currentPair.eng, canvas.width / 2, baseY + lineSpacing * 0.8);
-            }
+            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 10;
+            if (currentPair.kor) { ctx.font = `bold ${canvas.width * (lyricsFontSize / 100)}px ${lKorFont}`; ctx.fillStyle = hexToRgba(lColor, opacity); ctx.fillText(currentPair.kor, canvas.width / 2, baseY); }
+            if (currentPair.eng) { ctx.fillStyle = hexToRgba(lColor, opacity * 0.8); ctx.font = `bold ${canvas.width * (lyricsFontSize * 0.7 / 100)}px ${lEngFont}`; ctx.fillText(currentPair.eng, canvas.width / 2, baseY + lineSpacing * 0.8); }
             ctx.shadowBlur = 0;
           }
         }
       }
+    }
+  };
 
-      // v1.5.6: 시각적 블랙 페이드인 제거 (사용자 요청)
-      // visualOpacity 관련 로직 삭제됨
+  useEffect(() => {
+    if (audioRef.current && !isPlaying) {
+      audioRef.current.currentTime = startTime;
+    }
+  }, [startTime, isPlaying]);
 
+  useEffect(() => {
+    if (!imageSrc || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const audio = audioRef.current;
+    if (!ctx || !audio) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = imageSrc;
+
+    let animationFrameId: number;
+    let lastRenderTime = -1;
+
+    const render = () => {
+      const currentAudioTime = audio.currentTime;
+      
+      // Handle Auto-pause at end
+      if (duration && currentAudioTime >= startTime + duration) {
+        if (isPlaying) {
+          audio.pause();
+          setIsPlaying(false);
+          if (onEnded) onEnded();
+        }
+      }
+
+      // Audio Fade Logic
+      const segmentTime = currentAudioTime - startTime;
+      const audioFadeIn = fadeInDuration || 0;
+      const audioFadeOut = fadeOutDuration || 0;
+
+      if (segmentTime < audioFadeIn) {
+        audio.volume = Math.min(1, Math.max(0, segmentTime / audioFadeIn));
+      } else if (duration && currentAudioTime >= startTime + duration - audioFadeOut) {
+        const fadeOutProgress = (currentAudioTime - (startTime + duration - audioFadeOut)) / audioFadeOut;
+        audio.volume = Math.min(1, Math.max(0, 1 - fadeOutProgress));
+      } else {
+        audio.volume = 1;
+      }
+
+      // Skip heavy drawing if time hasn't changed (GPU optimization)
+      if (currentAudioTime !== lastRenderTime) {
+        drawFrame(ctx, canvas, img, currentAudioTime);
+        lastRenderTime = currentAudioTime;
+      }
+      
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -474,7 +466,7 @@ export const VideoPlayer = forwardRef(({
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [imageSrc, isPlaying, parsedLyrics, type, startTime, duration, onEnded, title, showTitle, titleSettings, koreanTitle, englishTitle, lyricsStartTime, lyricsScrollEnd, lyricsFontSize]);
+  }, [imageSrc, isPlaying, parsedLyrics, type, startTime, duration, onEnded, title, showTitle, titleSettings, koreanTitle, englishTitle, lyricsStartTime, lyricsScrollEnd, lyricsFontSize, fadeInDuration, fadeOutDuration]);
 
   const togglePlay = () => {
     if (audioRef.current) {
@@ -520,133 +512,133 @@ export const VideoPlayer = forwardRef(({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const canvas = canvasRef.current;
-    const audio = audioRef.current;
-    if (!canvas || !audio) return;
+    if (!canvas || !audioSrc || !imageSrc || isRecording) {
+      if (addLog) {
+        if (!canvas) addLog("❌ [Error] Canvas not found");
+        if (!audioSrc) addLog("❌ [Error] Audio source missing");
+        if (!imageSrc) addLog("❌ [Error] Image source missing");
+        if (isRecording) addLog("⚠️ 이미 렌더링이 진행 중입니다.");
+      }
+      return;
+    }
 
     setIsRecording(true);
+    setRenderProgress(0);
+    if (addLog) addLog(`🚀 [${label || type}] 오프라인 고화질 렌더링을 시작합니다...`);
 
-    // Create a stream from canvas
-    const stream = canvas.captureStream(30);
+    try {
+      if (addLog) addLog("📂 FFmpeg 엔진 로딩 중...");
+      const ffmpeg = await loadFFmpeg(addLog);
+      
+      const fps = 30;
+      const totalDuration = duration || audioDuration || 30;
+      const totalFrames = Math.ceil(totalDuration * fps);
+      
+      if (addLog) addLog(`🎬 총 ${totalFrames} 프레임 생성 준비 중 (FPS: ${fps}, 기간: ${totalDuration.toFixed(1)}s)...`);
 
-    // Try to capture audio stream
-    let audioStream;
-    if ((audio as any).captureStream) {
-      audioStream = (audio as any).captureStream();
-    } else if ((audio as any).mozCaptureStream) {
-      audioStream = (audio as any).mozCaptureStream();
-    }
+      // 1. Write Audio File to FFmpeg FS
+      if (addLog) addLog("🎵 오디오 소스 준비 중...");
+      ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioSrc));
+      if (addLog) addLog("✅ 오디오 파일 준비 완료");
 
-    if (audioStream) {
-      audioStream.getAudioTracks().forEach((track: any) => stream.addTrack(track));
-    }
-
-    // Determine the best supported mime type (prefer mp4 for mobile/iOS compatibility)
-    const getSupportedMimeType = () => {
-      const types = [
-        'video/mp4;codecs=h264',
-        'video/mp4',
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm'
-      ];
-      for (const type of types) {
-        if (MediaRecorder.isTypeSupported(type)) return type;
+      // 2. Rendering Frames
+      const frameInterval = 1 / fps;
+      if (addLog) addLog(`🖼️ 프레임 생성 시작 (총 ${totalFrames}개)...`);
+      
+      for (let i = 0; i < totalFrames; i++) {
+        const frameTime = startTime + (i * frameInterval);
+        
+        // Draw to current canvas
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (ctx) {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = imageSrc;
+          
+          // Wait for image to be ready if not already
+          if (!img.complete) {
+            await new Promise((resolve, reject) => { 
+              img.onload = resolve; 
+              img.onerror = () => reject(new Error("이미지 로드 실패"));
+              setTimeout(() => reject(new Error("이미지 로드 시간 초과")), 10000);
+            });
+          }
+          
+          drawFrame(ctx, canvas, img, frameTime);
+          
+          // Capture frame as Blob
+          const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.90));
+          if (blob) {
+            const buffer = await blob.arrayBuffer();
+            ffmpeg.FS('writeFile', `frame_${i.toString().padStart(6, '0')}.jpg`, new Uint8Array(buffer));
+          }
+        }
+        
+        if (i % 30 === 0) {
+          const progress = Math.round((i / totalFrames) * 90);
+          setRenderProgress(progress);
+          if (onProgress) onProgress(progress);
+          if (addLog) addLog(`🖼️ 프레임 생성 중... (${i}/${totalFrames})`);
+        }
       }
-      return '';
-    };
 
-    const mimeType = getSupportedMimeType();
-    const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      // 3. Encode Video
+      if (addLog) addLog("🎞️ 비디오 인코딩 및 오디오 믹싱 시작...");
+      
+      // FFmpeg command to combine images and audio
+      // -framerate 30 -i frame_%06d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest out.mp4
+      await ffmpeg.run(
+        '-framerate', fps.toString(),
+        '-i', 'frame_%06d.jpg',
+        '-i', 'audio.mp3',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-shortest',
+        'output.mp4'
+      );
 
-    // GPU Acceleration Hint: Use high bitrate and specific codecs
-    const recorderOptions: MediaRecorderOptions = {
-      mimeType: mimeType || undefined,
-      videoBitsPerSecond: 8000000, // 8Mbps for high quality / GPU usage
-      audioBitsPerSecond: 128000   // 128kbps for clear audio
-    };
-
-    const recorder = new MediaRecorder(stream, recorderOptions);
-    const chunks: Blob[] = [];
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType || 'video/mp4' });
-      const url = URL.createObjectURL(blob);
+      if (addLog) addLog("✅ 인코딩 완료. 파일 생성 중...");
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+      const url = URL.createObjectURL(videoBlob);
 
       const baseName = originalFileName ? originalFileName.replace(/\.[^/.]+$/, "") : (title || 'video');
-      const fileName = `${baseName} ${label || type}.${extension}`;
+      const fileName = `${baseName} ${label || type}.mp4`;
 
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-      if (isMobile) {
-        // On mobile, we try to click but also provide a fallback
-        // Some browsers require the element to be in the DOM
-        document.body.appendChild(a);
-        a.click();
-
-        // Fallback: if it's a blob, opening in a new tab can sometimes trigger the system download UI
-        // or at least show the video so the user can long-press to save.
-        setTimeout(() => {
-          if (document.body.contains(a)) {
-            document.body.removeChild(a);
+      // Cleanup
+      setRenderProgress(100);
+      if (onProgress) onProgress(100);
+      if (addLog) addLog(`🎉 [${label || type}] 영상 제작이 완료되었습니다!`);
+      
+      // Clean up FFmpeg FS
+      try {
+        const files = ffmpeg.FS('readdir', '/');
+        for (const file of files) {
+          if (file.endsWith('.jpg') || file === 'audio.mp3' || file === 'output.mp4') {
+            ffmpeg.FS('unlink', file);
           }
-          // If the user is still on the page, maybe the download didn't start
-          // We can't know for sure, but opening in new tab is a common mobile fallback
-          window.open(url, '_blank');
-        }, 500);
-      } else {
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        }
+      } catch (e) {
+        console.error("Cleanup error:", e);
       }
 
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
       setIsRecording(false);
-      if (addLog) addLog(`✅ ${label || '비디오'} 다운로드가 완료되었습니다.`);
-    };
-
-    // v1.5.2: 음튐 해결 - 볼륨 0에서 시작 후 빠르게 램프업
-    audio.currentTime = startTime;
-    audio.volume = 0; // 팝 노이즈 방지를 위해 0으로 시작
-
-    audio.play().then(() => {
-      setIsPlaying(true);
-      recorder.start(); // 즉시 녹화 시작 (딜레이 없음)
-      // 100ms 동안 볼륨 0→1 램프업으로 팝 노이즈 제거
-      let vol = 0;
-      const rampTimer = setInterval(() => {
-        vol = Math.min(1, vol + 0.1);
-        if (audio) audio.volume = vol;
-        if (vol >= 1) clearInterval(rampTimer);
-      }, 10);
-    }).catch(e => {
-      console.error("Playback failed during download:", e);
-      if (recorder.state === 'inactive') recorder.start();
-      audio.volume = 1;
-    });
-
-    // Stop recording when duration is reached or audio ends
-    const stopRecording = () => {
-      if (recorder.state !== 'inactive') {
-        recorder.stop();
-        audio.pause();
-        setIsPlaying(false);
-      }
-    };
-
-    if (duration) {
-      setTimeout(stopRecording, duration * 1000);
-    } else {
-      audio.onended = stopRecording;
+    } catch (error: any) {
+      console.error("Rendering failed:", error);
+      if (addLog) addLog(`❌ 렌더링 실패: ${error.message}`);
+      setIsRecording(false);
     }
   };
 
@@ -662,7 +654,7 @@ export const VideoPlayer = forwardRef(({
         ref={canvasRef}
         width={type === 'main' ? 1920 : 1080}
         height={type === 'main' ? 1080 : 1920}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
       />
       <audio
         ref={audioRef}
@@ -675,7 +667,7 @@ export const VideoPlayer = forwardRef(({
 
       {/* Center Play Button (Hidden when playing or hovering controls) */}
       <div className={cn(
-        "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity pointer-events-none",
+        "absolute inset-0 flex items-center justify-center pointer-events-none",
         isPlaying ? "opacity-0" : "opacity-100"
       )}>
         <button onClick={togglePlay} className="bg-white/20 p-4 rounded-full backdrop-blur-md hover:bg-white/40 transition-all pointer-events-auto">

@@ -17,7 +17,8 @@ export default defineConfig(({mode}) => {
     },
     server: {
       headers: {
-        'Cross-Origin-Opener-Policy': 'unsafe-none'
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

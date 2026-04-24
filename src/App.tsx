@@ -309,7 +309,23 @@ export default function App() {
   useEffect(() => {
     // ALWAYS save to LocalStorage as a local backup/cache
     if (sunoTracks.length > 0) {
-      localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
+      try {
+        localStorage.setItem('suno_json_data', JSON.stringify(sunoTracks));
+      } catch (e) {
+        if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+          console.warn("LocalStorage Quota Exceeded for suno_json_data, attempting to prune history images");
+          try {
+            // Prune history: Keep only the 10 most recent tracks, and remove images from older ones if needed
+            const prunedTracks = sunoTracks.map((t, idx) => {
+              if (idx > 5) return { ...t, generatedImages: [] }; // Keep images only for last 5 tracks
+              return t;
+            });
+            localStorage.setItem('suno_json_data', JSON.stringify(prunedTracks));
+          } catch (e2) {
+            console.error("Critical: Could not even save pruned sunoTracks");
+          }
+        }
+      }
     }
 
     // CRITICAL: Block sync until loading for the current user is complete
@@ -341,6 +357,30 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
+          // Migration: Ensure imageSettings exists
+          if (!parsed.imageSettings) {
+            parsed.imageSettings = {
+              style: 'Cinematic',
+              main: createDefaultSettings(),
+              tiktok: createDefaultSettings(),
+              shorts: createDefaultSettings()
+            };
+          }
+          // Migration: Ensure imageParams exists
+          if (!parsed.imageParams) {
+            parsed.imageParams = {
+              artStyle: '실사 사진 (Photorealistic)',
+              cameraView: '정면 (Front View)',
+              timeOfDay: '아침 (Morning)',
+              lightingAtmosphere: '시네마틱 라이팅 (Cinematic Lighting)',
+              weather: '맑음 (Clear Sky)',
+              backgroundType: '자연 숲 (Natural Forest)'
+            };
+          }
+          // Migration: Ensure progress exists
+          if (!parsed.progress) {
+            parsed.progress = { lyrics: 0, image: 0, video: 0, youtube: 0, blog: 0 };
+          }
           if (parsed.progress) {
             Object.keys(parsed.progress).forEach(key => {
               if (parsed.progress[key] > 0 && parsed.progress[key] < 100) {
@@ -366,7 +406,9 @@ export default function App() {
         tempo: '보통',
         instrument: '피아노',
         vocal: VOCAL_OPTIONS.Male[0],
-        lyricsStyle: '시적인'
+        lyricsStyle: '시적인',
+        originalLyrics: '',
+        isEnglishSong: false
       },
       imageParams: {
         artStyle: '실사 사진 (Photorealistic)',
@@ -527,49 +569,70 @@ export default function App() {
     }
   }, [workflow.results.lyrics, workflow.results.englishLyrics]);
 
-  // v1.5.6 추가 작업: 중복 번역 방지를 위한 레퍼런스
+  // v1.5.7 추가 작업: 중복 번역 방지를 위한 레퍼런스
   const lastTranslatedLyricsRef = useRef<string | null>(null);
+  const lastTranslateIsEnglishRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!workflow.results.lyrics || !apiKey) return;
-    
-    // 새로고침 시 혹은 가사가 동일한 경우 번역 스킵 (토큰 절약)
-    if (workflow.results.lyrics === lastTranslatedLyricsRef.current) return;
-    
-    // 초기 로드 시 영어 가사가 이미 존재하면 레퍼런스만 업데이트하고 스킵
-    if (!lastTranslatedLyricsRef.current && workflow.results.englishLyrics) {
+
+    // 시스템 안내 문구(플레이스홀더)는 번역 대상에서 제외
+    const isPlaceholder = workflow.results.lyrics.includes("분석하고 있습니다") ||
+      workflow.results.lyrics.includes("Analyzing");
+    if (isPlaceholder) return;
+
+    // 새로고침 시 혹은 가사/설정이 동일한 경우 번역 스킵 (토큰 절약)
+    if (workflow.results.lyrics === lastTranslatedLyricsRef.current &&
+      workflow.params.isEnglishSong === lastTranslateIsEnglishRef.current) return;
+
+    // 초기 로드 시 혹은 음원 분석을 통해 가사/번역이 이미 확보된 경우 스킵 (중복 번역 방지)
+    if (workflow.results.lyrics && workflow.results.englishLyrics) {
+      if (workflow.results.lyrics === lastTranslatedLyricsRef.current &&
+        workflow.params.isEnglishSong === lastTranslateIsEnglishRef.current) return;
+
       lastTranslatedLyricsRef.current = workflow.results.lyrics;
+      lastTranslateIsEnglishRef.current = workflow.params.isEnglishSong || false;
       return;
     }
 
     const timeoutId = setTimeout(async () => {
       if (isTranslating) return;
 
-      // 이전 영어 가사와 비교하여 변화가 필요한지 체크 (간단한 비교)
-      // 실제로는 한글 가사만 보고 번역을 수행함
+      lastTranslatedLyricsRef.current = workflow.results.lyrics;
+      lastTranslateIsEnglishRef.current = workflow.params.isEnglishSong || false;
+
       await translateLyrics(workflow.results.lyrics);
     }, 4000); // 4초 디바운스
 
     return () => clearTimeout(timeoutId);
-  }, [workflow.results.lyrics, apiKey]);
+  }, [workflow.results.lyrics, workflow.params.isEnglishSong, apiKey]);
 
-  const translateLyrics = async (koreanText: string) => {
-    if (!koreanText || !apiKey) return;
+  const translateLyrics = async (textToTranslate: string) => {
+    if (!textToTranslate || !apiKey) return;
 
     setIsTranslating(true);
     const selectedModel = aiEngine && aiEngine.includes('gemini') ? aiEngine : "gemini-3.1-flash-lite-preview";
 
     try {
-      addLog(`🔄 [${selectedModel}] 영어 가사 자동 번역 시작...`);
+      const isEnglish = workflow.params.isEnglishSong;
+      addLog(`🔄 [${selectedModel}] ${isEnglish ? '한글' : '영어'} 가사 자동 번역 시작...`);
 
-      const lines = koreanText.split('\n');
+      const lines = textToTranslate.split('\n');
       const cleanLines = lines.map(l => l.replace(/^\[\d{2}:\d{2}\]\s*/, '').trim());
       const timestamps = lines.map(l => {
         const m = l.match(/^\[\d{2}:\d{2}\]\s*/);
         return m ? m[0] : '';
       });
 
-      const prompt = `Translate the following Korean lyrics to English line-by-line. 
+      const prompt = isEnglish
+        ? `Translate the following English lyrics to Korean line-by-line. 
+      Keep the line count EXACTLY the same (${cleanLines.length} lines).
+      Do NOT include any timestamps, section headers, or extra explanations.
+      If a line is empty or a section header like [Verse 1], return it exactly as is.
+      
+      Lyrics:
+      ${cleanLines.join('\n')}`
+        : `Translate the following Korean lyrics to English line-by-line. 
       Keep the line count EXACTLY the same (${cleanLines.length} lines).
       Do NOT include any timestamps, section headers, or extra explanations.
       If a line is empty or a section header like [Verse 1], return it exactly as is.
@@ -587,7 +650,7 @@ export default function App() {
       const translatedLines = translatedContent.split('\n');
 
       const restored = lines.map((_, i) => {
-        // 한글 가사에 타임스탬프가 있었던 경우에만 영어 가사에도 복원
+        // 복원 로직
         const timestamp = timestamps[i];
         const translation = translatedLines[i] || "";
 
@@ -597,17 +660,17 @@ export default function App() {
         return timestamp + cleanTranslation;
       });
 
-      const finalEnglish = restored.join('\n');
+      const finalTranslated = restored.join('\n');
 
       setWorkflow(prev => ({
         ...prev,
         results: {
           ...prev.results,
-          englishLyrics: finalEnglish
+          englishLyrics: finalTranslated
         }
       }));
 
-      addLog(`✅ [${selectedModel}] 영어 가사 자동 번역 완료`);
+      addLog(`✅ [${selectedModel}] ${isEnglish ? '한글' : '영어'} 가사 자동 번역 완료`);
     } catch (error) {
       console.error("Auto-translation error:", error);
       addLog(`❌ 번역 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`);
@@ -714,28 +777,35 @@ export default function App() {
         
         [지시사항]
         1. 곡의 구조(Intro, Verse, Chorus, Bridge, Outro 등)를 정확히 파악하여 타임스탬프와 함께 정리해줘.
-        2. **가사 구조화 (가장 중요)**: 
+        2. **언어 판별 및 번역 (최우선순위)**:
+           - 이 곡이 영어 곡인지 한국어 곡인지 판별하여 'isEnglish' 필드에 담아줘.
+           - **만약 영어 곡이라면**, 'lyrics' 필드에는 **반드시 한국어 번역본**을 담아야 해. (영어 원문은 'englishLyrics'에 넣어줘.)
+           - 한국어 곡이라면 'lyrics'에 한국어 원문을, 'englishLyrics'에 영어 번역본을 담아줘.
+           - 어떤 경우에도 'lyrics' 필드에는 한국어 가사가 포함되어야 해.
+        3. **가사 구조화 (가장 중요)**: 
            - 가사는 반드시 한 줄씩 띄어쓰기를 적용하여 읽기 좋게 구성해줘.
            - 한글 가사 또한 한 줄로 뭉치지 않게, 사람이 부르는 단위(구절)로 줄바꿈을 철저히 해줘.
            - 각 섹션(예: [Verse 1]) 시작 전에 한 줄을 띄워줘.
-        3. **모든 줄에 타임스탬프 적용 (필수)**: 
-           - 각 가사 줄의 시작점에 반드시 [00:00] 과 같은 형식으로 해당 가사가 시작되는 정확한 타임스탬프를 달아줘.
+        4. **모든 줄에 타임스탬프 적용 (절대 필수)**: 
+           - **가사의 모든 줄(Every single line)**은 반드시 시작점에 [00:00] 형식의 정확한 타임스탬프를 포함해야 해.
+           - 단락의 첫 줄뿐만 아니라, 이어지는 모든 가사 구절마다 개별 타임스탬프를 달아줘.
            - 섹션 제목(예: [Intro], [Verse 1])에도 타임스탬프를 포함해줘. (예: [00:15] [Verse 1])
            - 한국어 가사와 영어 가사의 타임스탬프는 반드시 1:1로 일치해야 해.
-        4. **자막 싱크 데이터 (필수)**: 
+        5. **자막 싱크 데이터 (필수)**: 
            - 모든 가사 줄에 대해 정확한 시작 시간을 초(second) 단위로 파악하여 timedLyrics 배열에 담아줘.
            - kor와 eng는 반드시 1:1 매칭되어야 해.
-        5. 곡의 BPM, Key(조), 전반적인 에너지 레벨(0~100)을 추정해줘.
-        6. 반드시 아래 JSON 형식으로만 답변해줘. 다른 텍스트는 포함하지 마.
+        6. 곡의 BPM, Key(조), 전반적인 에너지 레벨(0~100)을 추정해줘.
+        7. 반드시 아래 JSON 형식으로만 답변해줘. 다른 텍스트는 포함하지 마.
 
         [응답 형식 JSON]
         {
-          "lyrics": "[00:00] [Intro]\\n가사 첫 번째 줄\\n가사 두 번째 줄...",
-          "englishLyrics": "[00:00] [Intro]\\nEnglish Line 1\\nEnglish Line 2...",
+          "isEnglish": true/false,
+          "lyrics": "[00:00] [Intro]\n[00:05] 가사 첫 번째 줄\n[00:10] 가사 두 번째 줄\n[00:15] [Verse 1]\n[00:16] 이어지는 가사 구절...",
+          "englishLyrics": "[00:00] [Intro]\n[00:05] English Line 1\n[00:10] English Line 2\n[00:15] [Verse 1]\n[00:16] Following English Line...",
           "timedLyrics": [
             { "time": 0, "section": "Intro", "kor": "", "eng": "" },
-            { "time": 15, "section": "Verse 1", "kor": "문밖의 소란을 내려놓고", "eng": "Leaving the noise outside" },
-            { "time": 17, "section": "Verse 1", "kor": "정결한 마음으로 주 앞에 섭니다", "eng": "With a pure heart, I stand before You" }
+            { "time": 5, "section": "Intro", "kor": "가사 첫 번째 줄", "eng": "English Line 1" },
+            { "time": 15, "section": "Verse 1", "kor": "", "eng": "" }
           ],
           "bpm": 120,
           "key": "C Major",
@@ -822,10 +892,15 @@ export default function App() {
       if (!options?.skipSync) {
         setWorkflow(prev => ({
           ...prev,
+          params: {
+            ...prev.params,
+            isEnglishSong: !!result.isEnglish // AI 언어 판별 결과 동기화
+          },
           results: {
             ...prev.results,
             lyrics: result.lyrics,
             englishLyrics: result.englishLyrics,
+            isEnglish: !!result.isEnglish,
             timedLyrics: result.timedLyrics || [],
             shortsHighlights: highlights.length > 0 ? highlights : prev.results.shortsHighlights,
             audioAnalysis: {
@@ -863,6 +938,19 @@ export default function App() {
       }
 
       addLog(`✅ 음원 분석 완료: 가사 및 곡 구조(${result.key}, ${result.bpm}BPM)를 성공적으로 추출했습니다.`);
+
+      // 가사 단락과 타임스탬프 연결하여 터미널 출력 (사용자 요청)
+      if (result.lyrics) {
+        addLog("----------------------------------------");
+        addLog(`📝 분석된 가사 출력 (${result.isEnglish ? '영어 곡 - 한글 번역 포함' : '한국어 곡'}):`);
+        const lyricsLines = result.lyrics.split('\n');
+        lyricsLines.forEach((line: string) => {
+          if (line.trim()) {
+            addLog(line);
+          }
+        });
+        addLog("----------------------------------------");
+      }
 
       // Update highlights if analysis provided them (legacy check kept for safety)
       if (highlights.length > 0) {
@@ -931,7 +1019,7 @@ export default function App() {
       addLog("📁 음원이 업로드되었습니다. 자동으로 정밀 분석을 시작합니다...");
 
       // Trigger analysis - RESTORED
-      analyzeAudioComprehensively(file);
+      analyzeAudioComprehensively(file, { referenceLyrics: workflow.params.originalLyrics });
 
       // Also decode for buffer (visualization)
       const arrayBuffer = await file.arrayBuffer();
@@ -948,6 +1036,14 @@ export default function App() {
   const handleAudioUpload = handleGlobalAudioUpload;
   const handleVideoAudioUpload = handleGlobalAudioUpload;
 
+  const handleSunoAudioReady = async (dataUrl: string, name: string) => {
+    setUploadedAudio(dataUrl);
+    setUploadedAudioName(name);
+    await saveAudioToDB(dataUrl);
+    await saveVoiceToDB('workspace_audio', dataUrl, name);
+    addLog(`✨ Suno 음원이 작업 공간에 로드되었습니다: ${name}`);
+  };
+
   const handleHighlightChange = (idx: number, field: 'start' | 'end', newVal: number) => {
     const newHighlights = [...shortsHighlights];
     const current = newHighlights[idx];
@@ -961,32 +1057,45 @@ export default function App() {
   };
 
   const handleDownloadAll = async () => {
+    if (isVideoRendering) {
+      addLog("⚠️ 이미 렌더링이 진행 중입니다. 잠시만 기다려주세요.");
+      return;
+    }
+
     setIsVideoRendering(true);
-    addLog("📥 모든 영상 다운로드를 시작합니다 (순차적으로 진행됩니다)...");
+    addLog("🚀 [대량 내보내기] 모든 영상의 순차적 렌더링을 시작합니다...");
 
-    if (mainVideoRef.current) {
-      addLog("메인 영상 다운로드 중...");
-      mainVideoRef.current.download();
-      // Wait a bit to avoid browser blocking multiple downloads
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    if (tiktokVideoRef.current) {
-      addLog("틱톡 영상 다운로드 중...");
-      tiktokVideoRef.current.download();
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    for (let i = 0; i < shortsCount; i++) {
-      if (shortsVideoRefs.current[i]) {
-        addLog(`숏츠 #${i + 1} 다운로드 중...`);
-        shortsVideoRefs.current[i].download();
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // 1. Main Video
+      if (mainVideoRef.current) {
+        addLog("🎬 [1/N] 메인 영상 렌더링 시작...");
+        await mainVideoRef.current.download();
+        addLog("✅ 메인 영상 완료.");
       }
-    }
 
-    addLog("✅ 모든 영상 다운로드 요청이 완료되었습니다.");
-    setIsVideoRendering(false);
+      // 2. TikTok/Shorts (Full)
+      if (tiktokVideoRef.current) {
+        addLog("🎬 [2/N] 틱톡 전체 영상 렌더링 시작...");
+        await tiktokVideoRef.current.download();
+        addLog("✅ 틱톡 전체 영상 완료.");
+      }
+
+      // 3. Sequential Shorts Clips
+      for (let i = 0; i < shortsCount; i++) {
+        if (shortsVideoRefs.current[i]) {
+          addLog(`🎬 [Shorts] #${i + 1} 렌더링 시작...`);
+          await shortsVideoRefs.current[i].download();
+          addLog(`✅ 숏츠 #${i + 1} 완료.`);
+        }
+      }
+
+      addLog("🎊 모든 영상 제작 및 다운로드가 완료되었습니다!");
+    } catch (error: any) {
+      console.error("Bulk rendering failed:", error);
+      addLog(`❌ 대량 내보내기 중 오류 발생: ${error.message}`);
+    } finally {
+      setIsVideoRendering(false);
+    }
   };
 
   const resetSubsequentSteps = (fromStep: Step) => {
@@ -1094,13 +1203,13 @@ export default function App() {
   };
 
 
-  const generateYoutubeMetadata = async () => {
+  const generatePlatformMetadata = async () => {
     const currentApiKey = apiKey || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
     if (!currentApiKey) {
       setIsApiKeyModalOpen(true);
       return;
     }
-    addLog("유튜브 업로드용 메타데이터(제목, 설명, 태그) 생성을 시작합니다...");
+    addLog("유튜브 및 틱톡 플랫폼별 최적화 메타데이터 생성을 시작합니다...");
     setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, youtube: 10 } }));
 
     try {
@@ -1108,33 +1217,66 @@ export default function App() {
       const model = aiEngine;
 
       const isCCM = workflow.params.target === 'CCM';
-      const persona = isCCM
-        ? "당신은 전 세계 기독교 문화 트렌드를 선도하며 수억 명의 영혼에게 영향력을 끼치는 '디지털 사역의 정점'에 선 최정상급 워십 비저너리입니다. 당신의 채널은 유튜브와 틱톡을 합쳐 3억 명 이상의 팔로워를 보유하고 있으며, 당신이 올리는 영상 하나가 전 세계 예배 문화의 새로운 표준이 됩니다. 유튜브의 정교한 알고리즘 설계와 틱톡의 폭발적인 숏폼 트렌드를 완벽하게 지배하며, 시청자의 마음을 1초 만에 사로잡는 영적이고 감성적인 카피라이팅의 독보적인 권위자입니다."
-        : "당신은 전 세계 5억 명 이상의 구독자를 보유하며 유튜브와 틱톡을 통틀어 지구상에서 가장 영향력 있는 글로벌 No.1 음악 인플루언서이자 큐레이터입니다. 당신의 메타데이터는 '알고리즘의 신'이라 불릴 만큼 완벽한 키워드 배치와, 전 세계적인 바이럴 열풍을 즉각적으로 일으키는 고도의 심리학적 카피라이팅이 결합된 마스터피스입니다. 미스터비스트(MrBeast)를 넘어서는 압도적인 도달률과 데이터 분석 능력을 갖추었으며, 트렌드를 따라가는 것이 아니라 스스로 트렌드를 창조하고 지배하는 음악 산업의 살아있는 전설입니다.";
+
+      const youtubePersona = isCCM
+        ? "당신은 전 세계 워십 문화를 지배하는 '무적의 워십 비저너리'이자 영적 카피라이팅의 정점에 선 마스터입니다. 수억 명의 영혼이 당신의 손끝에서 나오는 한 문장의 메시지에 반응하며, 유튜브 알고리즘을 굴복시켜 모든 검색 상단을 점유하는 독보적인 권위자입니다. 당신의 텍스트는 영적 권위와 감성적 몰입감을 동시에 지니며, 신성한 전율을 일으키는 압도적인 카리스마를 내뿜습니다."
+        : "당신은 지구상에서 가장 강력한 음악 권력을 쥐고 있는 '글로벌 엔터테인먼트의 황제'이자 알고리즘의 지배자입니다. 미스터비스트를 넘어선 세계 최고의 도달률과 클릭률을 자랑하며, 전 세계 트렌드를 당신의 의도대로 창조하고 파괴하는 카피라이팅의 신입니다. 당신의 메타데이터는 0.1초 만에 인간의 뇌를 장악하는 심리 공학적 정밀함과, 거부할 수 없는 천재적인 매력을 지닌 마스터피스입니다.";
+
+      const tiktokPersona = isCCM
+        ? "당신은 숏폼 사역의 판도를 바꾼 'Z세대 영적 리더'입니다. 무의미한 스크롤 속에서 단 한 문장의 텍스트로 영혼의 발걸음을 멈추게 하며, 틱톡 전체를 은혜와 찬양의 물결로 뒤덮는 강력한 바이럴 전략가입니다. 당신의 메시지는 날카롭고 명확하며, 하나님의 사랑을 가장 트렌디하고 강력한 방식으로 선포하는 숏폼의 대제사장입니다."
+        : "당신은 틱톡 알고리즘을 완벽히 해킹하여 전 세계 최상위 FYP를 독식하는 '글로벌 숏폼 카피라이팅 하이재커'입니다. 인간의 집중력이 유지되는 3초 안에 시청자의 영혼을 낚아채고 무한 공유를 유도하는 중독적이고 파괴적인 텍스트 설계의 1인자입니다. 당신이 던지는 해시태그 하나하나가 곧 전 세계의 유행이 되는 트렌드의 시초이자 지배자입니다.";
 
       const prompt = `
-        ${persona}
-        다음 곡 정보를 바탕으로 유튜브 업로드에 최적화된 메타데이터를 생성해주세요.
-        특히 한국어의 미묘한 정서와 한국 유튜브 시청자들의 감성을 자극하는 카피라이팅을 최우선으로 하세요.
-        
-        [곡 정보]
-        - 음악 종류: ${workflow.params.target}
-        - 한글 제목: ${workflow.params.koreanTitle || workflow.results.title}
-        - 주제: ${workflow.params.topic}
-        - 분위기: ${workflow.params.mood}
-        - 가사 일부: ${workflow.results.lyrics?.substring(0, 200)}...
-        ${workflow.params.songInterpretation ? `- **사용자 곡 해석 (최우선 반영)**: ${workflow.params.songInterpretation}` : ''}
-        ${isCCM ? `
-        [CCM 특별 지시사항]
-        - 수직적 차원 (Vertical): 하나님을 향한 찬양과 경배의 고백을 최우선으로 담아내세요.
-        - 수평적 차원 (Horizontal): 사람들 사이의 관계 속에서 하나님이 어떻게 일하시고 응답하시는지 포착하세요. 인간관계의 상호작용 속에서도 결국 일하시고 반응하시는 분은 하나님이심을 강조하는 통찰력 있는 카피를 작성하세요.
-        ` : ''}
-        
+        [IDENTITY & MISSION]
+        Generate algorithms-dominating metadata for BOTH YouTube and TikTok based on the provided song info.
+        You must write as the provided Personas, using their absolute authority and legendary copywriting skills.
+        The layout and formatting MUST be perfect for direct copy-paste.
+
+        [SONG INFO]
+        - Title: ${workflow.params.koreanTitle || workflow.results.title}
+        - Topic: ${workflow.params.topic}
+        - Mood: ${workflow.params.mood}
+        - Target: ${workflow.params.target}
+        - Interpretation: ${workflow.params.songInterpretation || 'N/A'}
+        - Lyrics: ${workflow.results.lyrics?.substring(0, 300)}...
+
+        [YOUTUBE TASK]
+        Persona: ${youtubePersona}
+        Objective: Create an SEO-optimized title, a highly engaging long-form description, and viral tags.
+        FORMAT RULES (MANDATORY):
+        - Description MUST be highly structured with multiple sections.
+        - USE EXPLICIT DOUBLE NEWLINES (ENTER key twice) BETWEEN SECTIONS.
+        - SECTION 1: [Intro Hook] - Emotional, powerful hook to grab attention.
+        - SECTION 2: [곡 소개 / Song Story] - Deep interpretation and emotional background.
+        - SECTION 3: [공식 채널 및 더 많은 나눔] - Mandatory link: https://litt.ly/echoes (Place this link prominently here) along with call to action.
+        - SECTION 4: [Viral Tags] - Space-separated hashtags.
+        - CRITICAL: NO HALLUCINATED TIMESTAMPS (e.g., 00:00 Intro). DO NOT generate a timestamp section unless specifically provided in song info.
+
+        [TIKTOK TASK]
+        Persona: ${tiktokPersona}
+        Objective: Create a single unified content for TikTok's description box.
+        FORMAT RULES (MANDATORY):
+        - The caption content MUST itself have internal line breaks for high readability. (Every sentence or short phrase MUST be followed by a newline \n).
+        - There MUST be 5+ EMPTY LINES (\\n\\n\\n\\n\\n) between the caption and the hashtags so the hashtags are invisible at first glance.
+        - Use exactly 15 high-performing hashtags.
+
+        [FINAL FORMAT INVARIANT - CRITICAL]
+        1. NO SINGLE BLOCKS OF TEXT. Every major section must be separated by empty space.
+        2. MANDATORY LINK: You MUST include https://litt.ly/echoes in the YouTube description (Section 3).
+        3. NO HALLUCINATION: Do NOT generate fake timestamps or fake URL links.
+        4. IF THE TIKTOK CAPTION IS A SINGLE PARAGRAPH WITHOUT INTERNAL NEWLINES, YOU HAVE FAILED.
+        5. TIKTOK HASHTAGS MUST BE PUSHED DOWN BY 5+ NEWLINES. (\\n\\n\\n\\n\\n)
+
         Response Format (JSON):
         {
-          "title": "클릭을 유발하는 강력한 제목",
-          "description": "다음 구조와 줄바꿈(\\n\\n)을 엄격히 준수하세요:\\n\\n[첫 인사 및 곡 제목 소개 (🌿 이모지 포함)]\\n\\n[곡에 대한 은혜롭고 감성적인 설명 2-3줄]\\n\\n[시청자를 위한 기도와 축복의 메시지 (🙏 이모지 포함)]\\n\\n[🔔 구독과 좋아요 안내 문구 (💖 이모지 포함)]\\n\\n[관련 해시태그 10개]\\n\\n※ 각 섹션 사이에는 반드시 두 번의 줄바꿈(\\n\\n)을 넣으세요. 바로 복사해서 붙여넣기 좋게 생성해야 합니다.",
-          "tags": "은혜로운찬양, 가사있는찬양, 인기CCM, ${workflow.params.mood}, ${workflow.params.topic} 등 노출이 잘 되는 키워드 15개를 쉼표로 구분"
+          "youtube": {
+            "title": "...",
+            "description": "High-impact formatted description with \\n\\n between sections",
+            "tags": "..."
+          },
+          "tiktok": {
+            "fullContent": "Caption content with internal newlines\\n\\n\\n\\n\\n#hashtags"
+          }
         }
       `;
 
@@ -1148,41 +1290,48 @@ export default function App() {
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              tags: { type: Type.STRING }
+              youtube: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  tags: { type: Type.STRING }
+                },
+                required: ['title', 'description', 'tags']
+              },
+              tiktok: {
+                type: Type.OBJECT,
+                properties: {
+                  fullContent: { type: Type.STRING }
+                },
+                required: ['fullContent']
+              }
             },
-            required: ['title', 'description', 'tags']
+            required: ['youtube', 'tiktok']
           },
           temperature: 0.8,
-          maxOutputTokens: 2048,
         }
       });
 
       const text = response.text;
       if (!text) throw new Error('응답이 비어있습니다.');
 
-      let parsed;
-      try {
-        const cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-        parsed = JSON.parse(cleanedText);
-      } catch (e) {
-        console.error('Youtube JSON Parse Error:', text);
-        throw new Error('AI 응답 형식이 올바르지 않습니다.');
-      }
+      const cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      const parsed = JSON.parse(cleanedText);
 
       setWorkflow(prev => ({
         ...prev,
         progress: { ...prev.progress, youtube: 100 },
         results: {
           ...prev.results,
-          youtubeMetadata: parsed
+          youtubeMetadata: parsed.youtube,
+          tiktokMetadata: parsed.tiktok
         }
       }));
-      addLog('✅ 유튜브 메타데이터 생성이 완료되었습니다.');
+      addLog('✅ 플랫폼별(유튜브/틱톡) 메타데이터 생성이 완료되었습니다.');
     } catch (error) {
-      console.error('Youtube Metadata Error:', error);
-      addLog('❌ 유튜브 메타데이터 생성 실패: ' + (error.message || String(error)));
+      console.error('Platform Metadata Error:', error);
+      addLog('❌ 메타데이터 생성 실패: ' + (error instanceof Error ? error.message : String(error)));
       setWorkflow(prev => ({ ...prev, progress: { ...prev.progress, youtube: 0 } }));
     }
   };
@@ -1230,7 +1379,9 @@ export default function App() {
         [미션]
         - 독자 타겟: **'${userAudience}'**
         - 분량: 최소 1,500자 이상의 풍성하고 깊이 있는 내용
+        - 필수 링크 포함: 포스팅의 하단(마지막 부분)에 반드시 "함께 은혜를 나누는 공식 채널: https://litt.ly/echoes" 문구와 링크를 포함하세요.
         - 목표: 사용자님이 기획한 '관점'과 '스타일'을 유지하면서, 각 플랫폼(네이버/티스토리/구글)의 특성에 맞춰 최적화된 형태로 출력하세요.
+        - 환각 금지: 제공된 외의 링크나 정보를 지어내지 마세요.
 
         [곡 정보]
         - 제목: ${workflow.params.koreanTitle || workflow.results.title}
@@ -1724,7 +1875,7 @@ export default function App() {
       return;
     }
 
-    addLog("✨ [v1.5.6] 독창적인 제목만 새롭게 5개 재생성 중... (가사 유지)");
+    addLog("✨ [v1.5.7] 독창적인 제목만 새롭게 5개 재생성 중... (가사 유지)");
 
     try {
       const ai = new GoogleGenAI({ apiKey: currentApiKey });
@@ -1945,14 +2096,17 @@ export default function App() {
           const finalUrl = storageUrl || base64Url;
 
           // 3. Update with permanent storage URL
-          const newImage = { url: finalUrl, localUrl: base64Url, type, label, prompt };
-          generatedImages.push(newImage);
+          const newImage = { url: finalUrl, type, label, prompt };
+          // For UI immediate feedback and local download, we can still use localUrl in workflow state
+          const uiImage = { ...newImage, localUrl: base64Url };
+
+          generatedImages.push(newImage); // Clean image for history list
 
           setWorkflow(prev => ({
             ...prev,
             results: {
               ...prev.results,
-              images: prev.results.images.map(img => img.label.replace(/\s/g, '').toLowerCase() === label.replace(/\s/g, '').toLowerCase() ? newImage : img)
+              images: prev.results.images.map(img => img.label.replace(/\s/g, '').toLowerCase() === label.replace(/\s/g, '').toLowerCase() ? uiImage : img)
             }
           }));
 
@@ -2108,27 +2262,25 @@ export default function App() {
     }
   };
 
-  const regenerateShorts = async () => {
+  const regenerateShorts = async (specificIndices?: number[]) => {
     const currentApiKey = apiKey || process.env.GEMINI_API_KEY;
     if (!currentApiKey) {
       setIsApiKeyModalOpen(true);
       return;
     }
 
-    const existingShortsCount = workflow.results.images.filter((img: any) => img.label.startsWith('숏츠')).length;
-    const remainingToGenerate = shortsCount - existingShortsCount;
+    const indicesToGenerate = specificIndices && specificIndices.length > 0
+      ? specificIndices
+      : Array.from({ length: shortsCount }, (_, i) => i + 1).filter(idx =>
+        !workflow.results.images.some(img => img.label === `숏츠 ${idx}`)
+      );
 
-    if (remainingToGenerate <= 0) {
-      addLog("ℹ️ 정보: 이미 설정된 개수만큼의 숏츠 이미지가 존재합니다.");
+    if (indicesToGenerate.length === 0) {
+      addLog("ℹ️ 정보: 생성할 숏츠 이미지가 선택되지 않았거나 이미 존재합니다.");
       return;
     }
 
-    if (shortsCount > 5) {
-      alert("최대 숏츠 생성 개수(5개)를 초과할 수 없습니다.");
-      return;
-    }
-
-    addLog(`[${imageEngine}] 숏츠 이미지 보강 생성 중... (현재: ${existingShortsCount}개, 추가: ${remainingToGenerate}개)`);
+    addLog(`[${imageEngine}] 숏츠 이미지 개별/보강 생성 중... (대상: ${indicesToGenerate.map(i => `숏츠 ${i}`).join(', ')})`);
     setIsShortsGenerating(true);
 
     try {
@@ -2158,7 +2310,6 @@ export default function App() {
         - 조명 및 대기: ${workflow.imageParams.lightingAtmosphere}
         - 날씨: ${workflow.imageParams.weather}
         - 배경: ${workflow.imageParams.backgroundType}
-        - 퀄리티 및 엔진: ${workflow.imageParams.qualityEngine}
         
         [지시사항]
         0. **사용자 의도 존중**: ${workflow.params.songInterpretation ? '사용자가 제공한 [사용자 곡 해석]을 최우선으로 반영하여 이미지를 구상하세요.' : '가사와 곡 정보를 바탕으로 이미지를 구상하세요.'}
@@ -2168,7 +2319,7 @@ export default function App() {
         
         JSON 형식으로 출력:
         {
-          "shortsPrompts": ["숏츠 하이라이트를 위한 ${remainingToGenerate}개의 서로 다른 감성적인 프롬프트."]
+          "shortsPrompts": ["숏츠 하이라이트를 위한 ${indicesToGenerate.length}개의 서로 다른 감성적인 프롬프트."]
         }
       `;
 
@@ -2197,12 +2348,8 @@ export default function App() {
         throw new Error("숏츠 프롬프트가 누락되었습니다.");
       }
 
-      // KEEP existing images, don't remove them. 
-      // We will only add or update based on the label match.
-
-      const actualShortsCount = Math.min(prompts.shortsPrompts.length, remainingToGenerate);
-      for (let i = 0; i < actualShortsCount; i++) {
-        const shortsIndex = existingShortsCount + i + 1;
+      for (let i = 0; i < indicesToGenerate.length; i++) {
+        const shortsIndex = indicesToGenerate[i];
         addLog(`새로운 숏츠 하이라이트 ${shortsIndex} 생성 중...`);
         const response = await ai.models.generateContent({
           model: imageEngine,
@@ -2213,23 +2360,21 @@ export default function App() {
         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (part?.inlineData?.data) {
           const base64Url = `data:image/png;base64,${part.inlineData.data}`;
-
-          // UI 즉시 업데이트를 위해 임시 객체 생성
-          const tempImage = { url: base64Url, type: 'vertical' as const, label: `숏츠 ${existingShortsCount + i + 1}`, prompt: prompts.shortsPrompts[i] };
+          const label = `숏츠 ${shortsIndex}`;
+          const tempImage = { url: base64Url, type: 'vertical' as const, label, prompt: prompts.shortsPrompts[i] };
 
           setWorkflow(prev => ({
             ...prev,
             results: {
               ...prev.results,
               images: [
-                ...prev.results.images.filter(img => img.label !== tempImage.label),
+                ...prev.results.images.filter(img => img.label !== label),
                 tempImage
               ]
             }
           }));
 
-          // Firebase Storage 업로드 및 최종 URL 업데이트
-          addLog(`📤 [숏츠 ${i + 1}] 클라우드 저장소에 업로드 중...`);
+          addLog(`📤 [${label}] 클라우드 저장소에 업로드 중...`);
           const storageUrl = await uploadImageToStorage(base64Url);
           const finalUrl = storageUrl || base64Url;
           const finalImage = { ...tempImage, url: finalUrl, localUrl: base64Url };
@@ -2238,18 +2383,18 @@ export default function App() {
             ...prev,
             results: {
               ...prev.results,
-              images: prev.results.images.map(img => img.label === tempImage.label ? finalImage : img)
+              images: prev.results.images.map(img => img.label === label ? finalImage : img)
             }
           }));
         }
       }
 
-      addLog(`✅ 숏츠 이미지 재생성 완료`);
+      addLog(`✅ 선택된 숏츠 이미지 생성 완료`);
       setIsShortsGenerating(false);
 
     } catch (error: any) {
       console.error("Shorts Regeneration Error:", error);
-      addLog(`❌ 오류: 숏츠 재생성 중 문제가 발생했습니다. (${error instanceof Error ? error.message : String(error)})`);
+      addLog(`❌ 오류: 숏츠 생성 중 문제가 발생했습니다. (${error instanceof Error ? error.message : String(error)})`);
       setIsShortsGenerating(false);
     }
   };
@@ -2651,6 +2796,16 @@ export default function App() {
   };
 
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [audioFadeIn, setAudioFadeIn] = useState(() => Number(localStorage.getItem('echoesuntohim_audioFadeIn')) || 0);
+  const [audioFadeOut, setAudioFadeOut] = useState(() => Number(localStorage.getItem('echoesuntohim_audioFadeOut')) || 3);
+
+  useEffect(() => {
+    localStorage.setItem('echoesuntohim_audioFadeIn', audioFadeIn.toString());
+  }, [audioFadeIn]);
+
+  useEffect(() => {
+    localStorage.setItem('echoesuntohim_audioFadeOut', audioFadeOut.toString());
+  }, [audioFadeOut]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -2713,7 +2868,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.5.6</span>
+            <span className="text-[8px] text-primary/50 font-bold mt-0.5 tracking-widest uppercase">v1.9.0</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/5 rounded-lg">
@@ -2743,7 +2898,7 @@ export default function App() {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tighter group-hover:text-primary transition-colors leading-none">Echoes Unto Him</span>
-            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.5.6</span>
+            <span className="text-[10px] text-primary/50 font-bold mt-1 tracking-widest uppercase">v1.9.0</span>
           </div>
         </div>
 
@@ -2847,6 +3002,7 @@ export default function App() {
                 user={user}
                 tracks={sunoTracks}
                 setTracks={setSunoTracks}
+                onAudioReady={handleSunoAudioReady}
               />
               <div className="flex justify-center mt-8">
                 <button onClick={() => handleTabChange('image')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
@@ -2924,7 +3080,7 @@ export default function App() {
               setWorkflow={setWorkflow}
               aiEngine={aiEngine}
               setAiEngine={setAiEngine}
-              generateYoutubeMetadata={generateYoutubeMetadata}
+              generatePlatformMetadata={generatePlatformMetadata}
               copyToClipboard={copyToClipboard}
               platforms={platforms}
               togglePlatform={togglePlatform}
@@ -2998,8 +3154,11 @@ export default function App() {
               setVideoEngine={setVideoEngine}
               videoQuality={videoQuality}
               setVideoQuality={setVideoQuality}
-
-              onReset={resetApp}
+              audioFadeIn={audioFadeIn}
+              setAudioFadeIn={setAudioFadeIn}
+              audioFadeOut={audioFadeOut}
+              setAudioFadeOut={setAudioFadeOut}
+              onReset={() => setIsResetModalOpen(true)}
               availableModels={availableModels}
               fetchAvailableModels={fetchAvailableModels}
               copyToClipboard={copyToClipboard}
