@@ -518,10 +518,8 @@ export const BlogTab = ({
 
                     const result = await uploadToBlogger(
                       blogId,
-                      accessToken,
-                      workflow.params.koreanTitle,
-                      workflow.results.blogPost,
-                      workflow.params.tags || ""
+                      { title: workflow.params.koreanTitle || workflow.results.title, content: workflow.results.blogPost.content || workflow.results.blogPost },
+                      accessToken
                     );
                     
                     if (result.id) {

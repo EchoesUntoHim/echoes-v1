@@ -9,8 +9,13 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const storage = getStorage(app);
-// 기본 로그인용 공급자 (추가 권한 없음)
+// 기본 로그인용 공급자 (추가 권한 없음 - 앱 접속 전용)
 export const googleProvider = new GoogleAuthProvider();
+
+// 플랫폼 연동용 공급자 (유튜브 업로드 및 블로거 권한 포함)
+export const youtubeProvider = new GoogleAuthProvider();
+youtubeProvider.addScope('https://www.googleapis.com/auth/youtube.upload');
+youtubeProvider.addScope('https://www.googleapis.com/auth/blogger');
 
 // Error Handling
 export enum OperationType {
@@ -107,6 +112,19 @@ export const signInWithGoogle = async () => {
     return { user: result.user, accessToken };
   } catch (error: any) {
     console.error("Error signing in with Google:", error);
+    const errorMessage = error.code ? `[${error.code}] ${error.message}` : String(error);
+    throw new Error(errorMessage);
+  }
+};
+
+export const signInForYouTube = async () => {
+  try {
+    const result = await signInWithPopup(auth, youtubeProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+    return { user: result.user, accessToken };
+  } catch (error: any) {
+    console.error("Error signing in with YouTube provider:", error);
     const errorMessage = error.code ? `[${error.code}] ${error.message}` : String(error);
     throw new Error(errorMessage);
   }

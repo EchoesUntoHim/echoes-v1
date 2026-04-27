@@ -404,6 +404,9 @@ export const VideoTab = ({
                   fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
                   onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, main: p }))}
                   onRenderComplete={onRenderComplete}
+                  videoEngine={videoEngine}
+                  videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                  karaokeColor={workflow.imageSettings?.['main']?.karaokeColor}
                 />
                 {videoProgressMap.main !== undefined && videoProgressMap.main < 100 && (
                   <div className="mt-2">
@@ -462,6 +465,9 @@ export const VideoTab = ({
                       fadeOutDuration={workflow.imageSettings?.['main']?.fadeOutDuration ?? 3}
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, tiktok: p }))}
                       onRenderComplete={onRenderComplete}
+                      videoEngine={videoEngine}
+                      videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                      karaokeColor={workflow.imageSettings?.['main']?.karaokeColor}
                     />
                     {videoProgressMap.tiktok !== undefined && videoProgressMap.tiktok < 100 && (
                       <div className="mt-2 w-full">
@@ -521,6 +527,9 @@ export const VideoTab = ({
                       fadeOutDuration={workflow.imageSettings?.['shorts']?.fadeOutDuration ?? 3}
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, [`shorts_${idx}`]: p }))}
                       onRenderComplete={onRenderComplete}
+                      videoEngine={videoEngine}
+                      videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                      karaokeColor={workflow.imageSettings?.['shorts']?.karaokeColor}
                     />
                     {videoProgressMap[`shorts_${idx}`] !== undefined && videoProgressMap[`shorts_${idx}`] < 100 && (
                       <div className="mt-1">

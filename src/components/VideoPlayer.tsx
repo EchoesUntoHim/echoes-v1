@@ -8,6 +8,7 @@ import {
 import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 import { cn } from '../lib/utils';
 import { TitleSettings } from '../types';
+import { storage, auth, uploadAudioToStorageSafe, uploadImageToStorage } from '../firebase';
 
 let ffmpeg: any = null;
 let ffmpegLoadingPromise: Promise<any> | null = null;
@@ -142,6 +143,9 @@ interface VideoPlayerProps {
   fadeOutDuration?: number;
   onProgress?: (progress: number) => void;
   onRenderComplete?: (blob: Blob, type: string) => void;
+  videoEngine?: string;
+  videoRenderApiUrl?: string;
+  karaokeColor?: string;
 }
 
 export const VideoPlayer = forwardRef(({
@@ -168,7 +172,10 @@ export const VideoPlayer = forwardRef(({
   fadeInDuration = 0,
   fadeOutDuration = 0,
   onProgress,
-  onRenderComplete
+  onRenderComplete,
+  videoEngine = 'echoesuntohim-v2.1-free',
+  videoRenderApiUrl = 'http://localhost:5000/render-shorts',
+  karaokeColor = '#00FFA3'
 }: any, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -269,9 +276,11 @@ export const VideoPlayer = forwardRef(({
           const mins = parseInt(timeMatch[1]);
           const secs = parseInt(timeMatch[2]);
           currentSectionTime = mins * 60 + secs;
-        }
-
-        if (cleanText) {
+          
+          // 타임스탬프가 있으면 텍스트가 비어있어도 추가 (간주/무음 처리)
+          result.push({ time: currentSectionTime, text: cleanText });
+        } else if (cleanText) {
+          // 타임스탬프가 없는 줄은 텍스트가 있을 때만 이전 시간에 붙임
           result.push({ time: currentSectionTime, text: cleanText });
         }
       });
@@ -281,19 +290,28 @@ export const VideoPlayer = forwardRef(({
     const korTimed = parseTimedLines(lyrics);
     const engTimed = parseTimedLines(englishLyrics);
 
-    // Sync Korean and English lines by index (assuming they match 1:1)
+    // Sync Korean and English lines by time (robust against mismatched line counts or blank lines)
     const timedLines: { time: number; kor: string; eng: string }[] = [];
-    const maxIdx = Math.max(korTimed.length, engTimed.length);
+    const timeMap = new Map<number, {kor: string; eng: string}>();
 
-    for (let i = 0; i < maxIdx; i++) {
-      const k = korTimed[i];
-      const e = engTimed[i];
+    korTimed.forEach(k => {
+      if (!timeMap.has(k.time)) timeMap.set(k.time, {kor: '', eng: ''});
+      timeMap.get(k.time)!.kor = k.text;
+    });
+
+    engTimed.forEach(e => {
+      if (!timeMap.has(e.time)) timeMap.set(e.time, {kor: '', eng: ''});
+      timeMap.get(e.time)!.eng = e.text;
+    });
+
+    const sortedTimes = Array.from(timeMap.keys()).sort((a, b) => a - b);
+    sortedTimes.forEach(t => {
       timedLines.push({
-        time: k?.time ?? e?.time ?? 0,
-        kor: k?.text ?? '',
-        eng: e?.text ?? ''
+        time: t,
+        kor: timeMap.get(t)!.kor,
+        eng: timeMap.get(t)!.eng
       });
-    }
+    });
 
     const korLines = (lyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
     const engLines = (englishLyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
@@ -591,7 +609,7 @@ export const VideoPlayer = forwardRef(({
         }
       }
 
-      if (parsedLyrics.flat.length > 0 && segmentTime >= (lyricsStartTime || 0)) {
+      if ((isPlaying || isRecording) && parsedLyrics.flat.length > 0 && segmentTime >= (lyricsStartTime || 0)) {
         const lKorFont = titleSettings.lyricsKoreanFont || 'sans-serif';
         const lEngFont = titleSettings.lyricsEnglishFont || 'sans-serif';
         const lColor = titleSettings.lyricsColor || '#ffffff';
@@ -645,7 +663,7 @@ export const VideoPlayer = forwardRef(({
                 const progressWidth = textWidth * Math.max(0, lineProgress);
                 ctx.rect(canvas.width / 2 - textWidth / 2, y - lineSpacing, progressWidth, lineSpacing * 2);
                 ctx.clip();
-                ctx.fillStyle = '#00FFA3';
+                ctx.fillStyle = karaokeColor;
                 ctx.fillText(line, canvas.width / 2, y);
                 ctx.restore();
               } else {
@@ -660,9 +678,16 @@ export const VideoPlayer = forwardRef(({
           const totalDur = duration || audioDuration || 100;
           if (parsedLyrics.timedLines && parsedLyrics.timedLines.length > 0) {
             const lines = parsedLyrics.timedLines;
-            let activeIdx = 0;
-            for (let i = 0; i < lines.length; i++) { if (lines[i].time <= currentAudioTime) activeIdx = i; else break; }
-            currentPair = lines[activeIdx];
+            let activeIdx = -1;
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].time <= currentAudioTime) {
+                activeIdx = i;
+              } else {
+                break;
+              }
+            }
+            if (activeIdx !== -1) currentPair = lines[activeIdx];
+            else currentPair = null;
           } else {
             const pairCount = parsedLyrics.pairs.length;
             const pairIndex = Math.min(pairCount - 1, Math.floor(lyricsProgress * pairCount));
@@ -701,7 +726,7 @@ export const VideoPlayer = forwardRef(({
                 const progressWidth = textWidth * Math.max(0, lineProgress);
                 ctx.rect(x - textWidth / 2, y - fontSize, progressWidth, fontSize * 2);
                 ctx.clip();
-                ctx.fillStyle = '#00FFA3';
+                ctx.fillStyle = karaokeColor;
                 ctx.fillText(text, x, y);
                 ctx.restore();
               } else {
@@ -754,8 +779,12 @@ export const VideoPlayer = forwardRef(({
     if (!ctx || !audio) return;
 
     const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = imageSrc;
+    const setupImage = (i: HTMLImageElement, useCors: boolean) => {
+      if (useCors && !imageSrc.startsWith('data:') && !imageSrc.startsWith('blob:')) {
+        i.crossOrigin = "anonymous";
+      }
+      i.src = imageSrc;
+    };
 
     let animationFrameId: number;
     let lastRenderTime = -1;
@@ -788,17 +817,31 @@ export const VideoPlayer = forwardRef(({
 
       // Skip heavy drawing if time hasn't changed (GPU optimization)
       if (currentAudioTime !== lastRenderTime) {
-        drawFrame(ctx, canvas, img, currentAudioTime);
+        drawFrame(ctx, canvas, i, currentAudioTime);
         lastRenderTime = currentAudioTime;
       }
 
       animationFrameId = requestAnimationFrame(render);
     };
 
+    let i = img;
     img.onload = () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       render();
     };
+
+    img.onerror = () => {
+      console.warn("VideoPlayer: Image load failed with CORS, retrying without CORS...");
+      const fallbackImg = new Image();
+      i = fallbackImg;
+      fallbackImg.onload = () => {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        render();
+      };
+      fallbackImg.src = imageSrc;
+    };
+
+    setupImage(img, true);
 
     if (img.complete) {
       render();
@@ -869,6 +912,95 @@ export const VideoPlayer = forwardRef(({
 
     setIsRecording(true);
     setRenderProgress(0);
+
+    // v1.12.1: Local Server Rendering Logic (Restored)
+    if (videoEngine === 'ffmpeg-cloud') {
+      if (addLog) addLog(`🔌 로컬 FFmpeg 서버(${videoRenderApiUrl})로 고화질 렌더링을 요청합니다...`);
+      try {
+        const payload = {
+          assets: {
+            audioUrl: audioSrc,
+            imageUrl: imageSrc,
+          },
+          settings: {
+            title,
+            koreanTitle,
+            englishTitle,
+            lyrics,
+            englishLyrics,
+            timedLyrics,
+            type,
+            quality: '1080p',
+            startTime,
+            duration: duration || audioDuration || 30,
+            titleSettings,
+            lyricsStartTime,
+            lyricsScrollEnd,
+            lyricsFontSize,
+            fadeInDuration,
+            fadeOutDuration,
+            karaokeColor
+          },
+          version: '1.12.1'
+        };
+
+        const response = await fetch(videoRenderApiUrl, {
+          method: 'POST',
+          mode: 'cors',
+          credentials: 'omit',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }).catch(err => {
+          throw new Error(`[Network Error] 로컬 서버에 접속할 수 없습니다. 서버가 실행 중인지 확인하세요. (${err.message})`);
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`[Server Error] ${response.status} ${response.statusText}${errorData.error ? `: ${errorData.error}` : ''}`);
+        }
+
+        // v1.12.5: 서버가 JSON(URL) 대신 영상 파일(Blob)을 직접 보낼 경우 처리
+        const contentType = response.headers.get('Content-Type');
+        if (contentType && (contentType.includes('video') || contentType.includes('application/octet-stream'))) {
+          if (addLog) addLog("✅ 렌더링 서버로부터 영상 파일을 직접 수신했습니다.");
+          const blob = await response.blob();
+          if (onRenderComplete) onRenderComplete(blob, type);
+          setIsRecording(false);
+          setRenderProgress(0);
+          if (addLog) addLog(`🎬 [Local] ${type} 영상 수신 완료!`);
+          return;
+        }
+
+        const result = await response.json().catch(() => ({}));
+        if (result.videoUrl) {
+          if (addLog) addLog("✅ 클라우드 렌더링 완료! 파일을 다운로드합니다.");
+
+          const videoRes = await fetch(result.videoUrl).catch(err => {
+            throw new Error(`[Download Error] 결과 파일 다운로드 실패: ${err.message}`);
+          });
+          const blob = await videoRes.blob();
+
+          if (onRenderComplete) onRenderComplete(blob, type);
+
+          setIsRecording(false);
+          setRenderProgress(0);
+          if (addLog) addLog(`🎬 [Cloud] ${type} 영상 다운로드 준비 완료!`);
+        } else {
+          throw new Error("서버에서 영상 데이터를 정상적으로 받지 못했습니다. (JSON 또는 Blob 형식이 아님)");
+        }
+      } catch (err: any) {
+        console.error("Cloud Render Error:", err);
+        if (addLog) addLog(`❌ 클라우드 렌더링 실패: ${err.message}`);
+        setIsRecording(false);
+      } finally {
+        setIsRecording(false);
+      }
+      return;
+    }
+
     if (addLog) addLog(`🚀 [${label || type}] 오프라인 고화질 렌더링을 시작합니다...`);
 
     try {
@@ -929,11 +1061,11 @@ export const VideoPlayer = forwardRef(({
 
       // 3. Encode Video
       if (addLog) addLog("🎞️ 비디오 인코딩 및 오디오 믹싱 시작...");
-      
+
       ffmpeg.setProgress(({ ratio }: { ratio: number }) => {
         const progress = Math.round(ratio * 100);
         if (addLog && progress % 10 === 0) { // 10% 단위로 로그 출력
-           addLog(`🎞️ 인코딩 진행 중... ${progress}%`);
+          addLog(`🎞️ 인코딩 진행 중... ${progress}%`);
         }
         if (onProgress) onProgress(90 + (ratio * 10)); // 90% ~ 100% 구간
       });

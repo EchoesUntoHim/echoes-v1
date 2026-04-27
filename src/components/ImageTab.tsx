@@ -1,7 +1,9 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ImageIcon, Upload, Music, Download, RefreshCw, Key, ChevronRight, CheckCircle2, FileText } from 'lucide-react';
+import { ImageIcon, Upload, Music, Download, RefreshCw, Key, ChevronRight, CheckCircle2, FileText, Trash2, Search, AlertTriangle, DownloadCloud, Database } from 'lucide-react';
 import { GlassCard } from './GlassCard';
+import { storage, auth } from '../firebase';
+import { ref, listAll, getDownloadURL, deleteObject } from 'firebase/storage';
 import { CanvasPreview } from './CanvasPreview';
 import { VideoSettingsPanel } from './VideoSettingsPanel';
 import { Terminal } from './Terminal';
@@ -93,6 +95,76 @@ export const ImageTab = ({
 
   const toggleShortsSelection = (num: number) => {
     setSelectedShorts(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
+  };
+
+  const handleDeleteHistory = (e: React.MouseEvent, trackTitle: string) => {
+    e.stopPropagation();
+    if (!confirm(`[${trackTitle}]의 이미지 히스토리를 삭제하시겠습니까?\n(DB에서 이미지 생성 기록만 삭제되며, 수노 곡 정보는 그대로 유지됩니다)`)) return;
+    
+    setSunoTracks(prev => prev.map(t => {
+      if (t.title === trackTitle) {
+        const { generatedImages, ...rest } = t;
+        return rest;
+      }
+      return t;
+    }));
+    addLog(`🗑️ [${trackTitle}] 이미지 생성 기록을 삭제했습니다.`);
+  };
+
+  const [orphanedImages, setOrphanedImages] = React.useState<{name: string, url: string}[]>([]);
+  const [isScanningOrphans, setIsScanningOrphans] = React.useState(false);
+
+  const scanOrphanedImages = async () => {
+    if (!auth.currentUser) return;
+    setIsScanningOrphans(true);
+    addLog("👻 스토리지에서 유령 이미지 탐색을 시작합니다...");
+    try {
+      const dbImageUrls = new Set<string>();
+      (sunoTracks || []).forEach(t => {
+        if (t.generatedImages) {
+          t.generatedImages.forEach((img: any) => {
+            if (img.url) dbImageUrls.add(img.url);
+          });
+        }
+      });
+
+      const storageRef = ref(storage, `users/${auth.currentUser.uid}/images`);
+      const res = await listAll(storageRef);
+      const orphans: {name: string, url: string}[] = [];
+      
+      for (const item of res.items) {
+        const url = await getDownloadURL(item);
+        if (!dbImageUrls.has(url)) {
+          orphans.push({ name: item.name, url });
+        }
+      }
+      
+      setOrphanedImages(orphans);
+      if (orphans.length > 0) {
+        addLog(`⚠️ DB에 없는 유령 이미지 ${orphans.length}개를 스토리지에서 발견했습니다.`);
+      } else {
+        addLog(`✅ 스토리지에 유령 이미지가 없습니다. 깨끗합니다!`);
+      }
+    } catch (err) {
+      console.error(err);
+      addLog("❌ 유령 이미지 탐색 중 오류가 발생했습니다.");
+    } finally {
+      setIsScanningOrphans(false);
+    }
+  };
+
+  const deleteOrphanedImage = async (name: string, url: string) => {
+    if (!auth.currentUser) return;
+    if (!confirm('스토리지에서 이 미아 이미지를 완전히 영구 삭제하시겠습니까?\n(삭제 후에는 복구할 수 없습니다)')) return;
+    try {
+      const itemRef = ref(storage, `users/${auth.currentUser.uid}/images/${name}`);
+      await deleteObject(itemRef);
+      setOrphanedImages(prev => prev.filter(img => img.name !== name));
+      addLog(`🗑️ 스토리지 유령 이미지 영구 삭제 완료: ${name}`);
+    } catch (err) {
+      console.error(err);
+      addLog(`❌ 유령 이미지 삭제 실패`);
+    }
   };
 
   return (
@@ -550,51 +622,59 @@ export const ImageTab = ({
           </div>
         </div>
       )}
-      {/* Image History List */}
+      {/* Image History List (v1.12.1: Slimmed) */}
       {(sunoTracks || []).some(t => t && t.generatedImages && t.generatedImages.length > 0) && (
-        <div className="space-y-1 mt-10">
-          <div className="flex items-center gap-2 px-2 pb-3 border-b border-white/5">
-            <RefreshCw className="w-3 h-3 text-primary/50" />
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">이미지 생성 히스토리</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4">
-            {(() => {
-              const uniqueTracks = Array.from(new Map((sunoTracks || [])
-                .filter(t => t && t.title) // 이미지 유무와 상관없이 제목이 있으면 표시
-                .map(t => [t.title, t])
-              ).values());
-              
-              const totalPages = Math.ceil(uniqueTracks.length / itemsPerPage);
-              const startIndex = (currentPage - 1) * itemsPerPage;
-              const paginatedTracks = uniqueTracks.slice(startIndex, startIndex + itemsPerPage);
+        <div className="space-y-4 mt-10">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 px-2 pb-3 border-b border-white/5">
+              <Database className="w-3 h-3 text-primary/50" />
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">이미지 생성 히스토리 (Slim List)</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+              {(() => {
+                const uniqueTracks = Array.from(new Map((sunoTracks || [])
+                  .filter(t => t && t.title && t.generatedImages && t.generatedImages.length > 0)
+                  .map(t => [t.title, t])
+                ).values());
+                
+                const totalPages = Math.ceil(uniqueTracks.length / itemsPerPage);
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const paginatedTracks = uniqueTracks.slice(startIndex, startIndex + itemsPerPage);
 
-              return (
-                <>
-                  {paginatedTracks.map((track, idx) => {
-                    const globalIdx = startIndex + idx + 1;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleLoadFromHistory(track)}
-                        className="w-full text-left px-2 py-1.5 hover:bg-white/[0.05] transition-all border-b border-white/5 flex items-center justify-between group relative overflow-hidden h-[32px]"
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden relative z-10 flex-1">
-                          <span className="text-[9px] text-gray-600 font-mono w-4 text-center group-hover:text-primary/50 transition-colors shrink-0">{globalIdx}</span>
-                          <span className="text-[11px] font-medium text-gray-400 truncate group-hover:text-white transition-colors">
-                            {track.title} 
-                            <span className="text-primary/70 ml-1 font-black text-[9px]">[{track.generatedImages?.length || 0}]</span>
-                          </span>
+                return (
+                  <>
+                    {paginatedTracks.map((track, idx) => {
+                      const globalIdx = startIndex + idx + 1;
+                      return (
+                        <div key={idx} className="flex items-center group hover:bg-white/5 overflow-hidden transition-all h-[28px] px-1 -mx-1">
+                          <button
+                            onClick={() => handleLoadFromHistory(track)}
+                            className="flex-1 text-left px-3 py-1.5 flex items-center justify-between relative overflow-hidden"
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden relative z-10 flex-1">
+                              <span className="text-[9px] text-primary/40 font-mono w-4 text-center group-hover:text-primary transition-colors shrink-0">{globalIdx}</span>
+                              <span className="text-xs font-bold text-gray-300 truncate group-hover:text-white transition-colors">
+                                {track.title} 
+                                <span className="text-primary/60 ml-2 text-[8px] font-black uppercase">{track.generatedImages?.length || 0} Images</span>
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 relative z-10">
+                              <span className="text-[8px] text-gray-600 font-medium tabular-nums">
+                                {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
+                              </span>
+                            </div>
+                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteHistory(e, track.title)}
+                            className="w-[36px] h-full flex items-center justify-center bg-red-500/5 hover:bg-red-500/20 text-red-400 border-l border-white/5 transition-colors opacity-0 group-hover:opacity-100"
+                            title="히스토리에서 삭제 (DB 반영)"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 relative z-10">
-                          <span className="text-[9px] text-gray-600 font-medium tracking-tighter">
-                            {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
-                          </span>
-                          <ChevronRight className="w-3 h-3 text-gray-700 group-hover:text-primary transition-all" />
-                        </div>
-                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
-                      </button>
-                    );
-                  })}
+                      );
+                    })}
 
                   {/* 페이지네이션 컨트롤 */}
                   {totalPages > 1 && (
@@ -640,9 +720,61 @@ export const ImageTab = ({
                 </>
               );
             })()}
+            </div>
           </div>
         </div>
       )}
+
+      {/* Orphaned Images Scanner Panel */}
+      <GlassCard className="mt-8 border-red-500/20 bg-red-500/5">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
+          <div>
+            <h4 className="text-sm font-black text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> 스토리지 유령 이미지 관리
+            </h4>
+            <p className="text-xs text-gray-400 mt-1">DB에는 없지만 스토리지에 남아있는 '미아 이미지'들을 스캔하고 삭제하여 용량을 확보합니다.</p>
+          </div>
+          <button
+            onClick={scanOrphanedImages}
+            disabled={isScanningOrphans}
+            className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all border border-red-500/30"
+          >
+            <Search className={cn("w-4 h-4", isScanningOrphans && "animate-spin")} />
+            {isScanningOrphans ? "스토리지 전체 스캔 중..." : "유령 이미지 찾기"}
+          </button>
+        </div>
+
+        {orphanedImages.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {orphanedImages.map((img, i) => (
+              <div key={i} className="relative group rounded-xl overflow-hidden aspect-square border border-white/10 bg-black/60">
+                <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2">
+                  <a
+                    href={img.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-md"
+                    title="크게 보기 / 다운로드"
+                  >
+                    <DownloadCloud className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => deleteOrphanedImage(img.name, img.url)}
+                    className="p-2 bg-red-500/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md"
+                    title="스토리지 영구 삭제"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="absolute bottom-0 inset-x-0 bg-black/80 px-2 py-1">
+                  <p className="text-[8px] text-gray-400 truncate text-center">{img.name}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
 
       <Terminal logs={logs} />
     </motion.div>

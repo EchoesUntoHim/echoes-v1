@@ -273,15 +273,31 @@ export const VideoSettingsPanel = ({
               <span className="text-xs font-black text-white uppercase tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">가사 및 노래방 효과</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Music className="w-3.5 h-3.5 text-[#00FFA3] animate-pulse" />
-              <select
-                value={settings.lyricsEffect || 'none'}
-                onChange={(e) => onChange({ ...settings, lyricsEffect: e.target.value })}
-                className="bg-[#1A1F26] border border-[#00FFA3]/30 rounded-lg px-2 py-1 text-[10px] text-[#00FFA3] focus:border-primary outline-none cursor-pointer"
-              >
-                {LYRICS_EFFECTS.map(e => <option key={e.value} value={e.value} className="bg-[#1A1F26]">{e.label}</option>)}
-              </select>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Music className="w-3.5 h-3.5 text-[#00FFA3] animate-pulse" />
+                <select
+                  value={settings.lyricsEffect || 'none'}
+                  onChange={(e) => onChange({ ...settings, lyricsEffect: e.target.value })}
+                  className="bg-[#1A1F26] border border-[#00FFA3]/30 rounded-lg px-2 py-1 text-[10px] text-[#00FFA3] focus:border-primary outline-none cursor-pointer"
+                >
+                  {LYRICS_EFFECTS.map(e => <option key={e.value} value={e.value} className="bg-[#1A1F26]">{e.label}</option>)}
+                </select>
+              </div>
+
+              {settings.lyricsEffect === 'karaoke' && (
+                <div className="flex items-center gap-2 bg-white/5 rounded-lg border border-white/10 px-2 py-1">
+                  <Palette className="w-3 h-3 text-primary shrink-0" />
+                  <span className="text-[9px] text-gray-500 font-bold uppercase">하이라이트</span>
+                  <input
+                    type="color"
+                    value={settings.karaokeColor || '#00FFA3'}
+                    onChange={(e) => onChange({ ...settings, karaokeColor: e.target.value })}
+                    className="w-4 h-4 rounded cursor-pointer bg-transparent border-none shrink-0"
+                    title="노래방 하이라이트 색상"
+                  />
+                </div>
+              )}
             </div>
           </div>
 

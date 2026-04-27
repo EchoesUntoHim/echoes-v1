@@ -747,14 +747,29 @@ export const SettingsPage = ({
           </div>
           <div>
             <h3 className="text-lg font-bold text-red-500">데이터 초기화 및 캐시 삭제</h3>
-            <p className="text-xs text-gray-400">앱이 꼬이거나 이전 작업 데이터가 계속 남을 때 사용하세요. 모든 설정과 작업 내용이 삭제됩니다.</p>
+            <p className="text-xs text-gray-400">앱이 꼬이거나 이전 작업 데이터가 계속 남을 때 사용하세요. 곡 데이터를 보존하는 '캐시 비우기'와 '전체 초기화' 중 선택할 수 있습니다.</p>
           </div>
         </div>
         
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3 flex-wrap">
           <button
             onClick={() => {
-              if (window.confirm("⚠️ 정말로 모든 데이터를 초기화하시겠습니까? 저장된 API 키와 작업 내용이 모두 삭제되며 페이지가 새로고침됩니다.")) {
+              if (window.confirm("⚠️ 임시 작업 캐시(찌꺼기)를 삭제하시겠습니까?\n\n(소중한 곡 데이터와 API 키는 유지되며 브라우저 용량 5MB 제한이 해제됩니다.)")) {
+                localStorage.removeItem('echoesuntohim_workflow');
+                localStorage.removeItem('echoesuntohim_logs');
+                alert("✅ 캐시가 성공적으로 비워졌습니다. 이제 정상적으로 로그인이 가능합니다!");
+                window.location.reload();
+              }
+            }}
+            className="px-6 py-2 bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded-xl font-bold hover:bg-yellow-500 hover:text-white transition-all shadow-lg flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4" />
+            캐시 비우기 (용량 확보용)
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm("⚠️ 정말로 모든 데이터를 초기화하시겠습니까? 저장된 API 키와 곡 작업 내용이 모두 영구 삭제됩니다!")) {
                 if (onReset) {
                   onReset();
                 } else {
@@ -765,8 +780,8 @@ export const SettingsPage = ({
             }}
             className="px-6 py-2 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 flex items-center gap-2"
           >
-            <AlertCircle className="w-4 h-4" />
-            모든 데이터 초기화 실행
+            <Trash2 className="w-4 h-4" />
+            모든 데이터 폭파 (전체 초기화)
           </button>
         </div>
       </GlassCard>

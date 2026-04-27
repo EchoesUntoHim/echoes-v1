@@ -64,6 +64,7 @@ interface PublishTabProps {
   fetchAvailableModels?: () => void;
   shortsCount: number;
   handleUploadToPlatform: (platform: 'youtube' | 'tiktok', type: string, index?: number) => Promise<void>;
+  onReset?: () => void;
 }
 
 export const PublishTab = ({
@@ -81,7 +82,8 @@ export const PublishTab = ({
   availableModels,
   fetchAvailableModels,
   shortsCount,
-  handleUploadToPlatform
+  handleUploadToPlatform,
+  onReset
 }: PublishTabProps) => {
   const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
   const [isStrategyVisible, setIsStrategyVisible] = useState(true);

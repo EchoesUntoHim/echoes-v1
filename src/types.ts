@@ -31,6 +31,7 @@ export interface MusicParams {
   vocalSwap?: string;
   useEnglish?: boolean;
   genderKey?: 'male' | 'female' | 'original';
+  referenceLink?: string;
 }
 
 export type ImageType = 'main' | 'tiktok' | 'shorts';
@@ -69,6 +70,7 @@ export interface TitleSettings {
   showVisualizer?: boolean;
   particleSystem?: string;
   lyricsEffect?: string;
+  karaokeColor?: string;
 }
 
 export interface BlogSettings {
@@ -115,7 +117,8 @@ export const createDefaultSettings = (): TitleSettings => ({
   videoOverlayIntensity: 0.5,
   showVisualizer: false,
   particleSystem: 'none',
-  lyricsEffect: 'none'
+  lyricsEffect: 'none',
+  karaokeColor: '#00FFA3'
 });
 
 export interface ImageParams {
