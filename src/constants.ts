@@ -129,6 +129,7 @@ export const ART_STYLES = [
   '재패니즈 애니메이션 (Anime Style)',
   '디즈니/픽사 스타일 (3D Cartoon)',
   '수채화 (Watercolor Painting)',
+  '수묵화 (Ink Wash Painting)',
   '유화 (Oil Painting)',
   '사이버펑크 일러스트 (Cyberpunk Art)',
   '연필 소묘 (Pencil Sketch)',
@@ -246,7 +247,7 @@ export const IMAGE_STYLES = [
 
 export const BLOG_STYLES = [
   '전문가/정보전달형 (신뢰감, 논리적, 객관적)',
-  '친근한 이웃형 (공감, 부드러움, 소통형)',
+  '친근한 이웃형 (공감, 부드움, 소통형)',
   '감성 에세이형 (서정적, 감각적, 여운)',
   '유머/재치형 (재미, 센스, 가벼운 톤)',
   '리뷰/체험단형 (솔직함, 디테일, 경험 위주)',
@@ -291,80 +292,83 @@ export const TITLE_ANIMATIONS: { value: TitleAnimation; label: string }[] = [
 ];
 
 export const KOREAN_FONTS = [
-  { value: "'Nanum Pen Script', cursive", label: '나눔 펜 (Handwriting)' },
-  { value: "'Nanum Brush Script', cursive", label: '나눔 붓 (Brush)' },
-  { value: "'Gamja Flower', cursive", label: '감자꽃 (Emotional)' },
-  { value: "'Hi Melody', cursive", label: '하이멜로디 (Cute)' },
-  { value: "'Gaegu', cursive", label: '개구체 (Hand)' },
-  { value: "'Poor Story', cursive", label: '푸어스토리 (Narrative)' },
-  { value: "'Gowun Batang', serif", label: '고운바탕 (Elegant Serif)' },
-  { value: "'Gowun Dodum', sans-serif", label: '고운돋움 (Elegant Sans)' },
-  { value: "'Sunflower', sans-serif", label: '해바라기 (Modern Script)' },
-  { value: "'Dokdo', cursive", label: '독도체 (Unique)' },
-  { value: "'East Sea Dokdo', cursive", label: '동해독도 (Rough)' },
-  { value: "'Jua', sans-serif", label: '주아체 (Bouncy)' },
-  { value: "'Nanum Myeongjo', serif", label: '나눔명조 (Classic Serif)' },
-  { value: "'Nanum Gothic', sans-serif", label: '나눔고딕 (Gothic 1)' },
-  { value: "'Do Hyeon', sans-serif", label: '도현체 (Gothic 2)' }
-];
-
-export const ENGLISH_FONTS = [
-  { value: "'Dancing Script', cursive", label: 'Dancing Script' },
-  { value: "'Pacifico', cursive", label: 'Pacifico' },
-  { value: "'Satisfy', cursive", label: 'Satisfy' },
-  { value: "'Great Vibes', cursive", label: 'Great Vibes' },
-  { value: "'Cookie', cursive", label: 'Cookie' },
-  { value: "'Allura', cursive", label: 'Allura' },
-  { value: "'Alex Brush', cursive", label: 'Alex Brush' },
-  { value: "'Pinyon Script', cursive", label: 'Pinyon Script' },
-  { value: "'Sacramento', cursive", label: 'Sacramento' },
-  { value: "'Herr Von Muellerhoff', cursive", label: 'Herr Von Muellerhoff' },
-  { value: "'Rouge Script', cursive", label: 'Rouge Script' },
-  { value: "'Monsieur La Doulaise', cursive", label: 'Monsieur La Doulaise' },
-  { value: "'Miss Fajardose', cursive", label: 'Miss Fajardose' },
-  { value: "'Cedarville Cursive', cursive", label: 'Cedarville Cursive' },
-  { value: "'Homemade Apple', cursive", label: 'Homemade Apple' },
-  { value: 'cursive', label: '필기체 (Cursive)' },
-  { value: 'sans-serif', label: '기본 (Sans)' },
-  { value: 'serif', label: '세리프 (Serif)' },
-  { value: 'monospace', label: '고정폭 (Mono)' },
-  { value: "'Inter', sans-serif", label: 'Inter' },
-  { value: "'Roboto', sans-serif", label: 'Roboto' },
-  { value: "'Playfair Display', serif", label: 'Playfair' },
-  { value: "'Montserrat', sans-serif", label: 'Montserrat' },
-  { value: "'Oswald', sans-serif", label: 'Oswald' },
-  { value: "'Poppins', sans-serif", label: 'Poppins' }
-];
-
-export const LYRICS_KOREAN_FONTS = [
+  { value: 'sans-serif', label: '--- 붓글씨 (Brush/Art) ---' },
+  { value: "'Nanum Brush Script', cursive", label: '나눔 붓 (Nanum Brush)' },
+  { value: "'Gowun Batang', serif", label: '고운 바탕 (Gowun Batang)' },
+  { value: "'AsiaGyeolhon', cursive", label: '결혼체 (Asia Gyeolhon)' },
+  { value: "'HaneulSanchaek_M', cursive", label: '하늘산책 (M)' },
+  { value: "'HaneulSanchaek_L', cursive", label: '하늘산책 (L)' },
   { value: 'sans-serif', label: '--- 정자체 (Regular) ---' },
   { value: "'Noto Sans KR', sans-serif", label: '본고딕 (Noto Sans)' },
   { value: "'Nanum Gothic', sans-serif", label: '나눔고딕 (Nanum Gothic)' },
   { value: "'Nanum Myeongjo', serif", label: '나눔명조 (Nanum Myeongjo)' },
   { value: "'Gowun Dodum', sans-serif", label: '고운돋움 (Gowun Dodum)' },
-  { value: 'sans-serif', label: '--- 귀여운/감성 (Cute) ---' },
+  { value: "'Do Hyeon', sans-serif", label: '도현체 (Do Hyeon)' },
+  { value: 'sans-serif', label: '--- 필기/감성 (Handwriting) ---' },
+  { value: "'Nanum Pen Script', cursive", label: '나눔 펜 (Nanum Pen)' },
   { value: "'Gamja Flower', cursive", label: '감자꽃 (Gamja Flower)' },
   { value: "'Hi Melody', cursive", label: '하이멜로디 (Hi Melody)' },
   { value: "'Gaegu', cursive", label: '개구체 (Gaegu)' },
   { value: "'Jua', sans-serif", label: '주아체 (Jua)' },
   { value: "'Poor Story', cursive", label: '푸어스토리 (Poor Story)' },
-  { value: "'Nanum Pen Script', cursive", label: '나눔펜 (Nanum Pen)' }
+  { value: "'Sunflower', sans-serif", label: '해바라기 (Sunflower)' }
 ];
 
-export const LYRICS_ENGLISH_FONTS = [
-  { value: 'sans-serif', label: '--- 정자체 (Regular) ---' },
+export const ENGLISH_FONTS = [
+  { value: 'sans-serif', label: '--- Brush/Script ---' },
+  { value: "'Alex Brush', cursive", label: 'Alex Brush' },
+  { value: "'Great Vibes', cursive", label: 'Great Vibes' },
+  { value: "'Pacifico', cursive", label: 'Pacifico' },
+  { value: "'Dancing Script', cursive", label: 'Dancing Script' },
+  { value: "'Satisfy', cursive", label: 'Satisfy' },
+  { value: "'Cookie', cursive", label: 'Cookie' },
+  { value: "'Sacramento', cursive", label: 'Sacramento' },
+  { value: 'sans-serif', label: '--- Regular ---' },
   { value: "'Inter', sans-serif", label: 'Inter' },
   { value: "'Roboto', sans-serif", label: 'Roboto' },
   { value: "'Montserrat', sans-serif", label: 'Montserrat' },
-  { value: "'Open Sans', sans-serif", label: 'Open Sans' },
-  { value: 'sans-serif', label: '--- 감성/필기 (Cute/Script) ---' },
-  { value: "'Dancing Script', cursive", label: 'Dancing Script' },
-  { value: "'Pacifico', cursive", label: 'Pacifico' },
-  { value: "'Satisfy', cursive", label: 'Satisfy' },
-  { value: "'Great Vibes', cursive", label: 'Great Vibes' },
-  { value: "'Cookie', cursive", label: 'Cookie' },
-  { value: "'Sacramento', cursive", label: 'Sacramento' }
+  { value: "'Oswald', sans-serif", label: 'Oswald' },
+  { value: "'Poppins', sans-serif", label: 'Poppins' },
+  { value: "'Playfair Display', serif", label: 'Playfair Display' }
 ];
+
+export const LYRICS_KOREAN_FONTS = [
+  { value: 'sans-serif', label: '--- 붓글씨 (Brush/Art) ---' },
+  { value: "'Nanum Brush Script', cursive", label: '나눔 붓 (Nanum Brush)' },
+  { value: "'Gowun Batang', serif", label: '고운 바탕 (Gowun Batang)' },
+  { value: "'AsiaGyeolhon', cursive", label: '결혼체 (Asia Gyeolhon)' },
+  { value: "'HaneulSanchaek_M', cursive", label: '하늘산책 (M)' },
+  { value: "'HaneulSanchaek_L', cursive", label: '하늘산책 (L)' },
+  { value: 'sans-serif', label: '--- 정자체 (Regular) ---' },
+  { value: "'Noto Sans KR', sans-serif", label: '본고딕 (Noto Sans)' },
+  { value: "'Nanum Gothic', sans-serif", label: '나눔고딕 (Nanum Gothic)' },
+  { value: "'Nanum Myeongjo', serif", label: '나눔명조 (Nanum Myeongjo)' },
+  { value: "'Gowun Dodum', sans-serif", label: '고운돋움 (Gowun Dodum)' },
+  { value: 'sans-serif', label: '--- 필기/감성 (Handwriting) ---' },
+  { value: "'Nanum Pen Script', cursive", label: '나눔 펜 (Nanum Pen)' },
+  { value: "'Gamja Flower', cursive", label: '감자꽃 (Gamja Flower)' },
+  { value: "'Hi Melody', cursive", label: '하이멜로디 (Hi Melody)' },
+  { value: "'Gaegu', cursive", label: '개구체 (Gaegu)' },
+  { value: "'Jua', sans-serif", label: '주아체 (Jua)' },
+  { value: "'Poor Story', cursive", label: '푸어스토리 (Poor Story)' }
+];
+
+export const LYRICS_ENGLISH_FONTS = [
+  { value: 'sans-serif', label: '--- Brush/Script ---' },
+  { value: "'Alex Brush', cursive", label: 'Alex Brush' },
+  { value: "'Great Vibes', cursive", label: 'Great Vibes' },
+  { value: "'Pacifico', cursive", label: 'Pacifico' },
+  { value: "'Dancing Script', cursive", label: 'Dancing Script' },
+  { value: "'Satisfy', cursive", label: 'Satisfy' },
+  { value: "'Cookie', cursive", label: 'Cookie' },
+  { value: "'Sacramento', cursive", label: 'Sacramento' },
+  { value: 'sans-serif', label: '--- Regular ---' },
+  { value: "'Inter', sans-serif", label: 'Inter' },
+  { value: "'Roboto', sans-serif", label: 'Roboto' },
+  { value: "'Montserrat', sans-serif", label: 'Montserrat' },
+  { value: "'Open Sans', sans-serif", label: 'Open Sans' }
+];
+
 export const VIDEO_MOTIONS = [
   { value: 'none', label: '움직임: 없음' },
   { value: 'ken_burns_in', label: '켄 번즈: 확대 (Zoom In)' },

@@ -1,4 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Nanum+Brush+Script&family=Gowun+Dodum&family=Gowun+Batang&family=Gaegu&family=Poor+Story&family=Gamja+Flower&family=Sunflower:wght@300;500;700&family=Dokdo&family=East+Sea+Dokdo&family=Hi+Melody&family=Jua&family=Do+Hyeon&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;700;900&family=Inter:wght@400;700;900&family=Roboto:wght@400;700&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Poppins:wght@400;700&family=Open+Sans:wght@400;700&family=Dancing+Script&family=Pacifico&family=Satisfy&family=Great+Vibes&family=Cookie&family=Sacramento&family=Playfair+Display:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Nanum+Pen+Script&family=Nanum+Brush+Script&family=Gowun+Dodum&family=Gowun+Batang&family=Gaegu&family=Poor+Story&family=Gamja+Flower&family=Sunflower:wght@300;500;700&family=Dokdo&family=East+Sea+Dokdo&family=Hi+Melody&family=Jua&family=Do+Hyeon&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;700;900&family=Inter:wght@400;700;900&family=Roboto:wght@400;700&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Poppins:wght@400;700&family=Open+Sans:wght@400;700&family=Dancing+Script&family=Pacifico&family=Satisfy&family=Great+Vibes&family=Cookie&family=Sacramento&family=Playfair+Display:wght@400;700;900&display=swap');
+
+/* 감성 폰트 로컬 주입 */
+@font-face {
+    font-family: 'AsiaGyeolhon';
+    src: url('/fonts/Asia결혼체.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'HaneulSanchaek_M';
+    src: url('/fonts/a하늘산책M.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'HaneulSanchaek_L';
+    src: url('/fonts/a하늘산책L.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
 @import "tailwindcss";
 
 @theme {
