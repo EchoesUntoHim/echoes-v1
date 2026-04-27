@@ -236,6 +236,7 @@ export const IMAGE_STYLES = [
   { value: 'Retro', label: '레트로' },
   { value: 'Surrealism', label: '초현실주의' },
   { value: 'Sketch', label: '스케치' },
+  { value: 'Ink Wash', label: '수묵화' },
   { value: 'Vibrant', label: '선명한' },
   { value: 'Dark & Moody', label: '어둡고 분위기 있는' },
   { value: 'Ethereal', label: '몽환적인' },
