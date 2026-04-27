@@ -3276,7 +3276,7 @@ export default function App() {
               <span className="text-[7px] font-black text-primary tracking-[0.2em] uppercase opacity-80">AI Vision</span>
               <div className="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-full flex items-center gap-0.5 shadow-[0_0_10px_rgba(0,255,163,0.1)]">
                 <div className="w-0.5 h-0.5 bg-primary rounded-full animate-pulse" />
-                <span className="text-[7px] font-black text-primary uppercase">v1.12.22 PREMIUM</span>
+                <span className="text-[7px] font-black text-primary uppercase">v1.12.23 PREMIUM</span>
               </div>
             </div>
           </div>
