@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RefreshCw, Play, Pause, ChevronRight, Music, Save, AlertCircle, Trash2, SkipBack, SkipForward, Volume2, Download } from 'lucide-react';
+import { RefreshCw, Play, Pause, ChevronRight, Music, Save, AlertCircle, Trash2, SkipBack, SkipForward, Volume2, Download, Database, Sparkles, FileText, Image as ImageIcon } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { Terminal } from './Terminal';
 import { db } from '../firebase';
@@ -34,10 +34,11 @@ interface SunoAudioListProps {
     aiEngine: string;
     analyzeAudioComprehensively: (file: File, options?: { skipSync?: boolean; referenceLyrics?: string }) => Promise<any>;
     user: User | null;
-    tracks: SunoTrack[];
-    setTracks: React.Dispatch<React.SetStateAction<SunoTrack[]>>;
+    tracks: any[];
+    setTracks: React.Dispatch<React.SetStateAction<any[]>>;
     /** 음원 분석 완료 후 오디오 데이터 URL과 파일명을 상위(App)로 전달하는 콜백 */
     onAudioReady?: (dataUrl: string, name: string) => void;
+    deleteTrack?: (id: string, type: string) => Promise<void>;
 }
 
 /** 가사에 타임스탬프가 없으면 추정 타임스탬프를 균등 분배하여 추가 */
@@ -74,7 +75,8 @@ export const SunoAudioList = ({
     user,
     tracks,
     setTracks,
-    onAudioReady
+    onAudioReady,
+    deleteTrack
 }: SunoAudioListProps) => {
     const [jsonInput, setJsonInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -90,6 +92,9 @@ export const SunoAudioList = ({
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [activeFolder, setActiveFolder] = useState<'all' | 'song' | 'lyrics' | 'image' | 'meditation'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+
 
     // Player event listeners
     useEffect(() => {
@@ -125,7 +130,7 @@ export const SunoAudioList = ({
         }
     }, [audioElement, tracks, playingTrackId]);
 
-    const handlePlayToggle = (track: SunoTrack) => {
+    const handlePlayToggle = (track: any) => {
         if (playingTrackId === track.id) {
             if (isPlaying) {
                 audioElement?.pause();
@@ -140,7 +145,10 @@ export const SunoAudioList = ({
             audioElement.src = '';
         }
 
-        const newAudio = new Audio(track.audio_url);
+        const audioUrl = track.audio_url || track.url;
+        if (!audioUrl) return;
+
+        const newAudio = new Audio(audioUrl);
         newAudio.play();
         setAudioElement(newAudio);
         setPlayingTrackId(track.id);
@@ -560,179 +568,209 @@ export const SunoAudioList = ({
                 </div>
             </GlassCard>
 
-            {/* Split View */}
-            <div className="flex flex-col lg:flex-row gap-6 min-h-[600px]">
-                {/* Left: List View */}
-                <GlassCard className="flex-[3] p-4 flex flex-col max-h-[700px]">
-                    <div className="flex justify-between items-center mb-4 px-2">
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="checkbox"
-                                checked={tracks.length > 0 && selectedIds.size === tracks.length}
-                                onChange={toggleSelectAll}
-                                className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary"
-                            />
-                            <h3 className="font-bold text-lg">내 곡 목록 <span className="text-gray-500 text-sm font-normal ml-2">{tracks.length}곡</span></h3>
+            {/* Integrated Library (Folder System) */}
+            <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left: Folder & List View */}
+                <GlassCard className="flex-[3] p-6 flex flex-col max-h-[800px]">
+                    <div className="flex flex-col gap-6 mb-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Database className="w-5 h-5 text-primary" />
+                                <h2 className="text-xl font-black uppercase tracking-widest">이미지 도서관</h2>
+                            </div>
+                            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                                {[
+                                    { id: 'all', label: '전체', icon: <Database className="w-3 h-3" /> },
+                                    { id: 'song', label: '곡', icon: <Music className="w-3 h-3" /> },
+                                    { id: 'lyrics', label: '가사', icon: <FileText className="w-3 h-3" /> },
+                                    { id: 'image', label: '이미지', icon: <ImageIcon className="w-3 h-3" /> },
+                                    { id: 'meditation', label: '묵상', icon: <Sparkles className="w-3 h-3" /> }
+                                ].map(cat => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => { setActiveFolder(cat.id as any); setCurrentPage(1); }}
+                                        className={cn(
+                                            "px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2",
+                                            activeFolder === cat.id ? "bg-primary text-background shadow-lg" : "text-gray-500 hover:text-white"
+                                        )}
+                                    >
+                                        {cat.icon}
+                                        {cat.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            {selectedIds.size > 0 && (
-                                <button
-                                    onClick={handleDeleteSelected}
-                                    className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 transition-all flex items-center gap-1"
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                    선택 삭제 ({selectedIds.size})
-                                </button>
-                            )}
+
+                        <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={tracks.length > 0 && selectedIds.size === tracks.length}
+                                    onChange={toggleSelectAll}
+                                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary"
+                                />
+                                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                                    Total {tracks.length} items
+                                </span>
+                            </div>
                             <button
                                 onClick={handleClearAll}
-                                className="text-xs bg-white/5 hover:bg-white/10 text-gray-400 px-3 py-1.5 rounded-lg border border-white/10 transition-all"
+                                className="text-[10px] font-black text-gray-600 hover:text-red-400 transition-colors uppercase tracking-widest"
                             >
-                                전체 삭제
+                                Clear List
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                        <AnimatePresence>
-                            {/* CCM Group */}
-                            {(() => {
-                                const ccmTracks = tracks.filter(t => t.title?.includes('[CCM]')).sort((a, b) => {
-                                    const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
-                                    const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
-                                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                        {(() => {
+                            const filteredTracks = (tracks || [])
+                                .filter(t => t && (t.id || t.title))
+                                .filter(t => activeFolder === 'all' || t.type === activeFolder)
+                                .sort((a, b) => {
+                                    const getTime = (val: any) => {
+                                        if (!val) return 0;
+                                        if (typeof val.toDate === 'function') return val.toDate().getTime();
+                                        const d = new Date(val);
+                                        return isNaN(d.getTime()) ? 0 : d.getTime();
+                                    };
+                                    return getTime(b.created_at || b.createdAt) - getTime(a.created_at || a.createdAt);
                                 });
 
-                                if (ccmTracks.length === 0) return null;
+                            const itemsPerPage = 20;
+                            const totalPages = Math.ceil(filteredTracks.length / itemsPerPage);
+                            const startIndex = (currentPage - 1) * itemsPerPage;
+                            const paginatedTracks = filteredTracks.slice(startIndex, startIndex + itemsPerPage);
 
+                            if (paginatedTracks.length === 0) {
                                 return (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
-                                            <span className="text-[10px] font-black bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 uppercase tracking-widest">CCM</span>
-                                            <div className="h-[1px] flex-1 bg-gradient-to-r from-primary/30 to-transparent" />
-                                        </div>
-                                        {ccmTracks.map(track => (
-                                            <motion.div
-                                                key={track.id}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, height: 0, margin: 0, overflow: 'hidden' }}
-                                                onClick={() => setSelectedTrackId(track.id)}
-                                                className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(track.id)}
-                                                    onClick={(e) => toggleSelect(e, track.id)}
-                                                    onChange={() => { }}
-                                                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
-                                                />
-                                                <div
-                                                    className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
-                                                    onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
-                                                >
-                                                    {track.image_url ? (
-                                                        <img src={track.image_url} alt="cover" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 text-gray-600" /></div>
-                                                    )}
-                                                    <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${playingTrackId === track.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                                        {playingTrackId === track.id && isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
-                                                    <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => handleDelete(e, track.id)}
-                                                    className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                                                    title="목록에서 삭제"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </motion.div>
-                                        ))}
+                                    <div className="py-40 text-center flex flex-col items-center justify-center bg-white/5 rounded-3xl border border-dashed border-white/10">
+                                        <AlertCircle className="w-10 h-10 mb-4 opacity-20" />
+                                        <p className="text-sm font-bold text-gray-500">이 카테고리에는 데이터가 없습니다.</p>
                                     </div>
                                 );
-                            })()}
+                            }
 
-                            {/* POP Group */}
-                            {(() => {
-                                const popTracks = tracks.filter(t => !t.title?.includes('[CCM]')).sort((a, b) => {
-                                    const dateA = a && a.created_at ? new Date(a.created_at).getTime() : 0;
-                                    const dateB = b && b.created_at ? new Date(b.created_at).getTime() : 0;
-                                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
-                                });
-
-                                if (popTracks.length === 0) return null;
-
-                                return (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2 px-2 py-1 sticky top-0 bg-[#0F1216] z-10">
-                                            <span className="text-[10px] font-black bg-white/10 text-gray-400 px-2 py-0.5 rounded border border-white/10 uppercase tracking-widest">대중음악</span>
-                                            <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent" />
-                                        </div>
-                                        {popTracks.map(track => (
-                                            <motion.div
-                                                key={track.id}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, height: 0, margin: 0, overflow: 'hidden' }}
-                                                onClick={() => setSelectedTrackId(track.id)}
-                                                className={`flex items-center gap-4 p-2 rounded-xl cursor-pointer group transition-all ${selectedTrackId === track.id ? 'bg-primary/20 border border-primary/30' : 'hover:bg-white/5 border border-transparent'}`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(track.id)}
-                                                    onClick={(e) => toggleSelect(e, track.id)}
-                                                    onChange={() => { }}
-                                                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary ml-2 cursor-pointer"
-                                                />
-                                                <div
-                                                    className="w-12 h-12 relative rounded-md overflow-hidden bg-black/40 flex-shrink-0 cursor-pointer"
-                                                    onClick={(e) => { e.stopPropagation(); handlePlayToggle(track); }}
-                                                >
-                                                    {track.image_url ? (
-                                                        <img src={track.image_url} alt="cover" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 text-gray-600" /></div>
+                            return (
+                                <>
+                                    <AnimatePresence mode="popLayout">
+                                        {paginatedTracks.map((track, idx) => {
+                                            const globalIdx = startIndex + idx + 1;
+                                            const displayImg = track.image_url || track.imageUrl || track.bgImage || track.url;
+                                            
+                                            return (
+                                                <motion.div
+                                                    key={track.id}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, x: -20 }}
+                                                    onClick={() => setSelectedTrackId(track.id)}
+                                                    className={cn(
+                                                        "flex items-center gap-4 p-3 rounded-2xl cursor-pointer group transition-all",
+                                                        selectedTrackId === track.id ? "bg-primary/10 border border-primary/30" : "hover:bg-white/5 border border-transparent"
                                                     )}
-                                                    <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity ${playingTrackId === track.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                                        {playingTrackId === track.id && isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-white text-sm truncate" title={track.title || 'Untitled'}>{track.title || 'Untitled'}</h4>
-                                                    <p className="text-xs text-gray-400 truncate">{new Date(track.created_at).toLocaleDateString()} • {track.status}</p>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => handleDelete(e, track.id)}
-                                                    className="w-8 h-8 rounded-full text-red-400 hover:bg-red-400/20 hover:text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                                                    title="목록에서 삭제"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </motion.div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
-                        </AnimatePresence>
+                                                    <div className="flex items-center gap-3 shrink-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedIds.has(track.id)}
+                                                            onClick={(e) => toggleSelect(e, track.id)}
+                                                            onChange={() => { }}
+                                                            className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary"
+                                                        />
+                                                        <span className="text-[10px] text-primary/40 font-mono w-4 text-center">{globalIdx}</span>
+                                                    </div>
 
-                        {tracks.length > 0 && (
-                            <div className="py-6 mt-4 border-t border-white/5 text-center">
-                                <p className="text-xs text-primary/60 font-mono tracking-widest uppercase">
-                                    Total {tracks.length} Tracks Syncing...
-                                </p>
-                            </div>
-                        )}
-                        {tracks.length === 0 && !isLoading && (
-                            <div className="py-20 text-center text-gray-500">
-                                <Music className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                                <p>곡 목록이 비어있습니다.</p>
-                            </div>
-                        )}
+                                                    <div 
+                                                        className="w-12 h-12 relative rounded-xl overflow-hidden bg-black/40 shrink-0"
+                                                        onClick={(e) => { e.stopPropagation(); if (track.audio_url || track.url) handlePlayToggle(track); }}
+                                                    >
+                                                        {displayImg ? (
+                                                            <img src={displayImg} alt="cover" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center">
+                                                                {track.type === 'lyrics' ? <FileText className="w-6 h-6 text-emerald-500/50" /> : <Music className="w-6 h-6 text-gray-600" />}
+                                                            </div>
+                                                        )}
+                                                        {(track.audio_url || track.url) && (
+                                                            <div className={cn(
+                                                                "absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity",
+                                                                playingTrackId === track.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                                            )}>
+                                                                {playingTrackId === track.id && isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-1" />}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <span className={cn(
+                                                                "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter",
+                                                                track.type === 'song' ? "bg-blue-500/20 text-blue-400" :
+                                                                track.type === 'lyrics' ? "bg-emerald-500/20 text-emerald-400" :
+                                                                track.type === 'image' ? "bg-pink-500/20 text-pink-400" :
+                                                                "bg-amber-500/20 text-amber-400"
+                                                            )}>
+                                                                {track.type || 'Suno'}
+                                                            </span>
+                                                            <h4 className="font-bold text-white text-sm truncate" title={track.title}>{track.title || track.koreanTitle || '무제'}</h4>
+                                                        </div>
+                                                        <p className="text-[10px] text-gray-500 flex items-center gap-2">
+                                                            {new Date(track.created_at || track.createdAt).toLocaleDateString()}
+                                                            <span>•</span>
+                                                            <span className="truncate">{track.metadata?.tags || track.verse || track.prompt || 'No description'}</span>
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); deleteTrack?.(track.id, track.type || 'song'); }}
+                                                            className="p-2 text-red-400/50 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                            title="DB에서 영구 삭제"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+
+                                    {totalPages > 1 && (
+                                        <div className="flex justify-center items-center gap-4 py-8">
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                                className="text-xs font-black text-gray-500 hover:text-primary disabled:opacity-20"
+                                            >
+                                                PREV
+                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                {Array.from({ length: totalPages }).map((_, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCurrentPage(i + 1)}
+                                                        className={cn(
+                                                            "w-8 h-8 rounded-xl text-xs font-black transition-all",
+                                                            currentPage === i + 1 ? "bg-primary text-background" : "bg-white/5 text-gray-500 hover:text-white"
+                                                        )}
+                                                    >
+                                                        {i + 1}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="text-xs font-black text-gray-500 hover:text-primary disabled:opacity-20"
+                                            >
+                                                NEXT
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
                 </GlassCard>
 
@@ -749,52 +787,84 @@ export const SunoAudioList = ({
                             >
                                 <div className="text-center mb-6">
                                     <div className="w-48 h-48 mx-auto rounded-2xl overflow-hidden shadow-2xl mb-4 relative group">
-                                        {selectedTrack.image_url ? (
-                                            <img src={selectedTrack.image_url} alt="cover" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" />
+                                        {selectedTrack.image_url || selectedTrack.imageUrl || selectedTrack.bgImage || selectedTrack.url ? (
+                                            <img src={selectedTrack.image_url || selectedTrack.imageUrl || selectedTrack.bgImage || selectedTrack.url} alt="cover" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" />
                                         ) : (
-                                            <div className="w-full h-full bg-black/40 flex items-center justify-center"><Music className="w-16 h-16 text-gray-600" /></div>
+                                            <div className="w-full h-full bg-black/40 flex items-center justify-center">
+                                                {selectedTrack.type === 'lyrics' ? <FileText className="w-16 h-16 text-emerald-500/30" /> : <Music className="w-16 h-16 text-gray-600" />}
+                                            </div>
                                         )}
-                                        <div
-                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer backdrop-blur-sm"
-                                            onClick={() => handlePlayToggle(selectedTrack)}
-                                        >
-                                            {playingTrackId === selectedTrack.id && isPlaying ? <Pause className="w-12 h-12 text-white" /> : <Play className="w-12 h-12 text-white ml-2" />}
-                                        </div>
+                                        {(selectedTrack.audio_url || selectedTrack.url) && (
+                                            <div
+                                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer backdrop-blur-sm"
+                                                onClick={() => handlePlayToggle(selectedTrack)}
+                                            >
+                                                {playingTrackId === selectedTrack.id && isPlaying ? <Pause className="w-12 h-12 text-white" /> : <Play className="w-12 h-12 text-white ml-2" />}
+                                            </div>
+                                        )}
                                     </div>
-                                    <h2 className="text-xl font-black text-white px-4 truncate" title={selectedTrack.title}>{selectedTrack.title || 'Untitled'}</h2>
+                                    <h2 className="text-xl font-black text-white px-4 truncate" title={selectedTrack.title || selectedTrack.koreanTitle}>{selectedTrack.title || selectedTrack.koreanTitle || '무제'}</h2>
+                                    <p className="text-xs text-primary font-bold mt-1 uppercase tracking-widest">{selectedTrack.type || 'Suno Track'}</p>
                                 </div>
 
                                 <div className="flex gap-2 mb-6">
-                                    <button
-                                        onClick={() => sendToWorkspace(selectedTrack)}
-                                        disabled={isAnalyzing}
-                                        className="flex-1 bg-primary hover:bg-primary/80 text-background font-black py-4 rounded-xl shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.5)] transition-all flex justify-center items-center gap-2 hover:-translate-y-1 disabled:opacity-50"
-                                    >
-                                        {isAnalyzing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
-                                        {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'}
-                                        {!isAnalyzing && <ChevronRight className="w-5 h-5" />}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDownload(selectedTrack)}
-                                        className="px-6 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all flex items-center justify-center border border-white/10 hover:border-white/20 group"
-                                        title="음원 다운로드"
-                                    >
-                                        <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    </button>
+                                    {(selectedTrack.audio_url || selectedTrack.url) && (
+                                        <button
+                                            onClick={() => sendToWorkspace(selectedTrack)}
+                                            disabled={isAnalyzing}
+                                            className="flex-1 bg-primary hover:bg-primary/80 text-background font-black py-4 rounded-xl shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.5)] transition-all flex justify-center items-center gap-2 hover:-translate-y-1 disabled:opacity-50"
+                                        >
+                                            {isAnalyzing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
+                                            {isAnalyzing ? 'AI 분석 중...' : '작업 공간으로 보내기'}
+                                            {!isAnalyzing && <ChevronRight className="w-5 h-5" />}
+                                        </button>
+                                    )}
+                                    {(selectedTrack.audio_url || selectedTrack.url) && (
+                                        <button
+                                            onClick={() => handleDownload(selectedTrack)}
+                                            className="px-6 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all flex items-center justify-center border border-white/10 hover:border-white/20 group"
+                                            title="음원 다운로드"
+                                        >
+                                            <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                        </button>
+                                    )}
+                                    {!selectedTrack.audio_url && !selectedTrack.url && (
+                                        <div className="flex-1 py-4 text-center text-xs text-gray-500 font-bold border border-white/5 rounded-xl bg-white/5 italic">
+                                            오디오 데이터가 없는 항목입니다.
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 bg-black/20 rounded-xl p-4 border border-white/5">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 pb-2 border-b border-white/10">Lyrics</h4>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 pb-2 border-b border-white/10">
+                                        {selectedTrack.type === 'lyrics' ? 'Generated Lyrics' : 
+                                         selectedTrack.type === 'meditation' ? 'Meditation Content' : 'Prompt / Description'}
+                                    </h4>
                                     <p className="text-sm text-gray-300 whitespace-pre-wrap leading-loose font-medium">
-                                        {selectedTrack.metadata?.prompt || <span className="text-gray-600 italic">가사 정보가 없습니다. (Instrumental 이거나 프롬프트 없음)</span>}
+                                        {selectedTrack.lyrics || selectedTrack.content || selectedTrack.verse || selectedTrack.metadata?.prompt || selectedTrack.prompt || 
+                                         <span className="text-gray-600 italic">상세 정보가 없습니다.</span>}
                                     </p>
+                                    
+                                    {selectedTrack.keywords && (
+                                        <div className="mt-6 pt-6 border-t border-white/5">
+                                            <h5 className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Keywords</h5>
+                                            <div className="flex flex-wrap gap-2">
+                                                {(selectedTrack.keywords || []).map((kw: string, i: number) => (
+                                                    <span key={i} className="text-[10px] bg-primary/10 text-primary/70 px-2 py-0.5 rounded">
+                                                        {kw}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         </AnimatePresence>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-                            <Music className="w-16 h-16 opacity-20 mb-4" />
-                            <p>좌측 리스트에서 곡을 선택하세요.</p>
+                            <Database className="w-16 h-16 opacity-20 mb-4" />
+                            <p className="font-bold">라이브러리에서 항목을 선택하세요.</p>
+                            <p className="text-xs opacity-50 mt-2">DB에 저장된 모든 내역을 확인할 수 있습니다.</p>
                         </div>
                     )}
                 </GlassCard>
@@ -814,8 +884,8 @@ export const SunoAudioList = ({
                         {/* Track Info */}
                         <div className="flex items-center gap-3 w-1/4 min-w-[180px]">
                             <div className="w-12 h-12 rounded-lg overflow-hidden bg-white/5 flex-shrink-0 shadow-lg">
-                                {playingTrack.image_url ? (
-                                    <img src={playingTrack.image_url} alt="cover" className="w-full h-full object-cover" />
+                                {playingTrack.image_url || playingTrack.imageUrl || playingTrack.bgImage || playingTrack.url ? (
+                                    <img src={playingTrack.image_url || playingTrack.imageUrl || playingTrack.bgImage || playingTrack.url} alt="cover" className="w-full h-full object-cover" />
                                 ) : (
                                     <Music className="w-6 h-6 text-gray-600 m-3" />
                                 )}
@@ -849,7 +919,7 @@ export const SunoAudioList = ({
                             </div>
 
                             <div className="w-full flex items-center gap-3 text-[10px] text-gray-400 font-mono">
-                                <span className="w-8 text-right">{formatTime(currentTime)}</span>
+                                <span className="w-8 text-right">{(typeof formatTime === 'function') ? formatTime(currentTime) : currentTime}</span>
                                 <div className="flex-1 h-1 bg-white/10 rounded-full relative group cursor-pointer overflow-hidden">
                                     <input
                                         type="range"
@@ -864,7 +934,7 @@ export const SunoAudioList = ({
                                         style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                                     />
                                 </div>
-                                <span className="w-8">{formatTime(duration)}</span>
+                                <span className="w-8">{(typeof formatTime === 'function') ? formatTime(duration) : duration}</span>
                             </div>
                         </div>
 

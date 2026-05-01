@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ImageIcon, Upload, Music, Download, RefreshCw, Key, ChevronRight, CheckCircle2, FileText, Trash2, Search, AlertTriangle, DownloadCloud, Database } from 'lucide-react';
+import { ImageIcon, Upload, Music, Download, RefreshCw, Key, ChevronRight, CheckCircle2, FileText, Trash2, Search, AlertTriangle, DownloadCloud, Database, Check, Zap } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { storage, auth } from '../firebase';
-import { ref, listAll, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, listAll, getDownloadURL, deleteObject, getBlob } from 'firebase/storage';
 import { CanvasPreview } from './CanvasPreview';
 import { VideoSettingsPanel } from './VideoSettingsPanel';
 import { Terminal } from './Terminal';
@@ -20,7 +20,8 @@ import {
   LIGHTING_ATMOSPHERES,
   WEATHERS,
   BACKGROUND_TYPES,
-  IMAGE_ENGINES
+  IMAGE_ENGINES,
+  AI_ENGINES
 } from '../constants';
 
 interface ImageTabProps {
@@ -44,6 +45,9 @@ interface ImageTabProps {
   setImageEngine: (engine: string) => void;
   sunoTracks: any[];
   setSunoTracks: React.Dispatch<React.SetStateAction<any[]>>;
+  saveCurrentImagesToCloud: (setSunoTracks?: React.Dispatch<React.SetStateAction<any[]>>) => Promise<void>;
+  aiEngine: string;
+  setAiEngine: (engine: string) => void;
 }
 
 export const ImageTab = ({
@@ -66,79 +70,95 @@ export const ImageTab = ({
   imageEngine,
   setImageEngine,
   sunoTracks,
-  setSunoTracks
+  setSunoTracks,
+  saveCurrentImagesToCloud,
+  aiEngine,
+  setAiEngine
 }: ImageTabProps) => {
-  const handleLoadFromHistory = (track: any) => {
-    if (track.generatedImages && track.generatedImages.length > 0) {
-      addLog(`📂 [${track.title}] 곡의 기록(이미지/가사/분석)을 불러옵니다.`);
-      setWorkflow(prev => ({
-        ...prev,
-        params: {
-          ...prev.params,
-          title: track.title,
-          koreanTitle: track.title.split('_')[0] || track.title,
-          englishTitle: track.title.split('_')[1] || ''
-        },
-        results: {
-          ...prev.results,
-          images: track.generatedImages,
-          lyrics: track.lyrics || prev.results.lyrics,
-          englishLyrics: track.englishLyrics || prev.results.englishLyrics,
-          audioAnalysis: track.audioAnalysis || prev.results.audioAnalysis
-        }
-      }));
-    }
-  };
-  const [selectedShorts, setSelectedShorts] = React.useState<number[]>([]);
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const itemsPerPage = 20;
 
+  const [selectedShorts, setSelectedShorts] = React.useState<number[]>([]);
   const toggleShortsSelection = (num: number) => {
     setSelectedShorts(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
   };
 
-  const handleDeleteHistory = (e: React.MouseEvent, trackTitle: string) => {
-    e.stopPropagation();
-    if (!confirm(`[${trackTitle}]의 이미지 히스토리를 삭제하시겠습니까?\n(DB에서 이미지 생성 기록만 삭제되며, 수노 곡 정보는 그대로 유지됩니다)`)) return;
-    
-    setSunoTracks(prev => prev.map(t => {
-      if (t.title === trackTitle) {
-        const { generatedImages, ...rest } = t;
-        return rest;
-      }
-      return t;
-    }));
-    addLog(`🗑️ [${trackTitle}] 이미지 생성 기록을 삭제했습니다.`);
+  const [orphanedImages, setOrphanedImages] = React.useState<{ name: string, url: string }[]>([]);
+  const [isScanningOrphans, setIsScanningOrphans] = React.useState(false);
+  const [selectedOrphanNames, setSelectedOrphanNames] = React.useState<Set<string>>(new Set());
+
+  const toggleOrphanSelection = (name: string) => {
+    setSelectedOrphanNames(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   };
 
-  const [orphanedImages, setOrphanedImages] = React.useState<{name: string, url: string}[]>([]);
-  const [isScanningOrphans, setIsScanningOrphans] = React.useState(false);
+  const toggleAllOrphans = () => {
+    if (selectedOrphanNames.size === orphanedImages.length) {
+      setSelectedOrphanNames(new Set());
+    } else {
+      setSelectedOrphanNames(new Set(orphanedImages.map(img => img.name)));
+    }
+  };
+
+  const deleteSelectedOrphans = async () => {
+    if (selectedOrphanNames.size === 0 || !auth.currentUser) return;
+    if (!confirm(`선택한 ${selectedOrphanNames.size}개의 유령 이미지를 스토리지에서 영구 삭제하시겠습니까?`)) return;
+
+    setIsScanningOrphans(true);
+    addLog(`🗑️ 유령 이미지 ${selectedOrphanNames.size}개 일괄 삭제 시작...`);
+
+    try {
+      const namesToDelete = Array.from(selectedOrphanNames);
+      let successCount = 0;
+
+      for (const name of namesToDelete) {
+        const itemRef = ref(storage, `users/${auth.currentUser.uid}/images/${name}`);
+        await deleteObject(itemRef).catch(e => console.warn(`Failed to delete ${name}:`, e));
+        successCount++;
+      }
+
+      setOrphanedImages(prev => prev.filter(img => !selectedOrphanNames.has(img.name)));
+      setSelectedOrphanNames(new Set());
+      addLog(`✅ 유령 이미지 ${successCount}개 삭제 완료.`);
+    } catch (err: any) {
+      addLog(`❌ 일괄 삭제 중 일부 오류가 발생했습니다.`);
+    } finally {
+      setIsScanningOrphans(false);
+    }
+  };
 
   const scanOrphanedImages = async () => {
     if (!auth.currentUser) return;
     setIsScanningOrphans(true);
+    setSelectedOrphanNames(new Set());
     addLog("👻 스토리지에서 유령 이미지 탐색을 시작합니다...");
     try {
-      const dbImageUrls = new Set<string>();
+      const dbImageNames = new Set<string>();
       (sunoTracks || []).forEach(t => {
         if (t.generatedImages) {
           t.generatedImages.forEach((img: any) => {
-            if (img.url) dbImageUrls.add(img.url);
+            if (img.url) {
+              // URL에서 파일명 추출 (토큰 변화 무시)
+              const match = img.url.match(/\/images%2F(.*?)\?/);
+              if (match && match[1]) dbImageNames.add(decodeURIComponent(match[1]));
+            }
           });
         }
       });
 
-      const storageRef = ref(storage, `users/${auth.currentUser.uid}/images`);
+      const storageRef = ref(storage, `users/${auth.currentUser?.uid}/images`);
       const res = await listAll(storageRef);
-      const orphans: {name: string, url: string}[] = [];
-      
+      const orphans: { name: string, url: string }[] = [];
+
       for (const item of res.items) {
-        const url = await getDownloadURL(item);
-        if (!dbImageUrls.has(url)) {
+        if (!dbImageNames.has(item.name)) {
+          const url = await getDownloadURL(item);
           orphans.push({ name: item.name, url });
         }
       }
-      
+
       setOrphanedImages(orphans);
       if (orphans.length > 0) {
         addLog(`⚠️ DB에 없는 유령 이미지 ${orphans.length}개를 스토리지에서 발견했습니다.`);
@@ -167,6 +187,102 @@ export const ImageTab = ({
     }
   };
 
+  const downloadOrphanedImage = async (url: string, name: string) => {
+    addLog(`📥 다운로드 시도: ${name}`);
+    try {
+      // 1. Firebase getBlob 시도
+      const itemRef = ref(storage, `users/${auth.currentUser?.uid}/images/${name}`);
+      const blob = await getBlob(itemRef);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+      addLog(`✅ 직접 다운로드 완료: ${name}`);
+    } catch (err: any) {
+      // 2. 실패 시 안내 및 새 창 열기
+      addLog(`⚠️ 서버 보안 설정(CORS)으로 인해 직접 다운로드가 제한되었습니다.`);
+      addLog(`💡 새 창이 뜨면 '우클릭 > 이미지를 다른 이름으로 저장'을 눌러주세요.`);
+      window.open(url, '_blank');
+    }
+  };
+
+  const loadHistoryItem = (track: any) => {
+    if (!track.generatedImages || track.generatedImages.length === 0) {
+      addLog("⚠️ 해당 히스토리에 저장된 이미지가 없습니다.");
+      return;
+    }
+
+    setWorkflow(prev => ({
+      ...prev,
+      params: {
+        ...prev.params,
+        title: track.title,
+        koreanTitle: track.title.split('_')[0] || track.title,
+        englishTitle: track.title.split('_')[1] || "",
+        lyrics: track.lyrics || prev.params.lyrics,
+        englishLyrics: track.englishLyrics || prev.params.englishLyrics
+      },
+      results: {
+        ...prev.results,
+        images: track.generatedImages,
+        lyrics: track.lyrics || prev.results.lyrics,
+        englishLyrics: track.englishLyrics || prev.results.englishLyrics
+      },
+      imageSettings: track.imageSettings || prev.imageSettings
+    }));
+    addLog(`🔄 [${track.title}] 히스토리 데이터를 현재 작업창으로 불러왔습니다.`);
+  };
+
+  const deleteTrackHistory = async (e: React.MouseEvent, track: any) => {
+    e.stopPropagation(); // 카드 클릭 이벤트(불러오기) 방지
+    if (!auth.currentUser) return;
+    if (!confirm(`[${track.title}] 작업을 정말 삭제하시겠습니까?\n이 곡과 관련된 모든 생성 이미지와 데이터가 영구 삭제됩니다.`)) return;
+
+    try {
+      addLog(`🗑️ [${track.title}] 데이터 및 스토리지 파일 삭제 시작...`);
+
+      // 1. 스토리지 파일 삭제
+      if (track.generatedImages && track.generatedImages.length > 0) {
+        for (const img of track.generatedImages) {
+          if (img.url) {
+            // URL에서 파일명 추출
+            const match = img.url.match(/\/images%2F(.*?)\?/);
+            if (match && match[1]) {
+              const fileName = decodeURIComponent(match[1]);
+              const itemRef = ref(storage, `users/${auth.currentUser.uid}/images/${fileName}`);
+              await deleteObject(itemRef).catch(e => console.warn("File already deleted or not found:", fileName));
+            }
+          }
+        }
+      }
+
+      // 2. DB(sunoTracks)에서 삭제 (App.tsx의 상태 업데이트 필요)
+      setSunoTracks(prev => prev.filter(t => t.id !== track.id));
+
+      // 3. Firestore 삭제 로직 (필요 시 App.tsx에서 전달받은 deleteTrack 함수 사용 가능)
+      // 현재는 setSunoTracks를 통해 상위 상태를 업데이트하여 간접 반영
+
+      addLog(`✅ [${track.title}] 히스토리 및 관련 파일 삭제 완료.`);
+    } catch (err: any) {
+      addLog(`❌ 삭제 중 오류 발생: ${err.message}`);
+    }
+  };
+
+  // [v1.15.28] Filtered tracks: Strict criteria (must have generated images to show in ImageTab)
+  const filteredTracks = React.useMemo(() => {
+    return (sunoTracks || [])
+      .filter(t => (t.title || t.koreanTitle) && t.generatedImages && t.generatedImages.length > 0)
+      .sort((a, b) => {
+        const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
+        const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+  }, [sunoTracks]);
+
   return (
     <motion.div key="image" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
@@ -175,8 +291,27 @@ export const ImageTab = ({
           <p className="text-gray-400">수노(Suno) 음원을 업로드하여 AI가 곡의 분위기를 분석하고 이미지를 생성합니다.</p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          {/* AI 분석 엔진 선택 */}
           <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5">
+            <Zap className="w-3 h-3 text-primary" />
+            <span className="text-[9px] font-black text-primary/50 uppercase tracking-tighter mr-1">분석:</span>
+            <select
+              value={aiEngine}
+              onChange={(e) => setAiEngine(e.target.value)}
+              className="bg-transparent text-[10px] text-white outline-none cursor-pointer font-bold max-w-[150px]"
+            >
+              {AI_ENGINES.map(eng => (
+                <option key={eng.value} value={eng.value} className="bg-[#1A1F26]">
+                  {eng.label} ({eng.type === 'paid' ? '유료' : '무료'})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 이미지 생성 엔진 선택 */}
+          <div className="flex items-center gap-2 bg-black/40 border border-primary/20 rounded-xl px-3 py-1.5 shadow-[0_0_10px_rgba(0,255,163,0.1)]">
             <ImageIcon className="w-3 h-3 text-primary" />
+            <span className="text-[9px] font-black text-primary/50 uppercase tracking-tighter mr-1">이미지:</span>
             <select
               value={imageEngine}
               onChange={(e) => setImageEngine(e.target.value)}
@@ -188,10 +323,6 @@ export const ImageTab = ({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">분석 엔진</span>
-            <p className="text-xs font-mono text-primary">Gemini 3.1 Flash Lite</p>
           </div>
         </div>
       </header>
@@ -329,9 +460,10 @@ export const ImageTab = ({
             </div>
           </GlassCard>
 
-          {/* New Horizontal Upload Row (The Red Square Area) */}
-          <div className="flex flex-wrap items-stretch gap-2">
-            <div className="relative group min-w-[140px] flex-1 h-full">
+          {/* Compact Single Row Layout (Optimized Width & Height) */}
+          <div className="flex items-stretch gap-2 h-[38px]">
+            {/* Audio Upload (Optimized Width) */}
+            <div className="relative group w-[110px] shrink-0">
               <input
                 type="file"
                 accept="audio/*"
@@ -339,36 +471,72 @@ export const ImageTab = ({
                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
               />
               <div className={cn(
-                "w-full h-full py-2.5 px-3 border border-dashed rounded-xl flex items-center gap-3 transition-all",
+                "w-full h-full px-2.5 border border-dashed rounded-xl flex items-center gap-2 transition-all relative overflow-hidden",
                 workflow.results.audioFile ? "bg-primary/10 border-primary/30" : "bg-white/5 border-white/10 hover:border-primary/50"
               )}>
-                <div className={cn("shrink-0 p-1.5 rounded-full", workflow.results.audioFile ? "bg-primary/20" : "bg-white/5")}>
-                  <Music className={cn("w-4 h-4", workflow.results.audioFile ? "text-primary" : "text-gray-400")} />
-                </div>
+                {/* Analysis Progress Bar Overlay */}
+                {workflow.progress.audioAnalysis > 0 && workflow.progress.audioAnalysis < 100 && (
+                  <div
+                    className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-300"
+                    style={{ width: `${workflow.progress.audioAnalysis}%` }}
+                  />
+                )}
+
+                <Music className={cn("w-3.5 h-3.5 shrink-0", workflow.results.audioFile ? "text-primary" : "text-gray-500")} />
                 <div className="overflow-hidden">
-                  <p className="text-[10px] font-bold text-white truncate">
-                    {workflow.results.audioFile ? (workflow.results.audioFile.name || 'Suno Audio') : '음원 업로드'}
+                  <p className="text-[9px] font-bold text-white truncate leading-tight">
+                    {workflow.progress.audioAnalysis > 0 && workflow.progress.audioAnalysis < 100
+                      ? `분석 중... ${workflow.progress.audioAnalysis}%`
+                      : (workflow.results.audioFile ? (workflow.results.audioFile.name || 'Suno Audio') : '음원 업로드')}
                   </p>
-                  <p className="text-[8px] text-gray-500 uppercase tracking-tighter">Suno Track</p>
+                  <p className="text-[7px] text-gray-500 uppercase tracking-tighter">
+                    {workflow.progress.audioAnalysis > 0 && workflow.progress.audioAnalysis < 100 ? 'AI Analyzing' : 'Suno Track'}
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 flex-[2]">
-              {['main', 'tiktok', ...Array.from({ length: shortsCount }).map((_, i) => `shorts_${i + 1}`)].map(type => (
-                <div key={type} className="relative group min-w-[80px] flex-1 h-full">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleSingleImageUpload(type, e)}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                  />
-                  <button className="w-full h-full py-2.5 bg-secondary/5 border border-secondary/20 text-secondary rounded-xl text-[9px] font-bold hover:bg-secondary/10 transition-all flex flex-col items-center justify-center gap-1">
-                    <Upload className="w-3.5 h-3.5" />
-                    {type === 'main' ? '메인' : type === 'tiktok' ? '틱톡' : `쇼츠 ${type.split('_')[1]}`}
-                  </button>
-                </div>
-              ))}
+            {/* Image Uploads (Flexible) */}
+            <div className="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar">
+              {['main', 'tiktok', ...Array.from({ length: shortsCount }).map((_, i) => `shorts_${i + 1}`)].map(type => {
+                const uploadedImg = workflow.results.images?.find((img: any) =>
+                  (type === 'main' && (img.label === '메인 이미지' || img.label === '메인')) ||
+                  (type === 'tiktok' && (img.label === '틱톡/릴스 이미지' || img.label === '틱톡')) ||
+                  (type.startsWith('shorts') && img.label === `숏츠 이미지 ${type.split('_')[1]}`)
+                );
+                const label = type === 'main' ? '메인' : type === 'tiktok' ? '틱톡' : `쇼츠${type.split('_')[1] || ''}`;
+
+                return (
+                  <div key={type} className="relative group w-[64px] shrink-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleSingleImageUpload(type, e)}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    />
+                    <button className={cn(
+                      "w-full h-full border rounded-xl transition-all flex flex-col items-center justify-center gap-0 px-1 leading-none",
+                      uploadedImg
+                        ? "bg-secondary/10 border-secondary/40 text-secondary shadow-[0_0_10px_rgba(0,255,163,0.1)]"
+                        : "bg-white/5 border-white/10 text-gray-500 hover:border-secondary/50"
+                    )}>
+                      {uploadedImg ? (
+                        <div className="flex flex-col items-center gap-0">
+                          <Check className="w-2 h-2 text-secondary" />
+                          <span className="text-[7px] font-black truncate w-[56px] text-center uppercase tracking-tighter">
+                            {uploadedImg.fileName || label}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-0 leading-none">
+                          <Upload className="w-2 h-2 text-gray-600" />
+                          <span className="text-[7px] font-black uppercase tracking-tighter">{label}</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -400,9 +568,9 @@ export const ImageTab = ({
                 <div className="flex gap-1.5">
                   {[1, 2, 3, 4, 5].map(num => (
                     <label key={num} className="flex items-center gap-1 cursor-pointer group">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedShorts.includes(num)} 
+                      <input
+                        type="checkbox"
+                        checked={selectedShorts.includes(num)}
                         onChange={() => toggleShortsSelection(num)}
                         className="hidden"
                       />
@@ -416,7 +584,7 @@ export const ImageTab = ({
                   ))}
                 </div>
               </div>
-              
+
               <button
                 onClick={() => regenerateShorts(selectedShorts)}
                 disabled={selectedShorts.length === 0}
@@ -445,6 +613,20 @@ export const ImageTab = ({
               {workflow.progress.image > 0 && workflow.progress.image < 100
                 ? "이미지 엔진 가동 중..."
                 : "AI 최적화 이미지 전체 생성"}
+            </button>
+
+            <button
+              onClick={() => saveCurrentImagesToCloud(setSunoTracks)}
+              disabled={workflow.results.images.length === 0}
+              className={cn(
+                "w-full py-2.5 rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-2 border",
+                workflow.results.images.length > 0
+                  ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                  : "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed"
+              )}
+            >
+              <Database className="w-3.5 h-3.5" />
+              현재 생성된 이미지 클라우드 DB 저장
             </button>
 
             <div className="flex justify-center pt-2">
@@ -526,7 +708,8 @@ export const ImageTab = ({
                           ...prev,
                           imageSettings: {
                             ...prev.imageSettings,
-                            [typeKey]: newSettings
+                            main: newSettings,
+                            tiktok: newSettings // 메인 설정 변경 시 틱톡도 동시에 업데이트
                           }
                         }))}
                         showLyricsControls={false}
@@ -561,39 +744,39 @@ export const ImageTab = ({
                     return aNum - bNum;
                   })
                   .map((img: any, i: number) => {
-                  const settings = workflow.imageSettings['shorts'] || createDefaultSettings();
-                  return (
-                    <motion.div
-                      key={img.label}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="w-[calc(50%-1rem)] md:w-[calc(33.33%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(20%-1rem)] min-w-[160px] flex flex-col gap-2"
-                    >
-                      <div className="relative rounded-xl overflow-hidden border border-white/10 group aspect-[9/16] w-full bg-black/40">
-                        <CanvasPreview img={img} settings={settings} params={workflow.params} type="shorts" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 z-20">
-                          <button
-                            onClick={() => regenerateSpecificImage(workflow.results.images.findIndex((im: any) => im.label === img.label), 'shorts')}
-                            className="bg-white/20 backdrop-blur-md border border-white/30 p-2 rounded-full hover:bg-white/40 transition-all pointer-events-auto"
-                            title="이 이미지만 재생성"
-                          >
-                            <RefreshCw className="w-4 h-4 text-white" />
-                          </button>
-                          <button
-                            onClick={() => downloadImageWithTitle(img)}
-                            className="bg-primary/40 backdrop-blur-md border border-primary/30 p-2 rounded-full hover:bg-primary/60 transition-all pointer-events-auto"
-                            title="타이틀 포함 다운로드"
-                          >
-                            <Download className="w-4 h-4 text-white" />
-                          </button>
+                    const settings = workflow.imageSettings['shorts'] || createDefaultSettings();
+                    return (
+                      <motion.div
+                        key={img.label}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="w-[calc(50%-1rem)] md:w-[calc(33.33%-1rem)] lg:w-[calc(25%-1rem)] xl:w-[calc(20%-1rem)] min-w-[160px] flex flex-col gap-2"
+                      >
+                        <div className="relative rounded-xl overflow-hidden border border-white/10 group aspect-[9/16] w-full bg-black/40">
+                          <CanvasPreview img={img} settings={settings} params={workflow.params} type="shorts" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 z-20">
+                            <button
+                              onClick={() => regenerateSpecificImage(workflow.results.images.findIndex((im: any) => im.label === img.label), 'shorts')}
+                              className="bg-white/20 backdrop-blur-md border border-white/30 p-2 rounded-full hover:bg-white/40 transition-all pointer-events-auto"
+                              title="이 이미지만 재생성"
+                            >
+                              <RefreshCw className="w-4 h-4 text-white" />
+                            </button>
+                            <button
+                              onClick={() => downloadImageWithTitle(img)}
+                              className="bg-primary/40 backdrop-blur-md border border-primary/30 p-2 rounded-full hover:bg-primary/60 transition-all pointer-events-auto"
+                              title="타이틀 포함 다운로드"
+                            >
+                              <Download className="w-4 h-4 text-white" />
+                            </button>
+                          </div>
+                          <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold z-10">
+                            {img.label}
+                          </div>
                         </div>
-                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold z-10">
-                          {img.label}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                      </motion.div>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -622,108 +805,49 @@ export const ImageTab = ({
           </div>
         </div>
       )}
-      {/* Image History List (v1.12.1: Slimmed) */}
-      {(sunoTracks || []).some(t => t && t.generatedImages && t.generatedImages.length > 0) && (
-        <div className="space-y-4 mt-10">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 px-2 pb-3 border-b border-white/5">
-              <Database className="w-3 h-3 text-primary/50" />
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">이미지 생성 히스토리 (Slim List)</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-              {(() => {
-                const uniqueTracks = Array.from(new Map((sunoTracks || [])
-                  .filter(t => t && t.title && t.generatedImages && t.generatedImages.length > 0)
-                  .map(t => [t.title, t])
-                ).values());
-                
-                const totalPages = Math.ceil(uniqueTracks.length / itemsPerPage);
-                const startIndex = (currentPage - 1) * itemsPerPage;
-                const paginatedTracks = uniqueTracks.slice(startIndex, startIndex + itemsPerPage);
 
-                return (
-                  <>
-                    {paginatedTracks.map((track, idx) => {
-                      const globalIdx = startIndex + idx + 1;
-                      return (
-                        <div key={idx} className="flex items-center group hover:bg-white/5 overflow-hidden transition-all h-[28px] px-1 -mx-1">
-                          <button
-                            onClick={() => handleLoadFromHistory(track)}
-                            className="flex-1 text-left px-3 py-1.5 flex items-center justify-between relative overflow-hidden"
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden relative z-10 flex-1">
-                              <span className="text-[9px] text-primary/40 font-mono w-4 text-center group-hover:text-primary transition-colors shrink-0">{globalIdx}</span>
-                              <span className="text-xs font-bold text-gray-300 truncate group-hover:text-white transition-colors">
-                                {track.title} 
-                                <span className="text-primary/60 ml-2 text-[8px] font-black uppercase">{track.generatedImages?.length || 0} Images</span>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0 relative z-10">
-                              <span className="text-[8px] text-gray-600 font-medium tabular-nums">
-                                {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
-                              </span>
-                            </div>
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteHistory(e, track.title)}
-                            className="w-[36px] h-full flex items-center justify-center bg-red-500/5 hover:bg-red-500/20 text-red-400 border-l border-white/5 transition-colors opacity-0 group-hover:opacity-100"
-                            title="히스토리에서 삭제 (DB 반영)"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-
-                  {/* 페이지네이션 컨트롤 */}
-                  {totalPages > 1 && (
-                    <div className="col-span-2 flex justify-center items-center gap-2 mt-6 pb-4">
-                      <button 
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        className="p-1 rounded hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      >
-                        <ChevronRight className="w-4 h-4 rotate-180" />
-                      </button>
-                      
-                      {Array.from({ length: totalPages }).map((_, pIdx) => {
-                        const pageNum = pIdx + 1;
-                        // 현재 페이지 근처만 표시 (옵션)
-                        if (totalPages > 7 && Math.abs(pageNum - currentPage) > 2 && pageNum !== 1 && pageNum !== totalPages) {
-                          if (Math.abs(pageNum - currentPage) === 3) return <span key={pageNum} className="text-gray-600">...</span>;
-                          return null;
-                        }
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={cn(
-                              "w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold transition-all",
-                              currentPage === pageNum ? "bg-primary text-background" : "hover:bg-white/10 text-gray-500"
-                            )}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-
-                      <button 
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        className="p-1 rounded hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-            </div>
-          </div>
+      {/* 곡 생성 히스토리 (SLIM LIST 스타일 통일) */}
+      <div className="space-y-4 pt-8 border-t border-white/10">
+        <div className="flex items-center justify-between px-2">
+          <h4 className="font-bold text-[11px] text-gray-400 flex items-center gap-2 uppercase tracking-tight">
+            <Database className="w-3.5 h-3.5 text-primary" /> 이미지 생성 히스토리 (SLIM LIST)
+          </h4>
+          <span className="text-[9px] text-gray-600 font-medium">통합 히스토리</span>
         </div>
-      )}
+
+        {filteredTracks.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+            {filteredTracks.slice(0, 16).map((track, idx) => (
+              <div
+                key={track.id || `track-${idx}`}
+                onClick={() => loadHistoryItem(track)}
+                className="group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 border-transparent hover:border-primary transition-all pr-0"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0 py-1.5 pl-3">
+                  <span className="text-[9px] font-bold text-primary/40 group-hover:text-primary transition-colors w-3">{idx + 1}</span>
+                  <p className="text-[11px] font-bold text-white/90 truncate tracking-tight">
+                    {track.title || track.koreanTitle} <span className="text-primary/60 font-medium ml-1">[{track.generatedImages?.length || 0}]</span>
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 shrink-0 h-full">
+                  <span className="text-[8px] text-gray-600 font-medium">{new Date(track.created_at || track.createdAt).toLocaleDateString().replace(/\. /g, '.')}</span>
+                  <button
+                    onClick={(e) => deleteTrackHistory(e, track)}
+                    className="opacity-0 group-hover:opacity-100 h-[32px] aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 bg-white/5 border border-dashed border-white/10 rounded-2xl text-center">
+            <p className="text-xs text-gray-500 font-medium">히스토리가 비어 있습니다. 이미지를 생성해 보세요!</p>
+          </div>
+        )}
+      </div>
 
       {/* Orphaned Images Scanner Panel */}
       <GlassCard className="mt-8 border-red-500/20 bg-red-500/5">
@@ -745,33 +869,76 @@ export const ImageTab = ({
         </div>
 
         {orphanedImages.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {orphanedImages.map((img, i) => (
-              <div key={i} className="relative group rounded-xl overflow-hidden aspect-square border border-white/10 bg-black/60">
-                <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2">
-                  <a
-                    href={img.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-md"
-                    title="크게 보기 / 다운로드"
-                  >
-                    <DownloadCloud className="w-4 h-4" />
-                  </a>
-                  <button
-                    onClick={() => deleteOrphanedImage(img.name, img.url)}
-                    className="p-2 bg-red-500/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md"
-                    title="스토리지 영구 삭제"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-2 py-2 bg-black/20 rounded-xl border border-white/5">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div
+                  onClick={toggleAllOrphans}
+                  className={cn(
+                    "w-5 h-5 rounded border flex items-center justify-center transition-all",
+                    selectedOrphanNames.size === orphanedImages.length ? "bg-red-500 border-red-500 text-white" : "border-white/20 bg-white/5 group-hover:border-red-500/50"
+                  )}
+                >
+                  {selectedOrphanNames.size === orphanedImages.length && <Check className="w-3.5 h-3.5" />}
                 </div>
-                <div className="absolute bottom-0 inset-x-0 bg-black/80 px-2 py-1">
-                  <p className="text-[8px] text-gray-400 truncate text-center">{img.name}</p>
+                <span className="text-xs font-bold text-gray-400">전체 선택 ({selectedOrphanNames.size}/{orphanedImages.length})</span>
+              </label>
+
+              {selectedOrphanNames.size > 0 && (
+                <button
+                  onClick={deleteSelectedOrphans}
+                  className="bg-red-500 text-white px-4 py-1.5 rounded-lg font-black text-xs flex items-center gap-2 hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  선택한 {selectedOrphanNames.size}개 일괄 삭제
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {orphanedImages.map((img, i) => (
+                <div
+                  key={i}
+                  onClick={() => toggleOrphanSelection(img.name)}
+                  className={cn(
+                    "relative group rounded-xl overflow-hidden aspect-square border transition-all cursor-pointer",
+                    selectedOrphanNames.has(img.name) ? "border-red-500 ring-2 ring-red-500/20" : "border-white/10 bg-black/60"
+                  )}
+                >
+                  <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+
+                  {/* Individual Checkbox */}
+                  <div className="absolute top-2 left-2 z-10">
+                    <div className={cn(
+                      "w-5 h-5 rounded border flex items-center justify-center transition-all backdrop-blur-sm",
+                      selectedOrphanNames.has(img.name) ? "bg-red-500 border-red-500 text-white" : "border-white/40 bg-black/40 text-transparent"
+                    )}>
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); downloadOrphanedImage(img.url, img.name); }}
+                      className="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-md"
+                      title="이미지 다운로드"
+                    >
+                      <DownloadCloud className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteOrphanedImage(img.name, img.url); }}
+                      className="p-2 bg-red-500/60 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md"
+                      title="스토리지 영구 삭제"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 bg-black/80 px-2 py-1">
+                    <p className="text-[8px] text-gray-400 truncate text-center">{img.name}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </GlassCard>

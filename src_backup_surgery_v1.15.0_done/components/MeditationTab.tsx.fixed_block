@@ -1,0 +1,29 @@
+  const handleGenerateSingleImage = async (index: number) => {
+    if (!apiKey) return;
+    setIsAnalyzing(true);
+    addLog(`🎨 [Day ${index + 1}] Imagen 4.0 AI로 단일 이미지 재생성 중...`);
+    try {
+      const genAI = new GoogleGenAI({ apiKey });
+      const selectedModel = imageEngine || DEFAULT_IMAGE_ENGINE;
+      const item = meditations[index];
+
+      const religiousPrompt = `
+        A stunning, high-quality Christian spiritual background for mobile shorts (9:16).
+        Theme: ${item.keywords || 'Holy grace and light'}.
+        Visuals: Must include explicit Christian elements (Cross, Bible, Dove, or Church).
+        Style: Photorealistic cinematic, divine atmosphere, sacred lighting.
+        NO fruits, NO watermelons, NO random objects. 100% Christian devotional art.
+      `;
+
+      addLog(`🖌️ [Single Gen] Prompt: "${religiousPrompt.trim().substring(0, 80)}..."`);
+      addLog(`📡 API Call: Imagen 4.0 [Mode: Single]`);
+
+      const response = await genAI.models.generateImages({
+        model: selectedModel,
+        prompt: religiousPrompt,
+        config: {
+          aspectRatio: "9:16",
+          numberOfImages: 1,
+          outputMimeType: "image/png"
+        }
+      });

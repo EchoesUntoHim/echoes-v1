@@ -1,0 +1,506 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Settings, Zap, Upload, CheckCircle2, FileText, Download, Music,
+  AlertCircle, HelpCircle, X, ExternalLink, Youtube, Info, Video
+} from 'lucide-react';
+import { GlassCard } from './GlassCard';
+import { MetadataCard } from './MetadataCard';
+import { PlatformToggle } from './PlatformToggle';
+import { ProgressBar } from './ProgressBar';
+import { Terminal } from './Terminal';
+import { cn } from '../lib/utils';
+import {
+  AI_ENGINES,
+  TARGETS,
+  POP_SUB_GENRES,
+  CCM_SUB_GENRES,
+  POP_MOODS,
+  CCM_MOODS,
+  BLOG_STYLES
+} from '../constants';
+
+const GUIDES = {
+  tiktok: {
+    title: "✨ 틱톡(TikTok) 연동 - 왕초보 탈출 가이드",
+    steps: [
+      "1. [틱톡 개발자 센터](https://developers.tiktok.com/)에 접속해서 내 틱톡 아이디로 로그인하세요.",
+      "2. 화면 위쪽 'My Apps'를 누르고 'Connect New App' (새 앱 연결) 버튼을 찾아서 클릭하세요.",
+      "3. 앱 이름은 자유롭게(예: MyVideoApp) 적으시고 'Create'를 눌러 앱을 만듭니다.",
+      "4. 왼쪽 메뉴에서 'Products'를 누른 뒤, 'Video Kit' 옆의 'Add' 버튼을 꼭! 눌러주세요. (이게 있어야 영상이 올라갑니다)",
+      "5. 이제 'App Details' 화면에 보이는 'Client Key'와 'Client Secret'이라는 긴 글자들을 복사하세요.",
+      "6. 우리 프로그램의 '설정' 탭에 이 글자들을 붙여넣기 하면 모든 준비 끝!"
+    ],
+    link: "https://developers.tiktok.com/console/app"
+  },
+  youtube: {
+    title: "✨ 유튜브(YouTube) 연동 - 80세 할머니도 하는 가이드",
+    steps: [
+      "1. [구글 클라우드 콘솔](https://console.cloud.google.com/)에 접속하세요. (파란색 화면이 나와도 당황하지 마세요!)",
+      "2. 맨 위 '프로젝트 선택'을 누르고 '새 프로젝트'를 만듭니다. 이름은 '나의유튜브업로드'라고 지어보세요.",
+      "3. 검색창에 'YouTube Data API v3'라고 치고, 나오는 결과를 클릭한 뒤 '사용' 버튼을 누르세요.",
+      "4. 왼쪽 '사용자 인증 정보' 메뉴 -> '사용자 인증 정보 만들기' -> 'OAuth 클라이언트 ID'를 누릅니다.",
+      "5. '동의 화면 구성'이 나오면 '외부'를 선택하고 내 이메일만 잘 적고 저장하세요.",
+      "6. 마지막으로 '웹 애플리케이션'을 선택하고 발급된 '클라이언트 ID'를 복사해서 우리 프로그램에 넣으면 끝납니다!"
+    ],
+    link: "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+  }
+};
+
+
+interface PublishTabProps {
+  workflow: any;
+  setWorkflow: React.Dispatch<React.SetStateAction<any>>;
+  aiEngine: string;
+  setAiEngine: (engine: string) => void;
+  generatePlatformMetadata: () => Promise<void>;
+  copyToClipboard: (text: string) => void;
+  platforms: any;
+  togglePlatform: (platform: string) => void;
+  setIsResetModalOpen: (isOpen: boolean) => void;
+  handleTabChange: (tab: string) => void;
+  logs: string[];
+  availableModels?: { value: string, label: string, type?: string }[];
+  fetchAvailableModels?: () => void;
+  shortsCount: number;
+  handleUploadToPlatform: (platform: 'youtube' | 'tiktok', type: string, index?: number) => Promise<void>;
+  onReset?: () => void;
+}
+
+export const PublishTab = ({
+  workflow,
+  setWorkflow,
+  aiEngine,
+  setAiEngine,
+  generatePlatformMetadata,
+  copyToClipboard,
+  platforms,
+  togglePlatform,
+  setIsResetModalOpen,
+  handleTabChange,
+  logs,
+  availableModels,
+  fetchAvailableModels,
+  shortsCount,
+  handleUploadToPlatform,
+  onReset
+}: PublishTabProps) => {
+  const [activeGuide, setActiveGuide] = useState<keyof typeof GUIDES | null>(null);
+  const [isStrategyVisible, setIsStrategyVisible] = useState(true);
+
+  const renderUploadSlot = (platform: 'youtube' | 'tiktok', label: string, type: 'main' | 'tiktok' | 'shorts', index?: number) => {
+    const isYoutube = platform === 'youtube';
+    const accentColor = isYoutube ? 'red-500' : 'primary';
+    const visibilityKey = `${platform}Visibility_${type}${index !== undefined ? `_${index}` : ''}`;
+    const scheduleKey = `${platform}Schedule_${type}${index !== undefined ? `_${index}` : ''}`;
+
+    return (
+      <div key={`${platform}-${type}-${index}`} className="p-4 bg-black/40 rounded-xl border border-white/5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Video className={cn("w-4 h-4", isYoutube ? "text-red-500" : "text-primary")} />
+            <span className="text-xs font-bold text-white">{label}</span>
+          </div>
+          <div className="flex gap-1">
+            {(isYoutube ? ['public', 'private', 'scheduled'] : ['PUBLIC', 'PRIVATE', 'FRIENDS']).map((v) => (
+              <button
+                key={v}
+                onClick={() => setWorkflow((prev: any) => ({
+                  ...prev,
+                  publishSettings: { ...prev.publishSettings, [visibilityKey]: v }
+                }))}
+                className={cn(
+                  "px-2 py-1 rounded text-[9px] font-bold border transition-all",
+                  (workflow.publishSettings?.[visibilityKey] || (isYoutube ? 'public' : 'PUBLIC')) === v
+                    ? `bg-${accentColor} text-${isYoutube ? 'white' : 'background'} border-${accentColor}`
+                    : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
+                )}
+              >
+                {v === 'public' || v === 'PUBLIC' ? '공개' : v === 'private' || v === 'PRIVATE' ? '비공개' : '예약'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(workflow.publishSettings?.[visibilityKey] === 'private' || workflow.publishSettings?.[visibilityKey] === 'PRIVATE' || workflow.publishSettings?.[visibilityKey] === 'scheduled') && (
+          <div className="flex items-center gap-2 p-2 bg-black/60 rounded-lg border border-white/10">
+            <span className="text-[9px] text-gray-500 shrink-0 font-bold uppercase">Schedule:</span>
+            <input
+              type="datetime-local"
+              className="bg-transparent text-[10px] text-white outline-none w-full"
+              onChange={(e) => setWorkflow((prev: any) => ({
+                ...prev,
+                publishSettings: { ...prev.publishSettings, [scheduleKey]: e.target.value }
+              }))}
+            />
+          </div>
+        )}
+
+
+        <button
+          onClick={() => handleUploadToPlatform(platform, type, index)}
+          className={cn(
+            "w-full py-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-2",
+            isYoutube
+              ? "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/10"
+              : "bg-primary text-background hover:neon-glow-primary shadow-lg shadow-primary/10"
+          )}
+        >
+          <Upload className="w-3.5 h-3.5" />
+          {label} 업로드 실행
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <motion.div key="publish" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8 pb-20">
+      <header className="flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">영상 업로드 및 발행</h1>
+          <p className="text-gray-400">제작된 영상을 유튜브와 틱톡에 즉시 업로드합니다.</p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5">
+            <Settings className="w-3 h-3 text-gray-400" />
+            <select
+              value={aiEngine}
+              onChange={(e) => {
+                setAiEngine(e.target.value);
+                localStorage.setItem('ai_engine', e.target.value);
+              }}
+              className="bg-transparent text-[11px] text-white outline-none cursor-pointer font-bold"
+            >
+              {AI_ENGINES.map(eng => (
+                <option key={eng.value} value={eng.value} className="bg-[#1A1F26]">
+                  {eng.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={generatePlatformMetadata}
+            disabled={workflow.progress.youtube > 0 && workflow.progress.youtube < 100}
+            className="bg-primary text-background px-6 py-2 rounded-xl font-bold hover:neon-glow-primary transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Zap className="w-4 h-4" />
+            AI 메타데이터 생성 (플랫폼별 최적화)
+          </button>
+          {workflow.progress.youtube > 0 && <div className="w-full"><ProgressBar progress={workflow.progress.youtube} /></div>}
+        </div>
+      </header>
+
+      <GlassCard className="grid grid-cols-1 md:grid-cols-2 gap-4 border-primary/20 bg-primary/5">
+        <div>
+          <label className="text-sm font-medium text-gray-400 mb-2 block">음악 종류 (메타데이터 생성 기준)</label>
+          <div className="flex gap-2">
+            {TARGETS.map(t => (
+              <button
+                key={t}
+                onClick={() => {
+                  const subGenre = t === '대중음악' ? POP_SUB_GENRES[0] : CCM_SUB_GENRES[0];
+                  const mood = t === '대중음악' ? POP_MOODS[0] : CCM_MOODS[0];
+                  setWorkflow(prev => ({ ...prev, params: { ...prev.params, target: t, subGenre, mood } }));
+                }}
+                className={cn(
+                  "flex-1 py-2 rounded-xl font-bold border transition-all",
+                  workflow.params.target === t
+                    ? "bg-primary text-background border-primary"
+                    : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium text-gray-400 mb-2 block">세부 장르</label>
+          <select
+            value={workflow.params.subGenre}
+            onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, subGenre: e.target.value } }))}
+            className="w-full bg-[#1A1F26] border border-white/10 rounded-xl px-3 py-2 outline-none text-white appearance-none cursor-pointer"
+          >
+            {(workflow.params.target === '대중음악' ? POP_SUB_GENRES : CCM_SUB_GENRES).map(sg => (
+              <option key={sg} value={sg} className="bg-[#1A1F26] text-white">{sg}</option>
+            ))}
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-gray-400 mb-2 block font-bold text-primary flex items-center gap-2">
+            <Info className="w-4 h-4" /> 곡 해석 (AI 분석보다 우선 적용)
+          </label>
+          <textarea
+            placeholder="곡의 의미나 의도를 입력하세요. 입력 시 AI 메타데이터 및 블로그 생성에 최우선으로 반영됩니다."
+            value={workflow.params.songInterpretation || ''}
+            onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, songInterpretation: e.target.value } }))}
+            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-white transition-all h-24 resize-none text-sm"
+          />
+        </div>
+      </GlassCard>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-2">
+        {/* YouTube Metadata Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-2 bg-red-500/10 rounded-xl border border-red-500/20">
+            <Youtube className="w-5 h-5 text-red-500" />
+            <h3 className="font-black text-red-500 text-sm uppercase tracking-widest">YouTube Optimal Strategy</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <MetadataCard title="유튜브 업로드 제목" content={workflow.results.youtubeMetadata?.title || ''} onCopy={copyToClipboard} />
+            <MetadataCard title="본문 설명 (SEO 최적화)" content={workflow.results.youtubeMetadata?.description || ''} onCopy={copyToClipboard} isTextArea />
+            <MetadataCard title="유튜브 추천 태그" content={workflow.results.youtubeMetadata?.tags || ''} onCopy={copyToClipboard} />
+          </div>
+        </div>
+
+        {/* TikTok Metadata Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-xl border border-primary/20">
+            <Zap className="w-5 h-5 text-primary" />
+            <h3 className="font-black text-primary text-sm uppercase tracking-widest">TikTok Viral Strategy</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <MetadataCard
+              title="틱톡 통합 설명 (한번에 복사)"
+              content={workflow.results.tiktokMetadata?.fullContent || ''}
+              onCopy={copyToClipboard}
+              isTextArea
+            />
+            <p className="text-[10px] text-gray-500 px-2 leading-relaxed">
+              * 틱톡은 제목 없이 하나의 설명 칸만 존재합니다. <br />
+              위 상자에는 캡션, 줄바꿈, 해시태그가 모두 포함되어 있어 한번에 복사해서 사용하기 좋습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* YouTube Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-red-500">
+              <Youtube className="w-6 h-6" /> 유튜브 업로드
+            </h3>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setActiveGuide('youtube')}
+                className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <HelpCircle className="w-3 h-3" /> 연동 도움말
+              </button>
+              <PlatformToggle
+                label=""
+                description="유튜브 자동 업로드"
+                status={platforms.youtube}
+                onToggle={() => togglePlatform('youtube')}
+              />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {renderUploadSlot('youtube', '메인 영상 (16:9)', 'main')}
+            {Array.from({ length: shortsCount }).map((_, i) => (
+              renderUploadSlot('youtube', `숏츠 영상 #${i + 1} (9:16)`, 'shorts', i)
+            ))}
+          </div>
+        </div>
+
+        {/* TikTok Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+              <Zap className="w-6 h-6" /> 틱톡 업로드
+            </h3>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setActiveGuide('tiktok')}
+                className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <HelpCircle className="w-3 h-3" /> 연동 도움말
+              </button>
+              <PlatformToggle
+                label=""
+                description="틱톡 자동 업로드"
+                status={platforms.tiktok}
+                onToggle={() => togglePlatform('tiktok')}
+              />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {renderUploadSlot('tiktok', '틱톡 최적화 영상 (9:16)', 'tiktok')}
+            {Array.from({ length: shortsCount }).map((_, i) => (
+              renderUploadSlot('tiktok', `틱톡 숏츠 #${i + 1}`, 'shorts', i)
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <GlassCard className="bg-primary/5 border-primary/20 p-8 text-center space-y-4">
+        <CheckCircle2 className="w-16 h-16 text-primary mx-auto shadow-2xl" />
+        <h2 className="text-2xl font-black">모든 작업이 완료되었습니다!</h2>
+        <p className="text-gray-400">생성된 영상과 메타데이터를 사용하여 채널을 성장시켜 보세요.</p>
+        <div className="flex justify-center pt-4">
+          <button onClick={() => handleTabChange('blog')} className="px-6 py-3 bg-primary text-background rounded-xl font-bold hover:neon-glow-primary transition-all shadow-lg shadow-primary/20">블로그 작성하러 가기</button>
+        </div>
+      </GlassCard>
+
+      {/* Draggable Optimal Time Info Card - Detailed version */}
+      <AnimatePresence>
+        {isStrategyVisible ? (
+          <motion.div
+            key="strategy-guide"
+            drag
+            dragConstraints={{ left: -500, right: 20, top: -600, bottom: 20 }}
+            initial={{ x: 20, y: 100, opacity: 0 }}
+            animate={{ x: 20, y: -20, opacity: 1 }}
+            exit={{ x: 100, opacity: 0, scale: 0.8 }}
+            className="fixed bottom-10 right-10 z-[100] cursor-move"
+          >
+            <GlassCard className="w-80 p-5 border-primary/30 bg-[#1A1F26]/90 backdrop-blur-2xl shadow-2xl relative group overflow-hidden max-h-[500px] flex flex-col">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <h4 className="text-[12px] font-black text-primary uppercase tracking-tighter flex items-center gap-1.5">
+                  <Zap className="w-4 h-4" /> 2026 업로드 최적화 전략
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsStrategyVisible(false)}
+                    className="p-1 hover:bg-white/10 rounded-lg transition-all text-gray-500 hover:text-white"
+                    title="숨기기"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+                {/* Daily Detailed Schedule */}
+                <div className="space-y-3">
+                  {[
+                    { day: '월요일 (Mon)', long: '06:00 - 07:00', shorts: '19:00 - 21:00', note: '한 주를 시작하는 새벽 묵상 공략' },
+                    { day: '화요일 (Tue)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '일상 속 잔잔한 위로와 휴식' },
+                    { day: '수요일 (Wed)', long: '16:00 - 18:00', shorts: '19:00 - 21:00', note: '삼일 밤 기도회 전후 영적 충전' },
+                    { day: '목요일 (Thu)', long: '17:00 - 18:00', shorts: '19:00 - 21:00', note: '주말을 기다리는 감성 음악' },
+                    { day: '금요일 (Fri)', long: '17:00 - 18:00', shorts: '20:00 - 22:00', note: '금요 철야 및 감성 클릭률 최고조' },
+                    { day: '토요일 (Sat)', long: '10:00 - 13:00', shorts: '11:00 / 14:00 / 21:00', note: '주말 오전의 여유로운 묵상' },
+                    { day: '일요일 (Sun)', long: '08:00 - 10:00', shorts: '19:00 - 21:00', note: '예배 이동 시간 찬양 수요 폭발' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 group hover:border-primary/30 transition-all">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-primary uppercase">{item.day}</span>
+                        <span className="text-[8px] text-gray-500 italic">{item.note}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[8px] text-gray-500 uppercase font-bold">Long-form</span>
+                          <span className="text-[10px] text-white font-black">{item.long}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5 border-l border-white/10 pl-2">
+                          <span className="text-[8px] text-gray-500 uppercase font-bold">Shorts</span>
+                          <span className="text-[10px] text-white font-black">{item.shorts}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 3. Optimization Strategy */}
+                <div className="p-3 bg-primary/10 rounded-xl border border-primary/20 space-y-2">
+                  <h5 className="text-[10px] font-black text-primary uppercase flex items-center gap-1.5">
+                    <Zap className="w-3 h-3" /> 2026 알고리즘 필살기
+                  </h5>
+                  <div className="space-y-2 text-[9px] leading-relaxed">
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">1. "2-3시간 선행 업로드":</span> 인덱싱을 위해 피크 타임 2-3시간 전 예약 게시.
+                    </p>
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">2. "고화질 처리 시간":</span> 4K는 최소 5시간 전 비공개 업로드 필수.
+                    </p>
+                    <p className="text-gray-300">
+                      <span className="text-white font-bold">3. "시즌 특수성":</span> 절기 2주 전부터 콘텐츠 업로드로 상단 선점.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-white/5 shrink-0">
+                <p className="text-[8px] text-gray-500 italic text-center">
+                  * 드래그하여 위치 이동이 가능합니다.
+                </p>
+              </div>
+            </GlassCard>
+          </motion.div>
+        ) : (
+          <motion.button
+            key="show-strategy-btn"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            onClick={() => setIsStrategyVisible(true)}
+            className="fixed bottom-10 right-10 z-[100] p-4 bg-primary text-background rounded-full shadow-lg hover:neon-glow-primary transition-all flex items-center gap-2 font-black text-xs"
+          >
+            <Zap className="w-4 h-4" />
+            2026 전략 가이드
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <Terminal logs={logs} />
+
+      {/* Guide Modal */}
+      <AnimatePresence>
+        {activeGuide && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="w-full max-w-lg bg-[#1A1F26] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-primary/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center">
+                    <HelpCircle className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold">{GUIDES[activeGuide].title}</h3>
+                </div>
+                <button onClick={() => setActiveGuide(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+              <div className="flex-1 p-8 space-y-6 overflow-y-auto custom-scrollbar text-left">
+                <div className="space-y-4">
+                  {GUIDES[activeGuide].steps.map((step, index) => (
+                    <div key={index} className="flex gap-4">
+                      <div className="w-6 h-6 bg-primary text-background rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5">
+                        {index + 1}
+                      </div>
+                      <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-4">
+                  <a
+                    href={GUIDES[activeGuide].link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all group"
+                  >
+                    <span>개발자 센터 바로가기</span>
+                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
+                  </a>
+                </div>
+              </div>
+              <div className="p-6 bg-black/20 border-t border-white/5">
+                <button
+                  onClick={() => setActiveGuide(null)}
+                  className="w-full py-4 bg-primary text-background rounded-xl font-black hover:neon-glow-primary transition-all"
+                >
+                  확인했습니다
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};

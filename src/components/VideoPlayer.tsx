@@ -9,6 +9,7 @@ import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 import { cn } from '../lib/utils';
 import { TitleSettings } from '../types';
 import { storage, auth, uploadAudioToStorageSafe, uploadImageToStorage } from '../firebase';
+import { RENDER_API_URL } from '../constants';
 
 let ffmpeg: any = null;
 let ffmpegLoadingPromise: Promise<any> | null = null;
@@ -72,14 +73,14 @@ class Particle {
       this.speedY = Math.random() * 1 + 0.8;
       this.color = '255, 182, 193'; // Pink
     } else if (type === 'dust') {
-      this.size = Math.random() * 2 + 0.5;
-      this.speedX = Math.random() * 0.6 - 0.3;
-      this.speedY = Math.random() * 0.4 - 0.5; // Floating up
-      this.color = '255, 223, 0'; // Gold
+      this.size = Math.random() * 3 + 1; // [v1.15.29] Larger
+      this.speedX = Math.random() * 0.8 - 0.4;
+      this.speedY = Math.random() * 0.6 - 0.8; // Floating up
+      this.color = '255, 230, 100'; // Brighter Gold
     } else { // stars
-      this.size = Math.random() * 2;
-      this.speedX = 0;
-      this.speedY = 0;
+      this.size = Math.random() * 3 + 1; // [v1.15.29] Larger and visible
+      this.speedX = Math.random() * 0.2 - 0.1; // Subtle movement
+      this.speedY = Math.random() * 0.2 - 0.1;
       this.color = '255, 255, 255';
     }
   }
@@ -102,7 +103,9 @@ class Particle {
 
     if (this.life <= 0) {
       this.life = this.maxLife;
-      if (this.type === 'dust') this.y = canvasHeight;
+      // [v1.15.29] Reset to random position to avoid concentration at bottom
+      this.x = Math.random() * canvasWidth;
+      this.y = Math.random() * canvasHeight;
     }
   }
 
@@ -174,7 +177,7 @@ export const VideoPlayer = forwardRef(({
   onProgress,
   onRenderComplete,
   videoEngine = 'echoesuntohim-v2.1-free',
-  videoRenderApiUrl = 'http://localhost:5000/render-shorts',
+  videoRenderApiUrl = RENDER_API_URL,
   karaokeColor = '#00FFA3'
 }: any, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -191,6 +194,8 @@ export const VideoPlayer = forwardRef(({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const particlesRef = useRef<any[]>([]);
   const lastParticleSettingsRef = useRef<string>('none');
+  // [v1.15.30] 재생 시작 시점 기록 (진입 효과 타이밍 보정용)
+  const playStartedTimeRef = useRef<number>(0);
 
   // Initialize particles when settings change
   useEffect(() => {
@@ -270,17 +275,20 @@ export const VideoPlayer = forwardRef(({
 
       lines.forEach(line => {
         const timeMatch = line.match(timeRegex);
+        // [v1.15.29] 구조 태그([Chorus] 등)를 감지하지만, cleanText에서는 제거하여 줄바꿈 효과 유도
+        const hasStructuralTag = /\[(Verse|Chorus|Bridge|Outro|Intro|Hook|Instrumental|.*?)\]/i.test(line);
         const cleanText = line.replace(/\[.*?\]|\(.*?\)/g, '').trim();
 
         if (timeMatch) {
           const mins = parseInt(timeMatch[1]);
           const secs = parseInt(timeMatch[2]);
           currentSectionTime = mins * 60 + secs;
-          
-          // 타임스탬프가 있으면 텍스트가 비어있어도 추가 (간주/무음 처리)
+
+          // [v1.15.29] 타임스탬프가 있으면 텍스트가 비어있어도 추가 (간주/무음/자막지우기 처리)
           result.push({ time: currentSectionTime, text: cleanText });
-        } else if (cleanText) {
-          // 타임스탬프가 없는 줄은 텍스트가 있을 때만 이전 시간에 붙임
+        } else if (cleanText || hasStructuralTag) {
+          // [v1.15.29] 타임스탬프가 없는 줄이라도 구조 태그가 있거나 텍스트가 있으면 추가
+          // 구조 태그만 있는 경우 cleanText는 ""이 되어 시각적 줄바꿈(공백) 역할을 함
           result.push({ time: currentSectionTime, text: cleanText });
         }
       });
@@ -292,15 +300,15 @@ export const VideoPlayer = forwardRef(({
 
     // Sync Korean and English lines by time (robust against mismatched line counts or blank lines)
     const timedLines: { time: number; kor: string; eng: string }[] = [];
-    const timeMap = new Map<number, {kor: string; eng: string}>();
+    const timeMap = new Map<number, { kor: string; eng: string }>();
 
     korTimed.forEach(k => {
-      if (!timeMap.has(k.time)) timeMap.set(k.time, {kor: '', eng: ''});
+      if (!timeMap.has(k.time)) timeMap.set(k.time, { kor: '', eng: '' });
       timeMap.get(k.time)!.kor = k.text;
     });
 
     engTimed.forEach(e => {
-      if (!timeMap.has(e.time)) timeMap.set(e.time, {kor: '', eng: ''});
+      if (!timeMap.has(e.time)) timeMap.set(e.time, { kor: '', eng: '' });
       timeMap.get(e.time)!.eng = e.text;
     });
 
@@ -313,8 +321,8 @@ export const VideoPlayer = forwardRef(({
       });
     });
 
-    const korLines = (lyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
-    const engLines = (englishLyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim()).filter(l => l);
+    const korLines = (lyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim());
+    const engLines = (englishLyrics || "").split('\n').map((line: string) => line.replace(/\[.*?\]|\(.*?\)/g, '').trim());
 
     const flat: string[] = [];
     const pairs: { kor: string; eng: string }[] = [];
@@ -323,9 +331,12 @@ export const VideoPlayer = forwardRef(({
     for (let i = 0; i < maxLines; i++) {
       const kor = korLines[i] || '';
       const eng = engLines[i] || '';
-      if (kor) flat.push(kor);
+      // [v1.15.29] 둘 다 비어있더라도(구조 태그 줄) 최소한 하나의 공백은 추가하여 줄바꿈 간격 확보
+      flat.push(kor);
       if (eng) flat.push(eng);
-      if (kor || eng) pairs.push({ kor, eng });
+      if (kor || eng || (korLines[i] !== undefined || engLines[i] !== undefined)) {
+        pairs.push({ kor, eng });
+      }
     }
 
     return { flat, pairs, timedLines };
@@ -495,17 +506,18 @@ export const VideoPlayer = forwardRef(({
       const titleDuration = (titleSettings as any).titleDuration || 5;
       const titleFade = (titleSettings as any).titleFade || 0.5;
 
+      // [v1.15.30] 진입 효과 타이밍: 실제 재생 시작 후 경과 시간 사용
       const elapsed = currentAudioTime - startTime;
+      const realPlayElapsed = playStartedTimeRef.current > 0 ? (Date.now() - playStartedTimeRef.current) / 1000 : 0;
+      const effectElapsed = isPlaying ? realPlayElapsed : 0;
       const isPrePlay = !isPlaying && elapsed <= 0.1;
 
       let titleOpacity = 0;
       if (isPrePlay) {
         titleOpacity = 1;
-      } else if (elapsed < titleDuration) {
-        if (elapsed < titleFade) titleOpacity = elapsed / titleFade;
-        else titleOpacity = 1;
+      } else if (effectElapsed < titleFade) {
+        titleOpacity = Math.max(0.01, effectElapsed / titleFade);
       } else {
-        // After titleDuration, keep it visible (Opacity 1)
         titleOpacity = 1;
       }
 
@@ -532,16 +544,18 @@ export const VideoPlayer = forwardRef(({
         let animBlur = 0;
         let typingProgress = 1;
 
-        if (!isPrePlay && animation !== 'none') {
-          const fadeIn = titleFade;
+        if (animation !== 'none') {
+          const fadeIn = titleFade || 0.5;
+          const animElapsed = isPrePlay ? 0.01 : effectElapsed; // [v1.15.30] 실제 재생 경과 시간 사용
+
           if (animation === 'floating') animY = Math.sin(segmentTime * 2) * 10;
           else if (animation === 'wave') animY = Math.sin(segmentTime * 3) * 15;
-          else if (animation === 'zoom_in') animScale = 0.95 + (Math.min(1, elapsed / 5) * 0.1);
-          else if (animation === 'zoom_out') animScale = 1.05 - (Math.min(1, elapsed / 5) * 0.1);
-          else if (animation === 'slide_up') { if (fadeIn > 0 && elapsed < fadeIn) animY = 30 * (1 - (elapsed / fadeIn)); }
-          else if (animation === 'blurry') { if (fadeIn > 0 && elapsed < fadeIn) animBlur = 15 * (1 - (elapsed / fadeIn)); }
-          else if (animation === 'typing') typingProgress = fadeIn > 0 ? Math.min(1, elapsed / (fadeIn * 1.5)) : 1;
-          else if (animation === 'dramatic_zoom') { if (fadeIn > 0 && elapsed < fadeIn) animScale = 0.5 + (0.5 * (elapsed / fadeIn)); }
+          else if (animation === 'zoom_in') animScale = 0.95 + (Math.min(1, animElapsed / 5) * 0.1);
+          else if (animation === 'zoom_out') animScale = 1.05 - (Math.min(1, animElapsed / 5) * 0.1);
+          else if (animation === 'slide_up') { if (animElapsed < fadeIn) animY = 30 * (1 - (animElapsed / fadeIn)); }
+          else if (animation === 'blurry') { if (animElapsed < fadeIn) animBlur = 15 * (1 - (animElapsed / fadeIn)); }
+          else if (animation === 'typing') typingProgress = Math.min(1, animElapsed / (fadeIn * 1.5));
+          else if (animation === 'dramatic_zoom') { if (animElapsed < fadeIn) animScale = 0.5 + (0.5 * (animElapsed / fadeIn)); }
         }
 
         let x = canvas.width / 2 + (titleXOffset * (canvas.width / 100));
@@ -856,10 +870,12 @@ export const VideoPlayer = forwardRef(({
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        playStartedTimeRef.current = 0; // [v1.15.30] 정지 시 리셋
       } else {
         if (audioRef.current.currentTime < startTime || (duration && audioRef.current.currentTime >= startTime + duration)) {
           audioRef.current.currentTime = startTime;
         }
+        playStartedTimeRef.current = Date.now(); // [v1.15.30] 재생 시작 시점 기록
         audioRef.current.play().catch(e => console.error("Playback failed:", e));
       }
       setIsPlaying(!isPlaying);
@@ -913,7 +929,7 @@ export const VideoPlayer = forwardRef(({
     setIsRecording(true);
     setRenderProgress(0);
 
-    // v1.12.1: Local Server Rendering Logic (Restored)
+    // v1.12.23: Local Server Rendering Logic (Restored)
     if (videoEngine === 'ffmpeg-cloud') {
       if (addLog) addLog(`🔌 로컬 FFmpeg 서버(${videoRenderApiUrl})로 고화질 렌더링을 요청합니다...`);
       try {
@@ -941,7 +957,7 @@ export const VideoPlayer = forwardRef(({
             fadeOutDuration,
             karaokeColor
           },
-          version: '1.12.1'
+          version: '1.12.23'
         };
 
         const response = await fetch(videoRenderApiUrl, {

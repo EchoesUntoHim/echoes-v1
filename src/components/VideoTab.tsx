@@ -8,7 +8,7 @@ import { ProgressBar } from './ProgressBar';
 import { TimeInput } from './TimeInput';
 import { Terminal } from './Terminal';
 import { cn } from '../lib/utils';
-import { VIDEO_ENGINES } from '../constants';
+import { VIDEO_ENGINES, RENDER_API_URL } from '../constants';
 import { createDefaultSettings } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
@@ -27,7 +27,7 @@ interface VideoTabProps {
   setEnglishVideoLyrics: React.Dispatch<React.SetStateAction<string>>;
   timedLyrics?: any[];
   isVideoRendering: boolean;
-  startVideoRender: () => void;
+  startVideoRender: (type: 'main' | 'tiktok' | 'shorts') => void;
   handleDownloadAll: () => void;
   mainVideoRef: React.RefObject<any>;
   tiktokVideoRef: React.RefObject<any>;
@@ -36,7 +36,6 @@ interface VideoTabProps {
   handleHighlightChange: (idx: number, type: 'start' | 'end', val: number) => void;
   addLog: (msg: string) => void;
   handleTabChange: (tab: string) => void;
-  musicEngine: string;
   videoEngine: string;
   setVideoEngine: (engine: string) => void;
   videoQuality: string;
@@ -72,7 +71,6 @@ export const VideoTab = ({
   handleHighlightChange,
   addLog,
   handleTabChange,
-  musicEngine,
   videoEngine,
   setVideoEngine,
   videoQuality,
@@ -157,21 +155,6 @@ export const VideoTab = ({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="flex gap-6 text-right">
-            <div>
-              <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">음악 엔진</span>
-              <p className="text-xs font-mono text-secondary">
-                {musicEngine.includes('magenta') ? 'Google Magenta' :
-                  musicEngine.includes('musiclm') ? 'Google MusicLM' :
-                    musicEngine.includes('suno') ? 'Suno AI' :
-                      musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
-              </p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">렌더링 품질</span>
-              <p className="text-xs font-mono text-primary">{videoQuality.toUpperCase()}</p>
-            </div>
           </div>
         </div>
       </header>
@@ -405,7 +388,7 @@ export const VideoTab = ({
                   onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, main: p }))}
                   onRenderComplete={onRenderComplete}
                   videoEngine={videoEngine}
-                  videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                  videoRenderApiUrl={workflow.params.isLocalMode ? RENDER_API_URL : undefined}
                   karaokeColor={workflow.imageSettings?.['main']?.karaokeColor}
                 />
                 {videoProgressMap.main !== undefined && videoProgressMap.main < 100 && (
@@ -466,7 +449,7 @@ export const VideoTab = ({
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, tiktok: p }))}
                       onRenderComplete={onRenderComplete}
                       videoEngine={videoEngine}
-                      videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                      videoRenderApiUrl={workflow.params.isLocalMode ? RENDER_API_URL : undefined}
                       karaokeColor={workflow.imageSettings?.['main']?.karaokeColor}
                     />
                     {videoProgressMap.tiktok !== undefined && videoProgressMap.tiktok < 100 && (
@@ -503,7 +486,7 @@ export const VideoTab = ({
 
                     <VideoPlayer
                       ref={el => { shortsVideoRefs.current[idx] = el; }}
-                      key={`shorts-v1.11.3-${idx}-${highlight.start}-${highlight.duration}-${getMatchingImage(`shorts_${idx + 1}`)?.url || 'none'}`}
+                      key={`shorts-v1.12.23-${idx}-${highlight.start}-${highlight.duration}-${getMatchingImage(`shorts_${idx + 1}`)?.url || 'none'}`}
                       imageSrc={getMatchingImage(`shorts_${idx + 1}`)?.url}
                       audioSrc={uploadedAudio}
                       lyrics={videoLyrics}
@@ -528,7 +511,7 @@ export const VideoTab = ({
                       onProgress={(p) => setVideoProgressMap(prev => ({ ...prev, [`shorts_${idx}`]: p }))}
                       onRenderComplete={onRenderComplete}
                       videoEngine={videoEngine}
-                      videoRenderApiUrl={workflow.params.isLocalMode ? 'http://localhost:5000/render-shorts' : undefined}
+                      videoRenderApiUrl={workflow.params.isLocalMode ? RENDER_API_URL : undefined}
                       karaokeColor={workflow.imageSettings?.['shorts']?.karaokeColor}
                     />
                     {videoProgressMap[`shorts_${idx}`] !== undefined && videoProgressMap[`shorts_${idx}`] < 100 && (

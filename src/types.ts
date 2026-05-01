@@ -1,4 +1,4 @@
-export type Step = 'lyrics' | 'music' | 'image' | 'video' | 'publish' | 'blog' | 'arrangement' | 'audio-separation' | 'settings';
+export type Step = 'lyrics' | 'music' | 'image' | 'video' | 'publish' | 'blog' | 'settings' | 'audio-separation' | 'meditation';
 
 export type Target = '대중음악' | 'CCM';
 export type Tempo = string;
@@ -22,6 +22,8 @@ export interface MusicParams {
   vocal: string;
   lyricsStyle: string;
   originalLyrics?: string;
+  lyrics?: string;
+  englishLyrics?: string;
   isEnglishSong?: boolean;
   songInterpretation?: string;
   userInput?: string;
@@ -161,16 +163,17 @@ export interface WorkflowState {
     tiktok: TitleSettings;
     shorts: TitleSettings;
   };
-  videoSettings?: any; // Added for compatibility
   blogSettings: BlogSettings;
   progress: {
     lyrics: number;
+    music: number;
     image: number;
     video: number;
     youtube: number;
     blog: number;
     prompts: number;
-    separation?: number; // Added for compatibility
+    'audio-separation': number;
+    meditation: number;
   };
   results: {
     title?: string;

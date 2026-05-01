@@ -23,5 +23,13 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src_backup_surgery_v1.15.0_done/**",
+    "backups/**",
+    "src/*backup*.tsx",
+    "src/*refactor_failed*.tsx"
+  ]
 }

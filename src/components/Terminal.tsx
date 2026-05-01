@@ -20,9 +20,8 @@ export const Terminal = ({ logs }: { logs: string[] }) => {
         <span>시스템 로그</span>
       </div>
       {logs.map((log, i) => (
-        <div key={i} className="flex gap-2">
-          <span className="text-gray-600">[{new Date().toLocaleTimeString()}]</span>
-          <span>{log}</span>
+        <div key={i} className="leading-relaxed break-words py-0.5 whitespace-pre-wrap">
+          {log}
         </div>
       ))}
       {logs.length === 0 && <div className="text-gray-600 italic">대기 중...</div>}

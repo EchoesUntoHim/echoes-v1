@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Send, Type as TypeIcon, Music, Copy, RefreshCw, ChevronRight, FileText, Globe, Trash2, Database, AlertCircle } from 'lucide-react';
+import { Send, Type as TypeIcon, Music, Image as ImageIcon, Copy, RefreshCw, ChevronRight, FileText, Globe, Trash2, Database, AlertCircle } from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { GlassCard } from './GlassCard';
@@ -47,7 +47,6 @@ interface LyricsTabProps {
   logs: string[];
   aiEngine: string;
   setAiEngine: (engine: string) => void;
-  musicEngine: string;
   apiKey: string;
   addLog: (msg: string) => void;
   availableModels?: { value: string, label: string, type?: string }[];
@@ -56,6 +55,7 @@ interface LyricsTabProps {
   regenerateTitles?: () => Promise<void>;
   sunoTracks?: any[];
   setSunoTracks?: React.Dispatch<React.SetStateAction<any[]>>;
+  instrumentDescription?: string;
 }
 
 export const LyricsTab = ({
@@ -68,7 +68,6 @@ export const LyricsTab = ({
   logs,
   aiEngine,
   setAiEngine,
-  musicEngine,
   apiKey,
   addLog,
   availableModels = AI_ENGINES,
@@ -76,11 +75,14 @@ export const LyricsTab = ({
   isTranslating = false,
   regenerateTitles,
   sunoTracks = [],
-  setSunoTracks
+  setSunoTracks,
+  instrumentDescription = ''
 }: LyricsTabProps) => {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [stripTimestamps, setStripTimestamps] = React.useState(false);
   const [isInstrumentOpen, setIsInstrumentOpen] = React.useState(false);
+  const [libraryPage, setLibraryPage] = React.useState(0);
+  const [selectedHistoryId, setSelectedHistoryId] = React.useState<string | null>(null);
   const itemsPerPage = 10;
   const translationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -98,11 +100,12 @@ export const LyricsTab = ({
       results: {
         ...prev.results,
         trackId: track.id,
-        title: track.title,
-        lyrics: track.lyrics,
-        englishLyrics: track.englishLyrics,
-        timedLyrics: track.timedLyrics || [], // 정밀 싱크 데이터 복구
-        interpretation: track.interpretation || track.intent || ''
+        title: track.title || track.koreanTitle || '무제',
+        lyrics: track.lyrics || track.koreanLyrics || track.content || '',
+        englishLyrics: track.englishLyrics || '',
+        timedLyrics: track.timedLyrics || [],
+        interpretation: track.interpretation || track.intent || '',
+        sunoPrompt: track.sunoPrompt || track.prompt || ''
       },
       progress: {
         ...prev.progress,
@@ -128,6 +131,24 @@ export const LyricsTab = ({
     addLog(`'${track.title}' 데이터를 불러왔습니다.`);
   };
 
+  const deleteTrackHistory = async (e: React.MouseEvent, track: any) => {
+    e.stopPropagation();
+    if (!db) return;
+    if (!confirm(`[${track.title || track.koreanTitle || '무제'}] 히스토리를 정말 삭제하시겠습니까?`)) return;
+
+    try {
+      addLog(`🗑️ [${track.title || track.koreanTitle}] 삭제 중...`);
+      await deleteDoc(doc(db, 'sunoTracks', track.id)).catch(() => {});
+      await deleteDoc(doc(db, 'generated_lyrics', track.id)).catch(() => {});
+      if (setSunoTracks) {
+        setSunoTracks(prev => prev.filter(t => t.id !== track.id));
+      }
+      addLog(`✅ 삭제 완료.`);
+    } catch (err: any) {
+      addLog(`❌ 삭제 실패: ${err.message}`);
+    }
+  };
+
   const toggleTimestamps = (val: boolean) => {
     setStripTimestamps(val);
     if (val) {
@@ -151,104 +172,32 @@ export const LyricsTab = ({
   // [v1.12.21] 실시간 동기화: 가사, 제목, 프롬프트 수정 시 즉시 히스토리(DB) 업데이트
   useEffect(() => {
     if (workflow.results.trackId && setSunoTracks) {
-      setSunoTracks(prev => prev.map(t => 
-        t.id === workflow.results.trackId 
-          ? { 
-              ...t, 
-              title: workflow.results.title,
-              lyrics: workflow.results.lyrics,
-              englishLyrics: workflow.results.englishLyrics,
-              sunoPrompt: workflow.results.sunoPrompt,
-              interpretation: workflow.results.interpretation
-            } 
+      setSunoTracks(prev => prev.map(t =>
+        t.id === workflow.results.trackId
+          ? {
+            ...t,
+            title: workflow.results.title,
+            lyrics: workflow.results.lyrics,
+            englishLyrics: workflow.results.englishLyrics,
+            sunoPrompt: workflow.results.sunoPrompt,
+            interpretation: workflow.results.interpretation
+          }
           : t
       ));
     }
   }, [
-    workflow.results.trackId, 
-    workflow.results.title, 
-    workflow.results.lyrics, 
-    workflow.results.englishLyrics, 
+    workflow.results.trackId,
+    workflow.results.title,
+    workflow.results.lyrics,
+    workflow.results.englishLyrics,
     workflow.results.sunoPrompt,
     workflow.results.interpretation,
     setSunoTracks
   ]);
 
-  const handleDeleteHistory = async (e: React.MouseEvent, title: string) => {
-    e.stopPropagation();
-    if (!window.confirm(`'${title}' 데이터를 히스토리와 DB에서 영구 삭제하시겠습니까?`)) return;
-
-    try {
-      if (setSunoTracks) {
-        setSunoTracks(prev => prev.filter(t => t.title !== title));
-      }
-      addLog(`🗑️ 히스토리에서 삭제 중: ${title}`);
-    } catch (err) {
-      console.error("Delete error:", err);
-    }
-  };
-
   return (
     <>
       <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <GlassCard className="border-primary/30 bg-primary/5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-primary">
-                <FileText className="w-5 h-5" />
-                <span className="text-sm font-black uppercase tracking-widest">원가사 입력 (타임스탬프 기준)</span>
-              </div>
-            </div>
-            <textarea
-              value={workflow.params.originalLyrics || ''}
-              onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, originalLyrics: e.target.value } }))}
-              placeholder="기존 가사를 가지고 있다면 여기에 입력하세요. 음원 분석 시 이 내용을 바탕으로 정확한 타임스탬프를 매깁니다."
-              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none transition-all h-32 resize-none"
-            />
-          </GlassCard>
-
-          <GlassCard className="border-secondary/30 bg-secondary/5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-secondary">
-                <Globe className="w-5 h-5" />
-                <span className="text-sm font-black uppercase tracking-widest">영어곡 번역 설정</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-gray-400">영어곡인가요?</span>
-                <button
-                  onClick={() => setWorkflow(prev => ({ ...prev, params: { ...prev.params, isEnglishSong: !prev.params.isEnglishSong } }))}
-                  className={cn(
-                    "w-10 h-5 rounded-full transition-all relative",
-                    workflow.params.isEnglishSong ? "bg-secondary" : "bg-gray-700"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-3 h-3 rounded-full bg-white transition-all",
-                    workflow.params.isEnglishSong ? "right-1" : "left-1"
-                  )} />
-                </button>
-              </div>
-            </div>
-            <div className="text-[10px] text-gray-400 leading-relaxed">
-              영어곡 모드 활성화 시, 가사 생성 및 번역 방향이 한국어 위주에서 영어 위주로 최적화됩니다.
-              <br />(예: 영어 가사를 한국어로 자동 번역)
-            </div>
-          </GlassCard>
-        </div>
-
-        <GlassCard className="border-secondary/30 bg-secondary/5">
-          <div className="flex items-center gap-2 text-secondary mb-4">
-            <Send className="w-5 h-5" />
-            <span className="text-sm font-black uppercase tracking-widest">사용자 직접 입력 (최우선 반영)</span>
-          </div>
-          <textarea
-            value={workflow.params.userInput || ''}
-            onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, userInput: e.target.value } }))}
-            placeholder="여기에 특정 가사 내용, 분위기, 스토리 등을 자유롭게 입력하세요. 입력 시 아래 설정보다 이 내용이 우선적으로 반영됩니다."
-            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-secondary outline-none transition-all h-32 resize-none"
-          />
-        </GlassCard>
-
         <header className="flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-bold mb-2">가사 및 프롬프트 생성</h1>
@@ -277,15 +226,6 @@ export const LyricsTab = ({
                   <RefreshCw className="w-3 h-3 text-gray-400" />
                 </button>
               )}
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] font-bold text-primary/50 uppercase tracking-widest">음악 엔진</span>
-              <p className="text-xs font-mono text-secondary">
-                {musicEngine.includes('magenta') ? 'Google Magenta' :
-                  musicEngine.includes('musiclm') ? 'Google MusicLM' :
-                    musicEngine.includes('suno') ? 'Suno AI' :
-                      musicEngine.includes('udio') ? 'Udio' : 'Echoes Unto Him'}
-              </p>
             </div>
           </div>
         </header>
@@ -508,8 +448,8 @@ export const LyricsTab = ({
                 <label className="text-sm font-medium text-gray-400 block">메인 악기 (AI가 세션을 구성합니다)</label>
                 <span className="text-[9px] font-bold text-primary border border-primary/30 px-1.5 py-0.5 rounded">다중 선택 (퓨전)</span>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => setIsInstrumentOpen(!isInstrumentOpen)}
                 className="w-full flex items-center justify-between bg-black/40 border border-white/10 p-2.5 rounded-lg hover:border-primary/50 transition-all text-sm text-left group"
               >
@@ -524,6 +464,11 @@ export const LyricsTab = ({
                       {inst}
                     </span>
                   ))}
+                  {instrumentDescription && (
+                    <span className="text-[9px] text-primary font-black px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded ml-1 animate-pulse">
+                      ✨ AI 매핑: {instrumentDescription}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -578,6 +523,8 @@ export const LyricsTab = ({
                 </div>
               )}
             </div>
+
+
 
             <div className="pt-2">
               <div className="flex items-center gap-2 mb-2">
@@ -730,114 +677,71 @@ export const LyricsTab = ({
                 />
               </GlassCard>
             </div>
-
-
           </motion.div>
         )}
 
-        {/* Lyrics History List (v1.12.1: Slimmed) - Moved outside any nested conditionals */}
-        {(sunoTracks || []).some(t => t && t.title && t.lyrics) && (
-          <div className="space-y-4 mt-10">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2 px-2 pb-3 border-b border-white/5">
-                <Database className="w-3 h-3 text-primary/50" />
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">가사 생성 히스토리 (Slim List)</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
-                {(() => {
-                  const uniqueTracks = Array.from(new Map((sunoTracks || [])
-                    .filter(t => t && t.title && t.lyrics)
-                    .map(t => [t.title, t])
-                  ).values());
-                  
-                  const totalPages = Math.ceil(uniqueTracks.length / itemsPerPage);
-                  const startIndex = (currentPage - 1) * itemsPerPage;
-                  const paginatedTracks = uniqueTracks.slice(startIndex, startIndex + itemsPerPage);
-
-                  return (
-                    <>
-                      {paginatedTracks.map((track, idx) => {
-                        const globalIdx = startIndex + idx + 1;
-                        return (
-                          <div key={idx} className="flex items-center group hover:bg-white/5 overflow-hidden transition-all h-[28px] px-1 -mx-1">
-                            <button
-                              onClick={() => handleLoadFromHistory(track)}
-                              className="flex-1 text-left px-3 py-1.5 flex items-center justify-between relative overflow-hidden"
-                            >
-                              <div className="flex items-center gap-3 overflow-hidden relative z-10 flex-1">
-                                <span className="text-[9px] text-primary/40 font-mono w-4 text-center group-hover:text-primary transition-colors shrink-0">{globalIdx}</span>
-                                <span className="text-xs font-bold text-gray-300 truncate group-hover:text-white transition-colors">
-                                  {track.title} 
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0 relative z-10">
-                                <span className="text-[8px] text-gray-600 font-medium tabular-nums">
-                                  {track.created_at ? new Date(track.created_at).toLocaleDateString() : track.createdAt ? new Date(track.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
-                                </span>
-                              </div>
-                              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
-                            </button>
-                            <button
-                              onClick={(e) => handleDeleteHistory(e, track.title)}
-                              className="w-[36px] h-full flex items-center justify-center bg-red-500/5 hover:bg-red-500/20 text-red-400 border-l border-white/5 transition-colors opacity-0 group-hover:opacity-100"
-                              title="히스토리에서 삭제 (DB 반영)"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        );
-                      })}
-
-                      {/* 페이지네이션 컨트롤 */}
-                      {totalPages > 1 && (
-                        <div className="col-span-1 md:col-span-2 flex justify-center items-center gap-4 mt-4 pt-4 border-t border-white/5">
-                          <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="text-xs text-gray-500 hover:text-primary disabled:opacity-30 transition-colors"
-                          >
-                            이전
-                          </button>
-                          <div className="flex items-center gap-2">
-                            {Array.from({ length: totalPages }).map((_, i) => (
-                              <button
-                                key={i}
-                                onClick={() => setCurrentPage(i + 1)}
-                                className={cn(
-                                  "w-6 h-6 rounded-full text-[10px] font-bold transition-all flex items-center justify-center",
-                                  currentPage === i + 1 
-                                    ? "bg-primary text-background" 
-                                    : "bg-white/5 text-gray-500 hover:bg-white/10 hover:text-white"
-                                )}
-                              >
-                                {i + 1}
-                              </button>
-                            ))}
-                          </div>
-                          <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="text-xs text-gray-500 hover:text-primary disabled:opacity-30 transition-colors"
-                          >
-                            다음
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+        {/* 곡 생성 히스토리 (SLIM LIST 스타일 통일) */}
+        <div className="space-y-4 pt-12 mt-12 border-t border-white/10">
+          <div className="flex items-center justify-between px-2">
+            <h4 className="font-bold text-[11px] text-gray-400 flex items-center gap-2 uppercase tracking-tight">
+              <Database className="w-3.5 h-3.5 text-primary" /> 가사 생성 히스토리 (SLIM LIST)
+            </h4>
+            <span className="text-[9px] text-gray-600 font-medium">통합 히스토리</span>
           </div>
-        )}
+          
+          {sunoTracks.filter(t => t.lyrics || t.koreanLyrics || t.content).length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+              {sunoTracks
+                .filter(t => t.lyrics || t.koreanLyrics || t.content)
+                .slice(0, 20)
+                .map((track, idx) => (
+                <div 
+                  key={track.id || `track-${idx}`} 
+                  onClick={() => {
+                    handleLoadFromHistory(track);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 border-transparent hover:border-primary transition-all pr-0"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0 py-1.5 pl-3">
+                    <span className="text-[9px] font-bold text-primary/40 group-hover:text-primary transition-colors w-3">{idx + 1}</span>
+                    <p className="text-[11px] font-bold text-white/90 truncate tracking-tight">
+                      {(track.title || track.koreanTitle || '무제')
+                        .replace(/#\S+/g, '') // 해시태그 제거
+                        .replace(/\[.*?\]/g, '') // [CCM] 등 분류 태그 제거
+                        .trim()}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 shrink-0 h-full">
+                    <span className="text-[8px] text-gray-600 font-medium">
+                      {new Date(track.createdAt || track.created_at || Date.now()).toLocaleDateString().replace(/\. /g, '.')}
+                    </span>
+                    <button 
+                      onClick={(e) => deleteTrackHistory(e, track)}
+                      className="opacity-0 group-hover:opacity-100 h-[32px] aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 bg-white/5 border border-dashed border-white/10 rounded-2xl text-center">
+              <p className="text-xs text-gray-500 font-medium">히스토리가 비어 있습니다.</p>
+            </div>
+          )}
+        </div>
 
         <div className="flex justify-center mt-10">
           <button onClick={() => handleTabChange('music')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
             다음 단계: 음악 생성 <ChevronRight className="w-5 h-5" />
           </button>
         </div>
-      </motion.div>
+
       <Terminal logs={logs} />
+      </motion.div>
     </>
   );
 };

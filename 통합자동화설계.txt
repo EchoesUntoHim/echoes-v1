@@ -1,0 +1,41 @@
+[통합 자동화 파이프라인 초정밀 시스템 설계도 - v1.15.28]
+
+본 문서는 Echoes Unto Him 프로젝트의 데이터 흐름, 비즈니스 로직, 기술 규격을 상세히 정의한 최종 명세서입니다.
+
+1. 가사 및 음원 지능형 연동 (Lyrics & Audio Intelligence)
+   - [구조화 가사]: 가사 생성 시 [벌스1], [벌스2], [코러스] 등의 메타 태그를 포함하여 곡의 구성을 명확히 함.
+   - [파일명 자동 인식]: 음원 업로드 시 '한글제목_영어제목.mp3' 파일명에서 정규식을 통해 '한글제목'을 추출.
+     * 로직: filename.split('_')[0] 또는 전체 파일명과 DB 내 title 필드 대조.
+   - [조건부 음원 분석]:
+      * DB 매칭 성공 시: 기존 가사 원문을 유지한 채, AI(Gemini/Whisper 등)는 각 행의 시작/종료 시간(Timestamp)만 추출하여 매핑.
+      * DB 매칭 실패 시: 음원 전체를 분석하여 가사 텍스트(Korean)와 타임스탬프를 동시 생성.
+   - [데이터 전역 동기화]: 분석 완료 즉시 sunoTracks 컬렉션 업데이트 및 전역 State(workflow.results.lyrics)에 실시간 반영하여 가사/이미지/영상 탭의 화면을 동시에 갱신.
+
+2. 이미지 생성 및 블로그 자동화 명세 (Image & Blog Specs)
+   - [리소스 영구 보존]: 모든 업로드 이미지(메인, 틱톡, 숏츠1~5)와 음원은 Firebase Storage에 저장 후 URL을 DB(generatedImages 배열)에 기록.
+   - [블로그용 이미지 가공]:
+      * 숏츠용 세로 이미지(9:16) -> 가로(16:9) 중앙 정렬 크롭(Center-Weighted Crop).
+      * 블로그 생성 프로세스에서 도출된 중요 포인트 및 문구(가사 무관)를 이미지 위에 시각적으로 오버레이.
+   - [외부 자산 관리]: 외부에서 가져온 이미지도 '유령 이미지 찾기' 시스템을 통해 DB 누락 여부를 상시 감시하고 동기화.
+
+3. 렌더링 및 자동화 서버 연동 (Rendering & Queue Management)
+   - [순차적 렌더링 큐]: 로컬 PC 사양을 고려하여 모든 FFmpeg 요청은 전역 큐(Global Queue)에 대기열로 등록.
+     * 영상 렌더링 요청과 묵상 이미지 제작 요청이 병렬로 들어와도 하나씩 순차 처리.
+   - [정밀 자막 싱크]: 1ms 단위의 정밀 타임스탬프를 FFmpeg의 subtitles 필터 또는 drawtext 필터에 매핑하여 음원과 완벽 싱크 구현.
+   - [플랫폼 업로드 및 클린업]: 
+      * **유튜브**: API를 통한 자동 업로드 및 해시태그 최적화 적용.
+      * **틱톡**: API 연동 보류로 인해 당분간 **사용자가 직접 수동 업로드**.
+      * **자동 삭제**: 유튜브 자동 업로드와 틱톡 수동 업로드가 모두 완료된 것을 확인 후 `downloads/` 폴더의 원본 파일 삭제.
+
+4. 데이터베이스 및 스토리지 구조 (Data Schema)
+   - [Firestore - sunoTracks]:
+     * fields: title, lyrics, lyricsWithTimestamps(JSON), generatedImages(Array), created_at(Timestamp), userId, audioUrl.
+   - [Firebase Storage]:
+     * paths: users/{uid}/images/{filename}, users/{uid}/audio/{filename}.
+   - [Local Cache]: localStorage('echoesuntohim_suno_json_data')를 통해 오프라인 및 새로고침 시 빠른 렌더링 지원.
+
+5. UI 및 UX 지침
+   - [리스트 통합]: 가사 탭과 이미지 탭 하단에 동일한 '곡 히스토리 리스트(Slim List)'를 배치하여 탭 이동 시에도 작업 맥락 유지.
+   - [불필요 요소 제거]: 가사 탭 내의 '원가사 입력', '영어 번역 설정' 등 실사용하지 않는 GlassCard 영역은 삭제하여 작업 동선 최적화.
+
+[2026-04-30 최종 확정 및 동기화 완료 - Antigravity AI]

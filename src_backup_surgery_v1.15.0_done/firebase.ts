@@ -1,0 +1,160 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, onSnapshot, deleteDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import firebaseConfig from './firebase-applet-config.json';
+
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const auth = getAuth(app);
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+export const storage = getStorage(app);
+// 기본 로그인용 공급자 (추가 권한 없음 - 앱 접속 전용)
+export const googleProvider = new GoogleAuthProvider();
+
+// 플랫폼 연동용 공급자 (유튜브 업로드 및 블로거 권한 포함)
+export const youtubeProvider = new GoogleAuthProvider();
+youtubeProvider.addScope('https://www.googleapis.com/auth/youtube.upload');
+youtubeProvider.addScope('https://www.googleapis.com/auth/blogger');
+
+// Error Handling
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Background Audio Upload using Firebase Storage
+export const uploadAudioToStorageSafe = async (blob: Blob, pathPrefix: string = 'music'): Promise<string | null> => {
+  const user = auth.currentUser;
+  if (!user) return null; 
+  
+  try {
+    const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.m4a`;
+    const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
+    await uploadBytesResumable(storageRef, blob);
+    return await getDownloadURL(storageRef);
+  } catch (error) {
+    console.error("Firebase Storage Upload Error:", error);
+    return null;
+  }
+};
+
+// Background Image Upload from URL to Firebase Storage
+export const uploadImageToStorage = async (imageUrl: string, pathPrefix: string = 'images'): Promise<string | null> => {
+  const user = auth.currentUser;
+  if (!user) return null;
+
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+    const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
+    await uploadBytesResumable(storageRef, blob);
+    return await getDownloadURL(storageRef);
+  } catch (error) {
+    console.error("Firebase Image Upload Error:", error);
+    return null;
+  }
+};
+
+// Auth Helpers
+export const signInWithGoogle = async () => {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+    return { user: result.user, accessToken };
+  } catch (error: any) {
+    console.error("Error signing in with Google:", error);
+    const errorMessage = error.code ? `[${error.code}] ${error.message}` : String(error);
+    throw new Error(errorMessage);
+  }
+};
+
+export const signInForYouTube = async () => {
+  try {
+    const result = await signInWithPopup(auth, youtubeProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+    return { user: result.user, accessToken };
+  } catch (error: any) {
+    console.error("Error signing in with YouTube provider:", error);
+    const errorMessage = error.code ? `[${error.code}] ${error.message}` : String(error);
+    throw new Error(errorMessage);
+  }
+};
+
+export const logout = () => signOut(auth);
+
+// User Profile Sync
+export const syncUserProfile = async (user: User) => {
+  const userRef = doc(db, 'users', user.uid);
+  try {
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      await setDoc(userRef, {
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        role: 'user',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await setDoc(userRef, {
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+  } catch (error) {
+    console.error("Error syncing user profile:", error);
+  }
+};

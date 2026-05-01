@@ -86,19 +86,36 @@ export const uploadAudioToStorageSafe = async (blob: Blob, pathPrefix: string = 
 };
 
 // Background Image Upload from URL to Firebase Storage
-export const uploadImageToStorage = async (imageUrl: string, pathPrefix: string = 'images'): Promise<string | null> => {
+export const uploadImageToStorage = async (source: string | Blob, pathPrefix: string = 'images'): Promise<string | null> => {
   const user = auth.currentUser;
   if (!user) return null;
 
   try {
-    const response = await fetch(imageUrl);
-    const blob = await response.blob();
+    let blob: Blob;
+    if (typeof source === 'string') {
+      // Detect data URL (base64) and convert to Blob directly to avoid fetch errors
+      if (source.startsWith('data:')) {
+        const commaIndex = source.indexOf(',');
+        const mime = source.substring(5, source.indexOf(';'));
+        const b64 = source.substring(commaIndex + 1);
+        const binary = atob(b64);
+        const array = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
+        blob = new Blob([array], { type: mime });
+      } else {
+        const response = await fetch(source);
+        blob = await response.blob();
+      }
+    } else {
+      blob = source;
+    }
+
     const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
     const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
     await uploadBytesResumable(storageRef, blob);
     return await getDownloadURL(storageRef);
   } catch (error) {
-    console.error("Firebase Image Upload Error:", error);
+    console.error('Firebase Image Upload Error:', error);
     return null;
   }
 };
