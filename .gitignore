@@ -29,3 +29,10 @@ downloads/
 reports/
 rules/
 renders/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
