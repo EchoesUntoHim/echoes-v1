@@ -73,12 +73,12 @@ class Particle {
       this.speedY = Math.random() * 1 + 0.8;
       this.color = '255, 182, 193'; // Pink
     } else if (type === 'dust') {
-      this.size = Math.random() * 3 + 1; // [v1.15.29] Larger
+      this.size = Math.random() * 3 + 1; // [v1.15.34] Larger
       this.speedX = Math.random() * 0.8 - 0.4;
       this.speedY = Math.random() * 0.6 - 0.8; // Floating up
       this.color = '255, 230, 100'; // Brighter Gold
     } else { // stars
-      this.size = Math.random() * 3 + 1; // [v1.15.29] Larger and visible
+      this.size = Math.random() * 3 + 1; // [v1.15.34] Larger and visible
       this.speedX = Math.random() * 0.2 - 0.1; // Subtle movement
       this.speedY = Math.random() * 0.2 - 0.1;
       this.color = '255, 255, 255';
@@ -103,7 +103,7 @@ class Particle {
 
     if (this.life <= 0) {
       this.life = this.maxLife;
-      // [v1.15.29] Reset to random position to avoid concentration at bottom
+      // [v1.15.34] Reset to random position to avoid concentration at bottom
       this.x = Math.random() * canvasWidth;
       this.y = Math.random() * canvasHeight;
     }
@@ -149,6 +149,7 @@ interface VideoPlayerProps {
   videoEngine?: string;
   videoRenderApiUrl?: string;
   karaokeColor?: string;
+  category?: string;
 }
 
 export const VideoPlayer = forwardRef(({
@@ -178,7 +179,8 @@ export const VideoPlayer = forwardRef(({
   onRenderComplete,
   videoEngine = 'echoesuntohim-v2.1-free',
   videoRenderApiUrl = RENDER_API_URL,
-  karaokeColor = '#00FFA3'
+  karaokeColor = '#00FFA3',
+  category = ''
 }: any, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -194,7 +196,7 @@ export const VideoPlayer = forwardRef(({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const particlesRef = useRef<any[]>([]);
   const lastParticleSettingsRef = useRef<string>('none');
-  // [v1.15.30] 재생 시작 시점 기록 (진입 효과 타이밍 보정용)
+  // [v1.15.34] 재생 시작 시점 기록 (진입 효과 타이밍 보정용)
   const playStartedTimeRef = useRef<number>(0);
 
   // Initialize particles when settings change
@@ -275,7 +277,7 @@ export const VideoPlayer = forwardRef(({
 
       lines.forEach(line => {
         const timeMatch = line.match(timeRegex);
-        // [v1.15.29] 구조 태그([Chorus] 등)를 감지하지만, cleanText에서는 제거하여 줄바꿈 효과 유도
+        // [v1.15.34] 구조 태그([Chorus] 등)를 감지하지만, cleanText에서는 제거하여 줄바꿈 효과 유도
         const hasStructuralTag = /\[(Verse|Chorus|Bridge|Outro|Intro|Hook|Instrumental|.*?)\]/i.test(line);
         const cleanText = line.replace(/\[.*?\]|\(.*?\)/g, '').trim();
 
@@ -284,10 +286,10 @@ export const VideoPlayer = forwardRef(({
           const secs = parseInt(timeMatch[2]);
           currentSectionTime = mins * 60 + secs;
 
-          // [v1.15.29] 타임스탬프가 있으면 텍스트가 비어있어도 추가 (간주/무음/자막지우기 처리)
+          // [v1.15.34] 타임스탬프가 있으면 텍스트가 비어있어도 추가 (간주/무음/자막지우기 처리)
           result.push({ time: currentSectionTime, text: cleanText });
         } else if (cleanText || hasStructuralTag) {
-          // [v1.15.29] 타임스탬프가 없는 줄이라도 구조 태그가 있거나 텍스트가 있으면 추가
+          // [v1.15.34] 타임스탬프가 없는 줄이라도 구조 태그가 있거나 텍스트가 있으면 추가
           // 구조 태그만 있는 경우 cleanText는 ""이 되어 시각적 줄바꿈(공백) 역할을 함
           result.push({ time: currentSectionTime, text: cleanText });
         }
@@ -331,7 +333,7 @@ export const VideoPlayer = forwardRef(({
     for (let i = 0; i < maxLines; i++) {
       const kor = korLines[i] || '';
       const eng = engLines[i] || '';
-      // [v1.15.29] 둘 다 비어있더라도(구조 태그 줄) 최소한 하나의 공백은 추가하여 줄바꿈 간격 확보
+      // [v1.15.34] 둘 다 비어있더라도(구조 태그 줄) 최소한 하나의 공백은 추가하여 줄바꿈 간격 확보
       flat.push(kor);
       if (eng) flat.push(eng);
       if (kor || eng || (korLines[i] !== undefined || engLines[i] !== undefined)) {
@@ -506,7 +508,7 @@ export const VideoPlayer = forwardRef(({
       const titleDuration = (titleSettings as any).titleDuration || 5;
       const titleFade = (titleSettings as any).titleFade || 0.5;
 
-      // [v1.15.30] 진입 효과 타이밍: 실제 재생 시작 후 경과 시간 사용
+      // [v1.15.34] 진입 효과 타이밍: 실제 재생 시작 후 경과 시간 사용
       const elapsed = currentAudioTime - startTime;
       const realPlayElapsed = playStartedTimeRef.current > 0 ? (Date.now() - playStartedTimeRef.current) / 1000 : 0;
       const effectElapsed = isPlaying ? realPlayElapsed : 0;
@@ -546,7 +548,7 @@ export const VideoPlayer = forwardRef(({
 
         if (animation !== 'none') {
           const fadeIn = titleFade || 0.5;
-          const animElapsed = isPrePlay ? 0.01 : effectElapsed; // [v1.15.30] 실제 재생 경과 시간 사용
+          const animElapsed = isPrePlay ? 0.01 : effectElapsed; // [v1.15.34] 실제 재생 경과 시간 사용
 
           if (animation === 'floating') animY = Math.sin(segmentTime * 2) * 10;
           else if (animation === 'wave') animY = Math.sin(segmentTime * 3) * 15;
@@ -870,12 +872,12 @@ export const VideoPlayer = forwardRef(({
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
-        playStartedTimeRef.current = 0; // [v1.15.30] 정지 시 리셋
+        playStartedTimeRef.current = 0; // [v1.15.34] 정지 시 리셋
       } else {
         if (audioRef.current.currentTime < startTime || (duration && audioRef.current.currentTime >= startTime + duration)) {
           audioRef.current.currentTime = startTime;
         }
-        playStartedTimeRef.current = Date.now(); // [v1.15.30] 재생 시작 시점 기록
+        playStartedTimeRef.current = Date.now(); // [v1.15.34] 재생 시작 시점 기록
         audioRef.current.play().catch(e => console.error("Playback failed:", e));
       }
       setIsPlaying(!isPlaying);
@@ -945,7 +947,8 @@ export const VideoPlayer = forwardRef(({
             lyrics,
             englishLyrics,
             timedLyrics,
-            type,
+            type: label || type, // Pass the specific label (e.g. Shorts_1)
+            category: category || (koreanTitle?.includes('묵상') ? '묵상' : '영상'),
             quality: '1080p',
             startTime,
             duration: duration || audioDuration || 30,
@@ -1110,8 +1113,13 @@ export const VideoPlayer = forwardRef(({
       const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
       const url = URL.createObjectURL(videoBlob);
 
-      const baseName = originalFileName ? originalFileName.replace(/\.[^/.]+$/, "") : (title || 'video');
-      const fileName = `${baseName} ${label || type}.mp4`;
+      const kTitle = koreanTitle || '제목없음';
+      const eTitle = englishTitle || 'Untitled';
+      const finalCategory = category || (titleSettings as any)?.category || (koreanTitle?.includes('묵상') ? '묵상' : '영상');
+      const safeType = (label || type || 'video').toLowerCase();
+
+      // [분류] 한글 제목_English Title_타입.mp4
+      const fileName = `[${finalCategory}] ${kTitle}_${eTitle}_${safeType}.mp4`;
 
       const a = document.createElement('a');
       a.href = url;

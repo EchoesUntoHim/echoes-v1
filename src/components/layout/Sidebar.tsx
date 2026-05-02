@@ -55,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="text-xl font-black tracking-tighter group-hover:text-primary transition-colors leading-none bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 whitespace-nowrap">
             Echoes Unto Him
           </span>
-          <span className="text-[10px] font-bold text-primary/60 mt-1">v1.15.29</span>
+          <span className="text-[10px] font-bold text-primary/60 mt-1">v1.15.34</span>
         </div>
       </div>
 

@@ -17,7 +17,8 @@ export const useLyricsLogic = ({
   setEnglishVideoLyrics,
   shortsCount,
   lyricsPrompts,
-  user
+  user,
+  setShortsHighlights
 }: any) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -132,7 +133,9 @@ export const useLyricsLogic = ({
         }
       });
 
-      const result = JSON.parse(response.text);
+      const responseText = response.text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
       const titles = (result.titles || []).map((t: string) => t.replace(/\[.*?\]/g, '').trim());
       const finalTitle = titles[0] || 'Untitled';
       const [kTitle, eTitle] = finalTitle.includes('_') ? finalTitle.split('_') : [finalTitle, ''];
@@ -208,7 +211,7 @@ export const useLyricsLogic = ({
         created_at: new Date().toISOString()
       }, ...prev]);
 
-      // [v1.15.29] Save to Cloud DB (Firestore) - Static Import used for stability
+      // [v1.15.34] Save to Cloud DB (Firestore) - Static Import used for stability
       if (user) {
         try {
 
@@ -277,7 +280,7 @@ export const useLyricsLogic = ({
       `;
 
       const response = await ai.models.generateContent({
-        model: aiEngine || 'gemini-1.5-flash',
+        model: aiEngine || DEFAULT_AI_ENGINE,
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
 
@@ -334,53 +337,58 @@ export const useLyricsLogic = ({
       const prompt = `
         이 오디오 파일을 정밀 분석하여 전체 가사를 추출하고 타임스탬프를 매겨줘.
         
-        [언어 판단 및 입력 지침]
-        1. 음원의 주 언어가 한국어인지 영어인지 먼저 판단하여 'isEnglish' 필드에 불리언 값으로 반환할 것.
-        2. **한국어 노래일 경우**: 
-           - 'lyrics' 필드에 오디오에서 추출한 한국어 가사 입력.
-           - 'englishLyrics' 필드에 한국어 가사를 영어로 번역하여 입력.
-        3. **영어 노래일 경우**:
-           - 'englishLyrics' 필드에 오디오에서 추출한 영어 가사 입력.
-           - 'lyrics' 필드에 영어 가사를 한국어로 번역하여 입력.
+        [SYSTEM] 당신은 전문 음악 프로듀서이자 영상 편집자입니다.
+        
+        [🚨 초강력 필수 지침 - 반드시 지킬 것 🚨]
+        1. 타임스탬프 강제: 모든 가사 줄 앞에는 예외 없이 [MM:SS] 형식의 타임스탬프를 붙이세요.
+        2. [구조 태그] 독립 행 구성: [Verse], [Chorus], [Bridge] 등의 태그는 반드시 **앞뒤로 한 줄씩 비우고(Double Newline)** 독립된 줄에 배치하세요. 절대 가사와 같은 줄에 쓰지 마세요.
+        3. 정밀 공백 스탬프(1초 지침): 가사가 없는 구간이 1초 이상 지속되면, 해당 시점의 타임스탬프와 함께 **아무 내용도 없는 빈 줄**을 반드시 생성하세요. 이는 자막을 지우는 핵심 신호입니다.
+           (예시 - 이 구조를 100% 따를 것):
+           [02:20] 노래 가사 줄
+           
+           [02:25] [Chorus]
+           
+           [02:25] 코러스 시작 가사
+           [02:41] 
+           [02:43] [Bridge]
+        4. 세로 대조 확인(Interleaved): 'interleavedReview' 필드에는 확인이 편하도록 **[MM:SS] 한글가사 \n [MM:SS] 영어가사** 순서로 한 줄씩 번갈아가며 모든 가사를 배치하세요.
+        5. 줄 수 일치: 'lyrics'와 'englishLyrics'의 모든 타임스탬프와 줄 수는 100% 일치해야 합니다.
         
         ${(options?.referenceLyrics && options.referenceLyrics.trim().length > 0) ? `
-        [필수 지침 - 사용자 원본 가사 우선]
-        중요: 아래 제공된 [원본 가사]는 사용자가 이미 생성한 '정답' 가사입니다. 
-        오디오에서 들리는 내용이 다르더라도 절대 가사 텍스트를 수정하지 말고, 이 텍스트를 그대로 유지한 채 각 문장의 정확한 타임스탬프만 추가해줘.
-        
-        [원본 가사]:
+        [사용자 원본 가사 기반 분석]
+        아래 원본 가사의 텍스트를 절대 변형하지 말고, 오디오 타이밍에 맞춰 타임스탬프와 구조 태그만 추가하세요.
         ${options.referenceLyrics}
         ` : `
-        [필수 지침 - 가사 직접 추출]
-        사용자가 제공한 가사가 없으므로 오디오를 직접 듣고 가사를 정확히 추출해줘.
+        [가사 직접 추출]
+        오디오를 듣고 가사를 정확히 추출하세요.
         `}
         
-        [공통 지시사항 - 반드시 엄격히 준수할 것]
-        1. **곡 구조 태그 [CRITICAL]**: 
-           - 반드시 [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Outro] 등 음악적 구조 태그를 줄 단위로 삽입할 것.
-           - 구조 태그는 반드시 **독립된 한 줄**로 작성하고, 그 다음 줄부터 해당 섹션의 가사를 작성할 것.
-           - 구조 태그 형식: "[00:00] [Verse 1]" (타임스탬프 + 구조명)
-           - 예시:
-             [00:00] [Intro]
-             [00:15] [Verse 1]
-             [00:15] 첫 번째 가사 줄
-             [00:20] 두 번째 가사 줄
-             [00:45] [Chorus]
-             [00:45] 후렴 가사 줄
-        2. **타임스탬프**: 모든 가사 줄과 구조 태그 시작에 [MM:SS] 형식의 타임스탬프를 반드시 포함할 것.
-        3. **가사 없는 구간 공백 스탬프 [CRITICAL]**: 
-           - 전주(Intro), 간주(Interlude), 후주(Outro), 브릿지 악기 연주 등 **노래가 없는 모든 구간**에는 반드시 아래와 같이 빈 가사 줄을 삽입할 것:
-             [02:30] [Outro]
-             [02:30] 
-           - 이는 자막 렌더링 시 가사 없는 구간에서 자막을 지우기 위한 필수 조치임.
-           - 곡 끝(Outro/Ending) 구간도 반드시 포함할 것.
-        4. **동기화**: 'lyrics'와 'englishLyrics'는 반드시 동일한 타임스탬프, 동일한 구조 태그, 동일한 줄 수를 가져야 함.
-        5. **줄바꿈 가독성**: 각 구조 태그 앞에 빈 줄을 하나 추가하여 섹션 간 구분을 명확히 할 것.
-        6. 반드시 JSON 형식으로 답변 (isEnglish, lyrics, englishLyrics, timedLyrics, bpm, key, energy, mood 포함).
+        [HIGHLIGHT INSTRUCTION]
+        - 반드시 제공된 오디오 파일의 **실제 총 재생 시간(Total Duration)을 먼저 정확하게 파악**하세요.
+        - 음원의 가사와 분위기를 분석하여 가장 임팩트 있는 구간(코러스/사비, 브릿지 등)을 ${shortsCount}개 찾아내세요.
+        - 🚨 치명적 주의사항: 하이라이트 시작 시간(start)은 **절대 실제 노래 총 길이를 초과해서는 안 됩니다.** (예: 노래가 4분(240초)인데 start를 300초로 설정하는 환각 오류 엄벌)
+        - 숏츠 길이(30~49초)를 고려하여, \`start + duration\` 값이 노래의 총 길이를 넘지 않도록 안전하게 계산하세요.
+        - 기계적인 30초 분할(0-30, 30-60) 절대 금지. 의미 있는 마디(Phrase) 기준으로 자르세요.
+
+        [OUTPUT FORMAT STRICT JSON]
+        {
+          "isEnglish": boolean,
+          "lyrics": "[00:00] [Intro]\\n[00:15] [Verse 1] 가사...\\n[00:30] \\n[00:32] 가사...",
+          "englishLyrics": "[00:00] [Intro]\\n[00:15] [Verse 1] Lyrics...\\n[00:30] \\n[00:32] Lyrics...",
+          "interleavedReview": "[00:15] 가사\\n[00:15] Lyrics\\n[00:30] (Blank)\\n[00:32] 가사\\n[00:32] Lyrics",
+          "timedLyrics": [],
+          "bpm": number,
+          "key": "string",
+          "energy": number,
+          "mood": "string",
+          "highlights": [
+            { "start": 45, "duration": 35, "reason": "..." }
+          ]
+        }
       `;
 
       const response = await ai.models.generateContent({
-        model: aiEngine || 'gemini-1.5-flash',
+        model: aiEngine || DEFAULT_AI_ENGINE,
         contents: [
           {
             role: "user",
@@ -393,10 +401,12 @@ export const useLyricsLogic = ({
         config: { responseMimeType: "application/json" }
       });
 
-      const result = JSON.parse(response.text);
+      const responseText = response.text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
 
       if (!options?.skipSync) {
-        // 1. [실시간 전파] 모든 탭이 참조하는 전역 workflow 상태 업데이트
+        // 1. [실시간 전파] 전역 workflow 상태 업데이트
         setWorkflow((prev: any) => ({
           ...prev,
           params: {
@@ -410,6 +420,7 @@ export const useLyricsLogic = ({
             lyrics: result.lyrics,
             englishLyrics: result.englishLyrics,
             isEnglish: !!result.isEnglish,
+            interleavedReview: result.interleavedReview,
             timedLyrics: result.timedLyrics || [],
             audioAnalysis: {
               bpm: result.bpm,
@@ -421,7 +432,21 @@ export const useLyricsLogic = ({
           progress: { ...prev.progress, audioAnalysis: 100 }
         }));
 
-        // 2. [데이터 역류] 히스토리 리스트(sunoTracks) 업데이트
+        // 2. [숏츠 하이라이트] 추출된 하이라이트 상태 저장
+        if (result.highlights && Array.isArray(result.highlights)) {
+          const validHighlights = result.highlights.slice(0, shortsCount);
+          setShortsHighlights(validHighlights);
+          localStorage.setItem('echoesuntohim_shortsHighlights', JSON.stringify(validHighlights));
+          addLog(`✅ 오디오 분석 완료: ${validHighlights.length}개의 하이라이트 구간(30~49초)이 자동 추출되었습니다.`);
+          if (result.interleavedReview) {
+            addLog(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔎 [가사 대조 확인 - 세로 배열 모드]\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${result.interleavedReview}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          }
+        } else {
+          const defaultHighlights = Array.from({ length: shortsCount }).map(() => ({ start: 0, duration: 30 }));
+          setShortsHighlights(defaultHighlights);
+        }
+
+        // 3. [데이터 역류] 히스토리 리스트 업데이트
         const currentTitle = workflow.params.title || workflow.params.koreanTitle;
         setSunoTracks((prev: any[]) => {
           const exists = prev.some(t => t.title === currentTitle || t.id === workflow.results.trackId);
@@ -433,50 +458,37 @@ export const useLyricsLogic = ({
               lyricsWithTimestamps: result.timedLyrics || [],
               audioAnalysis: result
             } : t);
-          } else {
-            // 매칭되는 히스토리가 없었던 경우 새로 생성하여 추가
-            return [{
-              id: Date.now().toString(),
-              title: currentTitle,
-              lyrics: result.lyrics,
-              englishLyrics: result.englishLyrics,
-              lyricsWithTimestamps: result.timedLyrics || [],
-              created_at: new Date().toISOString()
-            }, ...prev];
           }
+          return prev;
         });
 
-        // 3. [영상 렌더링용] 자막 상태 업데이트
+        // 4. [영상 렌더링용] 자막 상태 업데이트
         if (result.lyrics) setVideoLyrics(result.lyrics);
         if (result.englishLyrics) setEnglishVideoLyrics(result.englishLyrics);
 
-        // 4. [v1.15.29] [클라우드 저장] Firestore에 타임스탬프 가사 덮어씌우기
+        // 5. [클라우드 저장] Firestore 동기화
         if (user) {
           try {
             const docId = workflow.results.trackId || currentTitle.replace(/[^a-zA-Z0-9가-힣_-]/g, '_');
             const trackRef = doc(collection(db, 'sunoTracks'), docId);
-
             await setDoc(trackRef, {
               lyrics: result.lyrics,
               englishLyrics: result.englishLyrics,
               lyricsWithTimestamps: result.timedLyrics || [],
               updatedAt: serverTimestamp()
             }, { merge: true });
-            addLog("☁️ 분석된 타임스탬프 가사가 클라우드 DB에 동기화되었습니다.");
-          } catch (e) {
-            console.error("Firestore Sync Error:", e);
-          }
+            addLog("☁️ 분석된 데이터가 클라우드 DB에 동기화되었습니다.");
+          } catch (e) { }
         }
       }
 
-      addLog(`✅ 음원 분석 및 전체 동기화 완료`);
       return result;
 
     } catch (error: any) {
       console.error("Audio Analysis Error:", error);
       addLog(`❌ 음원 분석 실패: ${error.message}`);
     }
-  }, [apiKey, aiEngine, addLog, setWorkflow, setVideoLyrics, setEnglishVideoLyrics]);
+  }, [apiKey, aiEngine, addLog, setWorkflow, setVideoLyrics, setEnglishVideoLyrics, shortsCount, setShortsHighlights]);
 
   const generatePromptOnly = useCallback(async () => {
     if (!apiKey || !workflow.results.lyrics) return;
@@ -494,7 +506,7 @@ export const useLyricsLogic = ({
 
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: aiEngine || 'gemini-1.5-flash',
+        model: aiEngine || DEFAULT_AI_ENGINE,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -506,7 +518,9 @@ export const useLyricsLogic = ({
         }
       });
 
-      const result = JSON.parse(response.text);
+      const responseText = response.text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
       setWorkflow((prev: any) => ({
         ...prev,
         results: { ...prev.results, sunoPrompt: result.sunoPrompt }
@@ -528,7 +542,7 @@ export const useLyricsLogic = ({
       const prompt = `Generate 5 creative titles for these lyrics: ${workflow.results.lyrics}. Theme: ${workflow.params.topic}`;
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: aiEngine || 'gemini-1.5-flash',
+        model: aiEngine || DEFAULT_AI_ENGINE,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -540,7 +554,9 @@ export const useLyricsLogic = ({
         }
       });
 
-      const result = JSON.parse(response.text);
+      const responseText = response.text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
       setWorkflow((prev: any) => ({
         ...prev,
         results: { ...prev.results, suggestedTitles: result.titles }

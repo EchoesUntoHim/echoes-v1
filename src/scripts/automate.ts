@@ -5,7 +5,8 @@ import "dotenv/config";
 
 // 설정 로드
 const apiKey = process.env.VITE_GEMINI_API_KEY || "";
-const aiEngine = "gemini-1.5-flash";
+// [v1.15.37] 엔진 하드코딩 금지: 환경 변수 우선, 기본값은 최신 모델로 설정
+const aiEngine = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
 
 if (!apiKey) {
   console.error("❌ VITE_GEMINI_API_KEY가 .env 파일에 설정되어 있지 않습니다.");

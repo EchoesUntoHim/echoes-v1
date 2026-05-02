@@ -32,7 +32,11 @@ import {
   Volume2,
   Upload,
   ChevronLeft,
-  ChevronRight as ChevronRightIcon
+  ChevronRight as ChevronRightIcon,
+  Video,
+  ExternalLink,
+  Maximize2,
+  X
 } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { WorkflowState, Step } from '../types';
@@ -52,7 +56,10 @@ import {
   serverTimestamp,
   deleteDoc,
   doc,
-  where
+  where,
+  getDocs,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 
 interface MeditationItem {
@@ -61,6 +68,7 @@ interface MeditationItem {
   time: string;
   verse: string;
   content: string;
+  interpretation?: string; // [v1.15.31] 35~50초 상단 노출용 개혁주의 해석
   keywords: string[];
   cardNews: {
     hook: string;
@@ -70,11 +78,12 @@ interface MeditationItem {
   bgImage?: string;
   bgAudio?: string;
   audioName?: string;
+  videoUrl?: string; // [v1.15.35] 렌더링 완료된 영상 URL
 }
 
 interface MeditationTabProps {
   workflow: WorkflowState;
-  setWorkflow: (wf: WorkflowState) => void;
+  setWorkflow: React.Dispatch<React.SetStateAction<WorkflowState>>;
   addLog: (msg: string) => void;
   handleTabChange: (tab: Step) => void;
   apiKey: string;
@@ -82,7 +91,7 @@ interface MeditationTabProps {
   logs: string[];
   sunoTracks?: any[];
   setSunoTracks?: any;
-  addToRenderQueue?: (task: { label: string, payload: any, onComplete?: () => void }) => void;
+  addToRenderQueue?: (task: { label: string, payload: any, onComplete?: (result: any) => void }) => void;
   isRendering?: boolean;
   user: User | null;
 }
@@ -101,6 +110,10 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
   isRendering,
   user
 }) => {
+  // [v1.15.31] 유연한 스케줄링: 시작일 + 기간 선택
+  const [scheduleStartDate, setScheduleStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [schedulePeriod, setSchedulePeriod] = useState<7 | 14 | 28>(7);
+
   const [meditations, setMeditations] = useState<MeditationItem[]>(() => {
     const saved = localStorage.getItem('echoesuntohim_meditations');
     if (saved) return JSON.parse(saved);
@@ -108,15 +121,17 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     return Array.from({ length: 7 }).map((_, i) => ({
       id: 'med-' + Math.random().toString(36).substring(2, 15),
       date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      time: '06:00',
+      time: '04:50', // [v1.15.31] 04:50 AM 자동 예약
       verse: '',
       content: '',
+      interpretation: '',
       keywords: [],
       cardNews: { hook: '', body: '', cta: '' }
     }));
   });
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+  const [showFullPreview, setShowFullPreview] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [bulkTheme, setBulkTheme] = useState('');
 
@@ -125,15 +140,17 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
   const [histImages, setHistImages] = useState<any[]>([]);
   const [imageLibrary, setImageLibrary] = useState<any[]>([]);
   const [audioLibrary, setAudioLibrary] = useState<any[]>([]);
+  const [themeLibrary, setThemeLibrary] = useState<any[]>([]);
   const [libraryPage, setLibraryPage] = useState(0);
-  const [activeLibraryTab, setActiveLibraryTab] = useState<'image' | 'audio'>('image');
+  const [activeLibraryTab, setActiveLibraryTab] = useState<'image' | 'audio' | 'theme'>('image');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const ITEMS_PER_PAGE = 14;
 
-  // [v1.15.30] 유령 이미지 찾기 상태
+  // [v1.15.34] 유령 이미지 찾기 상태
   const [orphanedImages, setOrphanedImages] = useState<{ name: string, url: string }[]>([]);
   const [isScanningOrphans, setIsScanningOrphans] = useState(false);
+  const [isScanningAudioOrphans, setIsScanningAudioOrphans] = useState(false); // [v1.15.32] 오디오 유령 스캔 상태
 
   // Sync to localStorage (Slimmed)
   React.useEffect(() => {
@@ -144,16 +161,27 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     }
   }, [meditations]);
 
-  // [v1.15.30] Storage 직결 이미지 도서관 (DB 경유 불필요, 병렬 로딩)
+  // [v1.15.45] 클라우드 동기화 자동화: 모든 상태 변경 시 백그라운드 저장
+  React.useEffect(() => {
+    if (!user || meditations.length === 0) return;
+
+    const timeoutId = setTimeout(() => {
+      saveMeditationPlanToCloud(meditations);
+    }, 2000); // 2초 디바운스 적용하여 과도한 DB 쓰기 방지
+
+    return () => clearTimeout(timeoutId);
+  }, [meditations, bulkTheme]);
+
+  // [v1.15.34] Storage 직결 이미지 도서관 (DB 경유 불필요, 병렬 로딩)
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
-  
+
   const loadImagesFromStorage = async () => {
     if (!user) return;
     setIsLoadingLibrary(true);
     try {
       const storageRef = ref(storage, `users/${user.uid}/meditation_library`);
       const res = await listAll(storageRef);
-      
+
       if (res.items.length === 0) {
         setImageLibrary([]);
         setIsLoadingLibrary(false);
@@ -167,14 +195,14 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           return { id: item.name, url, name: item.name };
         })
       );
-      
+
       // 최신순 정렬 (파일명 타임스탬프: img_1776605297395_...)
       images.sort((a, b) => {
         const tsA = parseInt(a.name.match(/img_(\d+)/)?.[1] || '0');
         const tsB = parseInt(b.name.match(/img_(\d+)/)?.[1] || '0');
         return tsB - tsA;
       });
-      
+
       setImageLibrary(images);
       addLog(`📚 이미지 도서관: Storage에서 ${images.length}장 로드 완료`);
     } catch (err) {
@@ -193,7 +221,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
   useEffect(() => {
     if (!user) return;
 
-    const audQ = query(collection(db, 'users', user.uid, 'audio_library'), orderBy('createdAt', 'desc'));
+    const audQ = query(collection(db, 'users', user.uid, 'audio_library'));
     const audUnsubscribe = onSnapshot(audQ, (snapshot) => {
       setAudioLibrary(snapshot.docs.map(doc => ({
         id: doc.id,
@@ -201,6 +229,9 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         name: doc.data().name || 'Unknown',
         createdAt: doc.data().createdAt
       })));
+    }, (error) => {
+      console.error("Audio Library onSnapshot error:", error);
+      addLog(`❌ 도서관 목록 불러오기 실패: ${error.message}`);
     });
 
     // 미백업 데이터 DB 이전
@@ -230,14 +261,75 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
       }
     };
 
+    // [v1.15.43] 클라우드 작업 초안 불러오기
+    const loadCloudPlan = async () => {
+      if (!user || !db) return;
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          if (data.meditationPlan && Array.isArray(data.meditationPlan.meditations)) {
+            setMeditations(data.meditationPlan.meditations);
+            if (data.meditationPlan.bulkTheme) setBulkTheme(data.meditationPlan.bulkTheme);
+            addLog("☁️ 클라우드 DB에서 최신 작업 초안을 성공적으로 불러왔습니다.");
+          }
+        }
+      } catch (err: any) {
+        console.warn("Cloud load failed, using local storage instead.", err);
+      }
+    };
+
+    // Firebase Theme Library Sync (meditation_history 연동 + 로그 강화)
+    const historyQ = query(collection(db, 'meditation_history'), where('userId', '==', user.uid));
+    const themeUnsubscribe = onSnapshot(historyQ, (snapshot) => {
+      if (snapshot.empty) {
+        addLog("ℹ️ 주제 도서관: 불러올 기록이 없습니다.");
+        setThemeLibrary([]);
+        return;
+      }
+
+      const historyItems = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() :
+          data.created_at ? new Date(data.created_at).toLocaleDateString() : '';
+
+        return {
+          id: doc.id,
+          title: `${data.bulkTheme || data.title || '무제'} (${date})`,
+          meditations: data.meditations || [],
+          // 개별 항목일 경우를 대비해 원본 데이터 보존
+          raw: data,
+          createdAt: data.createdAt || data.created_at
+        };
+      });
+
+      setThemeLibrary(historyItems.sort((a, b) => {
+        const getTime = (val: any) => {
+          if (!val) return 0;
+          if (val.seconds) return val.seconds * 1000;
+          return new Date(val).getTime() || 0;
+        };
+        return getTime(b.createdAt) - getTime(a.createdAt);
+      }));
+
+      addLog(`📚 주제 도서관: ${historyItems.length}개의 기록을 불러왔습니다.`);
+    }, (error) => {
+      console.error("Theme Library onSnapshot error:", error);
+      addLog(`❌ 주제 도서관 로드 실패: ${error.message}`);
+    });
+
     syncPendingToDB();
+    loadCloudPlan();
 
     return () => {
       audUnsubscribe();
+      themeUnsubscribe();
     };
-  }, [user]);
+  }, [user, db]);
 
-  // [v1.15.30] 묵상용 유령 이미지 스캔
+  // [v1.15.34] 묵상용 유령 이미지 스캔
   const scanMeditationOrphans = async () => {
     if (!user) return;
     setIsScanningOrphans(true);
@@ -279,6 +371,73 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     }
   };
 
+  // [v1.15.32] 묵상용 유령 오디오 스캔 및 자동 동기화 (중복 제거 기능 포함)
+  const scanAudioOrphans = async () => {
+    if (!user) return;
+    setIsScanningAudioOrphans(true);
+    addLog(`🧹 오디오 도서관을 청소하고 유령 파일을 탐색합니다...`);
+
+    try {
+      // 1. 현재 DB에 있는 목록 가져오기
+      const snap = await getDocs(collection(db, 'users', user.uid, 'audio_library'));
+      const dbAudios = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 2. 중복 제거 작업 (이름이 같은 것이 여러 개면 삭제)
+      const seenNames = new Set<string>();
+      let deleteCount = 0;
+
+      for (const aud of dbAudios) {
+        if (seenNames.has(aud.name)) {
+          await deleteDoc(doc(db, 'users', user.uid, 'audio_library', aud.id));
+          deleteCount++;
+        } else {
+          seenNames.add(aud.name);
+        }
+      }
+
+      if (deleteCount > 0) {
+        addLog(`♻️ 중복된 오디오 데이터 ${deleteCount}개를 정리했습니다.`);
+      }
+
+      // 3. Storage 스캔하여 누락된 파일(유령) 찾기
+      const storageRef = ref(storage, `users/${user.uid}/audio_library`);
+      const res = await listAll(storageRef);
+      const orphans: { name: string, url: string }[] = [];
+
+      for (const item of res.items) {
+        // 이미 DB에 존재하는 이름(seenNames)이면 스킵
+        if (!seenNames.has(item.name)) {
+          const url = await getDownloadURL(item);
+          orphans.push({ name: item.name, url });
+        }
+      }
+
+      if (orphans.length > 0) {
+        addLog(`⚠️ 누락된 파일 ${orphans.length}개를 발견하여 복구합니다.`);
+        let successCount = 0;
+        for (const orphan of orphans) {
+          try {
+            await addDoc(collection(db, 'users', user.uid, 'audio_library'), {
+              url: orphan.url,
+              name: orphan.name,
+              createdAt: serverTimestamp()
+            });
+            successCount++;
+          } catch (e) {
+            console.error("Audio recover failed:", e);
+          }
+        }
+        addLog(`✅ 유령 오디오 ${successCount}개 복구 완료!`);
+      } else {
+        addLog(`✨ 도서관이 완벽하게 정리되었습니다.`);
+      }
+    } catch (err: any) {
+      addLog(`❌ 도서관 정리 실패: ${err.message}`);
+    } finally {
+      setIsScanningAudioOrphans(false);
+    }
+  };
+
   const recoverOrphanToLibrary = async (name: string, url: string) => {
     if (!user) return;
     try {
@@ -297,14 +456,14 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     }
   };
 
-  // [v1.15.30] 전체 복구
+  // [v1.15.34] 전체 복구
   const recoverAllOrphans = async () => {
     if (!user || orphanedImages.length === 0) return;
     if (!confirm(`유령 이미지 ${orphanedImages.length}개를 전부 DB에 복구하시겠습니까?`)) return;
-    
+
     addLog(`📦 유령 이미지 ${orphanedImages.length}개 전체 복구 시작...`);
     let successCount = 0;
-    
+
     for (const img of orphanedImages) {
       try {
         await addDoc(collection(db, 'meditation_history'), {
@@ -320,7 +479,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         console.warn(`Failed to recover: ${img.name}`);
       }
     }
-    
+
     setOrphanedImages([]);
     addLog(`✅ 유령 이미지 ${successCount}/${orphanedImages.length}개 전체 복구 완료!`);
   };
@@ -346,16 +505,110 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     });
   };
 
+  // [v1.15.43] 클라우드 동기화: 분석/생성 시 실시간 DB 저장
+  const saveMeditationPlanToCloud = async (currentMeditations: MeditationItem[]) => {
+    if (!user || !db) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        meditationPlan: {
+          meditations: currentMeditations,
+          bulkTheme,
+          updatedAt: serverTimestamp(),
+          lastUpdatedBy: 'MeditationFactory'
+        }
+      }, { merge: true });
+      addLog("☁️ 클라우드 DB에 작업 초안이 안전하게 동기화되었습니다.");
+    } catch (err: any) {
+      console.error("Cloud sync failed:", err);
+      addLog(`⚠️ 클라우드 동기화 실패: ${err.message}`);
+    }
+  };
+
+  // [v1.15.44] 일주일치 일괄 AI 분석 및 최적화 (Bulk Analysis)
+  const handleBulkGenerateAI = async () => {
+    if (!apiKey) {
+      addLog("⚠️ API 키가 설정되지 않았습니다.");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    addLog(`✨ [전체 일괄 분석] 7일치 콘텐츠 최적화 엔진 가동...`);
+
+    try {
+      const genAI = new GoogleGenAI({ apiKey });
+      const selectedModel = aiEngine || DEFAULT_AI_ENGINE;
+
+      const prompt = `
+        당신은 '혁신AI'의 성공 공식을 마스터한 CCM 수익화 전문가입니다. 
+        제시된 7일간의 묵상 계획을 분석하여, 각 항목마다 고전환 황금 키워드와 숏츠 최적화 줄바꿈을 적용하세요.
+
+        [분석 데이터]
+        ${meditations.map((m, i) => `Day ${i + 1}: ${m.verse} / ${m.content}`).join('\n')}
+
+        [수행 작업]
+        1. 모든 항목에 대해 조회수를 부르는 황금 키워드 7개 생성.
+        2. 말씀(Verse)을 7~10글자 단위로 의미가 끊기지 않게 줄바꿈(\\n) 처리.
+        3. 개혁주의 관점의 심도 있는 짧은 해석(Interpretation) 추가.
+        4. 궁금함을 유발하는 후킹 문구(CardNews) 생성.
+
+        [응답 형식 JSON 배열]
+        [
+          {
+            "keywords": ["#키워드1", ...],
+            "cardNews": { "hook": "...", "body": "...", "cta": "..." },
+            "verse": "줄바꿈이 포함된 말씀",
+            "interpretation": "해석"
+          },
+          ... (총 7개)
+        ]
+        반드시 JSON 배열 형식으로만 응답하세요.
+      `;
+
+      const result = await (genAI as any).models.generateContent({
+        model: selectedModel,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { responseMimeType: "application/json" }
+      });
+
+      const text = result.text || (result.response && typeof result.response.text === 'function' ? result.response.text() : "");
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        const updatedMeditations = meditations.map((item, idx) => {
+          const itemData = data[idx] || {};
+          return {
+            ...item,
+            keywords: Array.isArray(itemData.keywords) ? itemData.keywords : item.keywords || [],
+            cardNews: itemData.cardNews || item.cardNews,
+            verse: itemData.verse || item.verse,
+            interpretation: itemData.interpretation || item.interpretation
+          };
+        });
+
+        setMeditations(updatedMeditations);
+
+        await saveMeditationPlanToCloud(updatedMeditations);
+        addLog(`✅ 7일치 일괄 분석 및 클라우드 저장 완료!`);
+      }
+    } catch (e: any) {
+      console.error("Full Analysis Error:", e);
+      addLog(`❌ 일괄 분석 오류: ${e.message || JSON.stringify(e)}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleLoadFromHistory = (track: any) => {
     if (!track) return;
 
     // 현재 선택된 인덱스의 묵상 카드 업데이트
     const updates: Partial<MeditationItem> = {
-      verse: track.prompt || track.verse || meditations[activeIndex].verse,
-      content: track.content || meditations[activeIndex].content,
+      verse: track.prompt || track.verse || (activeIndex !== -1 ? meditations[activeIndex]?.verse : ''),
+      content: track.content || (activeIndex !== -1 ? meditations[activeIndex]?.content : ''),
       keywords: track.keywords || meditations[activeIndex].keywords || [],
-      bgImage: track.generatedImages?.[0]?.url || track.imageUrl || track.bgImage || meditations[activeIndex].bgImage,
+      bgImage: track.generatedImages?.[0]?.url || track.imageUrl || track.bgImage || (activeIndex !== -1 ? meditations[activeIndex]?.bgImage : undefined),
     };
 
     updateMeditation(activeIndex, updates);
@@ -427,7 +680,8 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
             "body": "본문",
             "cta": "행동 유도"
           },
-          "formattedVerse": "줄바꿈(\\n)이 포함된 성경 구절"
+          "formattedVerse": "줄바꿈(\\n)이 포함된 성경 구절",
+          "interpretation": "개혁주의 관점의 심도 있는 해석 (1~2줄)"
         }
         반드시 JSON 형식으로만 응답하세요. 
         [줄바꿈 및 데이터 보존 가이드라인]:
@@ -447,11 +701,19 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const data = JSON.parse(jsonMatch[0]);
-        updateMeditation(index, {
+        const updatedItem = {
           keywords: data.keywords,
           cardNews: data.cardNews,
-          verse: data.formattedVerse || item.verse
-        });
+          verse: data.formattedVerse || item.verse,
+          interpretation: data.interpretation || ''
+        };
+        updateMeditation(index, updatedItem);
+
+        // [v1.15.43] AI 분석 즉시 클라우드 저장
+        const nextMeditations = [...meditations];
+        nextMeditations[index] = { ...nextMeditations[index], ...updatedItem };
+        await saveMeditationPlanToCloud(nextMeditations);
+
         addLog(`✅ [Day ${index + 1}] 분석 및 줄바꿈 최적화 완료!`);
       }
     } catch (e: any) {
@@ -481,48 +743,74 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
            - 단어는 절대 중간에 분리하지 말 것 (11자 초과 시 이전 단어에서 끊기).
            - 성경 장절은 반드시 마지막 줄에 포함.
         3. **Content (묵상)**: 감성적인 3줄 묵상.
-        4. **CardNews Hook**: 궁금함을 유발하는 후킹 문구.
+        4. **Interpretation (해석)**: 개혁주의 신학 기반의 심도 있는 짧은 해석 (1~2줄). (영상 35~50초 구간 노출용)
+        5. **CardNews Hook**: 궁금함을 유발하는 후킹 문구.
 
-        JSON 배열 형식으로 응답하세요. (Array of 7 items)
+        JSON 배열 형식으로 응답하세요. (Array of items)
+        각 객체는 { verse, content, interpretation, keywords, cardNews } 를 포함해야 합니다.
       `;
 
-      const response = await genAI.models.generateContent({
+      const result = await (genAI as any).models.generateContent({
         model: selectedModel,
         contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
         config: { responseMimeType: "application/json" }
       });
 
-      const text = response.text || "";
+      const text = result.text || (result.response && typeof result.response.text === 'function' ? result.response.text() : "");
       const jsonMatch = text.match(/\[[\s\S]*\]/);
 
       if (jsonMatch) {
         const data = JSON.parse(jsonMatch[0]);
-        const newMeditations = meditations.map((item, idx) => ({
-          ...item,
-          verse: data[idx]?.verse || item.verse,
-          content: data[idx]?.content || item.content,
-          keywords: data[idx]?.keywords || item.keywords,
-          cardNews: data[idx]?.cardNews || item.cardNews
-        }));
+        const newMeditations = meditations.map((item, idx) => {
+          const itemData = data[idx] || {};
+          return {
+            ...item,
+            verse: itemData.verse || item.verse,
+            content: itemData.content || item.content,
+            interpretation: itemData.interpretation || item.interpretation,
+            keywords: Array.isArray(itemData.keywords) ? itemData.keywords : (item.keywords || []),
+            cardNews: itemData.cardNews || item.cardNews
+          };
+        });
         setMeditations(newMeditations);
+
+        // [v1.15.43] 일괄 생산 즉시 클라우드 저장
+        await saveMeditationPlanToCloud(newMeditations);
+
         addLog(`✅ 일주일 치 콘텐츠 생산 완료!`);
       }
     } catch (e: any) {
-      addLog(`❌ 일괄 생산 오류: ${e.message}`);
+      console.error("Full Production Error:", e);
+      addLog(`❌ 일괄 생산 오류: ${e.message || JSON.stringify(e)}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  // [v1.15.31] 유연한 날짜 설정: 선택한 시작일 + 기간(1주/2주/한달)에 따라 슬롯 동적 생성
   const handleBulkDateSet = () => {
-    const start = new Date();
-    const newMeditations = meditations.map((item, idx) => {
+    const start = new Date(scheduleStartDate);
+    const dayCount = schedulePeriod;
+    const newMeditations = Array.from({ length: dayCount }).map((_, idx) => {
       const d = new Date(start);
       d.setDate(start.getDate() + idx);
-      return { ...item, date: d.toISOString().split('T')[0] };
+      const existing = meditations[idx];
+      return existing
+        ? { ...existing, date: d.toISOString().split('T')[0] }
+        : {
+          id: 'med-' + Math.random().toString(36).substring(2, 15),
+          date: d.toISOString().split('T')[0],
+          time: '04:50', // [v1.15.31] 04:50 AM 자동 예약
+          verse: '',
+          content: '',
+          interpretation: '',
+          keywords: [],
+          cardNews: { hook: '', body: '', cta: '' }
+        };
     });
     setMeditations(newMeditations);
-    addLog("📅 날짜가 오늘부터 7일간 정렬되었습니다.");
+    setActiveIndex(0);
+    addLog(`📅 ${scheduleStartDate}부터 ${dayCount}일간 슬롯이 생성되었습니다.`);
   };
 
   const saveImageToLibrary = async (url: string) => {
@@ -542,29 +830,46 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     return null;
   };
 
+  // [v1.15.31] 오디오 다중 업로드 + 자동 번호 부여 (1분묵상_01, 1분묵상_02...)
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !auth.currentUser) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !auth.currentUser) return;
     setIsAnalyzing(true);
-    addLog(`🎵 [${file.name}] 오디오 라이브러리 업로드 중...`);
-    try {
-      const permanentUrl = await uploadImageToStorage(file as any, 'audio_library');
-      if (permanentUrl) {
-        await addDoc(collection(db, 'users', auth.currentUser.uid, 'audio_library'), {
-          url: permanentUrl,
-          name: file.name,
-          createdAt: serverTimestamp()
-        });
-        addLog("✅ 음악이 도서관에 등록되었습니다.");
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // 자동 번호 부여: 파일명이 '1분묵상'을 포함하면 기존 개수 기반 시퀀스 번호 생성
+      let finalName = file.name;
+      const rawName = file.name.replace(/\.[^/.]+$/, '');
+      if (rawName.includes('1분묵상') || rawName === '1분묵상') {
+        const existingCount = audioLibrary.filter((a: any) => (a.name || '').includes('1분묵상')).length;
+        const seqNum = String(existingCount + 1 + i).padStart(2, '0');
+        const ext = file.name.split('.').pop() || 'mp3';
+        finalName = `1분묵상_${seqNum}.${ext}`;
       }
-    } catch (e: any) {
-      addLog(`❌ 업로드 실패: ${e.message}`);
-    } finally {
-      setIsAnalyzing(false);
+
+      addLog(`🎵 [${finalName}] 오디오 라이브러리 업로드 중...`);
+      try {
+        const permanentUrl = await uploadImageToStorage(file as any, 'audio_library', finalName);
+        if (permanentUrl) {
+          await addDoc(collection(db, 'users', auth.currentUser.uid, 'audio_library'), {
+            url: permanentUrl,
+            name: finalName,
+            createdAt: serverTimestamp()
+          });
+          addLog(`✅ [${finalName}] 음악이 도서관에 등록되었습니다.`);
+        }
+      } catch (err: any) {
+        addLog(`❌ 업로드 실패 (${finalName}): ${err.message}`);
+      }
     }
+
+    // 같은 파일을 다시 업로드할 수 있도록 input 초기화
+    e.target.value = '';
+    setIsAnalyzing(false);
   };
 
-  // [v1.15.30] 체크박스 선택 상태
+  // [v1.15.34] 체크박스 선택 상태
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
 
@@ -587,7 +892,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
   };
 
   // Storage 직접 삭제 (단일)
-  const deleteFromLibrary = async (id: string, type: 'image' | 'audio') => {
+  const deleteFromLibrary = async (id: string, type: 'image' | 'audio' | 'theme') => {
     if (!auth.currentUser) return;
     if (type === 'audio') {
       // 오디오는 DB 유지
@@ -596,7 +901,17 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         await deleteDoc(doc(db, 'users', auth.currentUser.uid, 'audio_library', id));
         addLog(`🗑️ 오디오 삭제 완료.`);
       } catch (e: any) {
-        addLog(`❌ 삭제 실패: ${e.message}`);
+        console.error("Delete Error:", e);
+        addLog(`❌ 삭제 실패: ${e.message || JSON.stringify(e)}`);
+      }
+    } else if (type === 'theme') {
+      if (!confirm('분석된 주제를 삭제하시겠습니까?')) return;
+      try {
+        await deleteDoc(doc(db, 'meditation_history', id));
+        addLog(`🗑️ 주제 삭제 완료.`);
+      } catch (e: any) {
+        console.error("Delete Error:", e);
+        addLog(`❌ 삭제 실패: ${e.message || JSON.stringify(e)}`);
       }
     } else {
       // 이미지: Storage 직접 삭제
@@ -607,16 +922,17 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         setImageLibrary(prev => prev.filter(img => img.id !== id));
         addLog(`🗑️ 이미지 삭제 완료: ${id}`);
       } catch (e: any) {
-        addLog(`❌ 삭제 실패: ${e.message}`);
+        console.error("Image Delete Error:", e);
+        addLog(`❌ 이미지 삭제 실패: ${e.message || JSON.stringify(e)}`);
       }
     }
   };
 
-  // [v1.15.30] 선택된 이미지 일괄 삭제
+  // [v1.15.34] 선택된 이미지 일괄 삭제
   const deleteSelectedImages = async () => {
     if (!auth.currentUser || selectedImages.size === 0) return;
     if (!confirm(`선택한 ${selectedImages.size}개 이미지를 영구 삭제하시겠습니까?\n(삭제 후 복구 불가)`)) return;
-    
+
     addLog(`🗑️ ${selectedImages.size}개 이미지 일괄 삭제 시작...`);
     let successCount = 0;
 
@@ -644,32 +960,57 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     } else {
       if (audioRef.current) {
         audioRef.current.src = url;
-        audioRef.current.play();
+        audioRef.current.play().catch(e => {
+          console.error("오디오 재생 오류:", e);
+          addLog(`❌ 오디오 재생 실패: 네트워크 또는 파일 형식 문제일 수 있습니다.`);
+          setPlayingAudioId(null);
+        });
         setPlayingAudioId(id);
       }
     }
   };
 
-  // 요일별 파스텔 색상 (고정) - 원본 순서 유지
+  const renameAudiosChronologically = async () => {
+    if (!user) return;
+    setIsScanningAudioOrphans(true);
+    addLog(`🔄 오디오 이름을 시간 순서대로 일괄 변경합니다...`);
+    try {
+      const snap = await getDocs(query(collection(db, 'users', user.uid, 'audio_library'), orderBy('createdAt', 'asc')));
+      let count = 1;
+      for (const docSnap of snap.docs) {
+        const newName = `1분 묵상 ${String(count).padStart(3, '0')}.mp3`;
+        if (docSnap.data().name !== newName) {
+          await setDoc(doc(db, 'users', user.uid, 'audio_library', docSnap.id), { name: newName }, { merge: true });
+        }
+        count++;
+      }
+      addLog(`✅ 총 ${count - 1}개의 오디오 이름이 통일되었습니다.`);
+    } catch (e: any) {
+      addLog(`❌ 이름 변경 실패: ${e.message}`);
+    } finally {
+      setIsScanningAudioOrphans(false);
+    }
+  };
+
+  // [v1.15.34] 일주일 단위 무지개 연한 파스텔톤 고정 적용
   const DAY_COLORS = [
-    { day: '일요일', color: 'soft lavender purple, pastel violet' },
-    { day: '월요일', color: 'soft periwinkle blue, pastel lavender blue' },
-    { day: '화요일', color: 'soft teal, pastel mint green-blue' },
-    { day: '수요일', color: 'soft sage green, pastel mint green' },
-    { day: '목요일', color: 'soft lemon yellow, pastel warm yellow' },
-    { day: '금요일', color: 'soft tangerine orange, pastel warm orange' },
-    { day: '토요일', color: 'soft coral pink, pastel salmon pink' },
+    { day: '일요일', color: 'soft pastel violet' },
+    { day: '월요일', color: 'soft pastel red' },
+    { day: '화요일', color: 'soft pastel orange' },
+    { day: '수요일', color: 'soft pastel yellow' },
+    { day: '목요일', color: 'soft pastel green' },
+    { day: '금요일', color: 'soft pastel blue' },
+    { day: '토요일', color: 'soft pastel indigo' },
   ];
 
   const SYMBOL_POSITIONS = ['bottom-left', 'bottom-center', 'bottom-right', 'center', 'top-left', 'top-right'];
   const getRandomPosition = () => SYMBOL_POSITIONS[Math.floor(Math.random() * SYMBOL_POSITIONS.length)];
 
-  // AI에게 창의적 자유를 부여하는 묵상 프롬프트 생성 (제한 삭제)
-  const buildMeditationPrompt = (index: number, verse?: string) => {
-    const dayInfo = DAY_COLORS[index % 7];
+  const buildMeditationPrompt = (index: number, verse?: string, dateString?: string) => {
+    const dayOfWeek = dateString ? new Date(dateString).getDay() : (index % 7);
+    const dayInfo = DAY_COLORS[dayOfWeek];
     const position = getRandomPosition();
 
-    // 심볼을 고정하지 않고, AI가 구절(Verse)이나 주제를 바탕으로 기독교적인 상징물을 그리도록 유도
     const prompt = `A premium, artistic vertical background (9:16) for a Christian meditation app. 
       [STYLE]: Minimalist, serene, and spiritually uplifting. 
       [BACKGROUND]: Smooth, clean pastel ${dayInfo.color} tones with a soft paper texture.
@@ -677,7 +1018,8 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
       Examples could be an artistic cross, a gentle lamb, a sacred light, botanical elements like lilies or olive branches, or a serene landscape, but do not limit to these. 
       [COMPOSITION]: Place the main subject elegantly around the ${position} area. 
       [AESTHETIC]: High-quality artistic illustration (e.g., watercolor, soft oil, or clean minimalist vector), very clean and uncluttered. 
-      STRICTLY NO TEXT, LETTERS, OR WORDS on the image. High-end stationery/bookmark vibe.`;
+      [ABSOLUTE PROHIBITION]: STRICTLY NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, NO WATERMARKS, NO SIGNATURES, NO LOGOS anywhere on the image. The image must be 100% text-free. This is the most critical rule.
+      High-end stationery/bookmark vibe.`;
 
     return { prompt, position, dayInfo };
   };
@@ -701,7 +1043,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           const dayInfo = DAY_COLORS[i % 7];
           addLog(`🖼️ [Day ${i + 1} - ${dayInfo.day}] ${dayInfo.color} 색상 이미지 생성 중...`);
 
-          const { prompt, position } = buildMeditationPrompt(i, item.verse);
+          const { prompt, position } = buildMeditationPrompt(i, item.verse, item.date);
 
           const response = await genAI.models.generateImages({
             model: modelName,
@@ -717,11 +1059,9 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           if (image?.image?.imageBytes) {
             const base64Url = `data:image/png;base64,${image.image.imageBytes}`;
 
-            // [v1.15.36] UI 즉시 업데이트 (Base64 우선 적용)
             updateMeditation(i, { bgImage: base64Url });
             addLog(`📸 [Day ${i + 1}] 이미지 생성 완료! 화면에 즉시 적용합니다.`);
 
-            // [v1.15.42] 즉각적인 DB 저장 (백그라운드 지연 제거)
             try {
               const permanentUrl = await saveImageToLibrary(base64Url);
               if (user) {
@@ -735,17 +1075,15 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
                   day: dayInfo.day,
                   color: dayInfo.color,
                   engine: modelName,
-                  created_at: serverTimestamp(), // [v1.15.29] 문자열 대신 Timestamp 사용
-                  createdAt: serverTimestamp()   // [v1.15.29] 필드명 동기화
+                  created_at: serverTimestamp(),
+                  createdAt: serverTimestamp()
                 };
                 const docRef = await addDoc(collection(db, 'meditation_history'), historyData);
 
-                // 도서관 상태 즉시 업데이트 (SunoTracks 연동)
                 if (setSunoTracks) {
                   setSunoTracks(prev => [{ ...historyData, id: docRef.id }, ...prev]);
                 }
 
-                // 최종 영구 URL 적용
                 updateMeditation(i, { bgImage: permanentUrl || base64Url });
                 addLog(`✅ [Day ${i + 1}] DB 저장 완료.`);
               }
@@ -758,7 +1096,6 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           }
         } catch (e: any) {
           addLog(`❌ [Day ${i + 1}] 이미지 생성 실패: ${e.message}`);
-          // 루프는 계속 진행됨
         }
       }
       addLog("✅ 7일간의 요일별 파스텔 배경 생성 작업이 완료되었습니다!");
@@ -789,11 +1126,9 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
       if (image?.image?.imageBytes) {
         const base64Url = `data:image/png;base64,${image.image.imageBytes}`;
 
-        // [v1.15.36] UI 즉시 업데이트 (Base64 우선 적용)
         updateMeditation(index, { bgImage: base64Url });
         addLog(`📸 [Day ${index + 1}] 이미지가 교체되었습니다. 화면에 즉시 적용합니다.`);
 
-        // 백그라운드 저장 프로세스
         (async () => {
           try {
             const permanentUrl = await saveImageToLibrary(base64Url);
@@ -815,7 +1150,6 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
               if (setSunoTracks) {
                 setSunoTracks(prev => [{ ...historyData, id: docRef.id }, ...prev]);
               }
-              // 영구 URL로 교체
               updateMeditation(index, { bgImage: permanentUrl || base64Url });
             }
           } catch (err) {
@@ -846,15 +1180,33 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         continue;
       }
 
+      // 🚀 핵심 변경: 도서관의 음악을 요일별로 자동 매칭 (도서관 곡 수보다 일차가 많아도 자동으로 처음으로 돌아가서 매칭됨)
+      let audioUrl = item.bgAudio;
+      
+      if (!audioUrl) {
+        if (audioLibrary && audioLibrary.length > 0) {
+          // 도서관에 음악이 있다면 순서대로 가져옴 (예: 10곡일 때 1~7일차는 1~7번 곡 적용)
+          audioUrl = audioLibrary[i % audioLibrary.length].url;
+        } else {
+          // 도서관마저 텅 비어있다면 1일차 음악이나 기본 제공 음악 사용
+          audioUrl = meditations[0]?.bgAudio || "https://storage.googleapis.com/echoes-unto-him.appspot.com/assets/peaceful_meditation.mp3";
+        }
+      }
+
+      const audioStartTime = 0;
+      console.log(`🎬 [Day ${i + 1}] Requesting with Audio:`, audioUrl);
+
       const typingDuration = Math.min(15, Math.max(3, item.verse.length * 0.15));
       const payload = {
         assets: {
-          audioUrl: item.bgAudio || "https://storage.googleapis.com/echoes-unto-him.appspot.com/assets/peaceful_meditation.mp3",
+          audioUrl: audioUrl,
+          audioStartTime: audioStartTime,
           imageUrl: item.bgImage
         },
         settings: {
           koreanTitle: item.verse,
           lyrics: item.content,
+          timedLyrics: [{ start: 0, end: 60, text: `${item.verse}\n\n${item.content}` }],
           type: 'shorts',
           duration: 60,
           titleSettings: {
@@ -864,16 +1216,64 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
             lyricsDisplayMode: 'center',
             lyricsStartTime: typingDuration + 1,
             showVisualizer: true,
-            particleSystem: 'dust'
+            particleSystem: 'dust',
+            interpretation: item.interpretation,
+            timeline: {
+              verseEnd: 35,
+              interpretationStart: 35,
+              interpretationEnd: 50,
+              verseResume: 50
+            }
           }
+        },
+        metadata: {
+          description: `${item.cardNews?.hook || ''}\n\n${item.cardNews?.body || ''}\n\n${item.cardNews?.cta || ''}`,
+          tags: item.keywords,
+          scheduledTime: `${item.date}T${item.time}:00`
         }
       };
 
       addToRenderQueue({
         label: `[Day ${i + 1}] ${item.verse}`,
         payload,
-        onComplete: () => {
-          addLog(`✅ [Day ${i + 1}] 렌더링 완료!`);
+        onComplete: (res: any) => {
+          console.log(`🎬 [Day ${i + 1}] Render Result:`, res);
+          if (res.videoUrl) {
+            const videoUrl = res.videoUrl;
+            updateMeditation(i, { videoUrl: videoUrl });
+
+            if (setWorkflow) {
+              setWorkflow(prev => ({
+                ...prev,
+                results: {
+                  ...prev.results,
+                  videos: [
+                    ...(prev.results.videos || []),
+                    {
+                      id: `med-video-${Date.now()}-${i}`,
+                      url: videoUrl,
+                      type: 'shorts',
+                      label: `[Day ${i + 1}] ${item.verse.slice(0, 20)}...`,
+                      metadata: {
+                        verse: item.verse,
+                        content: item.content,
+                        keywords: item.keywords,
+                        source: 'meditation-factory'
+                      }
+                    }
+                  ]
+                }
+              }));
+            }
+
+            addLog(`✅ [Day ${i + 1}] 렌더링 완료! 비디오가 라이브러리에 등록되었습니다.`);
+
+            // 자동 다운로드 트리거 주석 처리 (앱 이탈 방지용)
+            // const a = document.createElement('a');
+            // a.href = videoUrl;
+            // a.download = `Meditation_Day_${i + 1}.mp4`;
+            // a.click();
+          }
         }
       });
     }
@@ -882,6 +1282,106 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
     setIsAnalyzing(false);
   };
 
+  const handleSingleRender = async (index: number) => {
+    if (!apiKey || !addToRenderQueue) return;
+    const item = meditations[index];
+    console.log(`🎬 [Day ${index + 1}] Debug Item Data:`, item);
+    if (!item.bgImage || !item.verse || !item.content) {
+      addLog(`⚠️ [Day ${index + 1}] 필수 데이터가 부족합니다.`);
+      return;
+    }
+
+    // 🚀 여기도 대량 렌더링과 똑같이 자동 매칭 로직 적용
+    let audioUrl = item.bgAudio;
+    
+    if (!audioUrl) {
+      if (audioLibrary && audioLibrary.length > 0) {
+        audioUrl = audioLibrary[index % audioLibrary.length].url;
+      } else {
+        audioUrl = meditations[0]?.bgAudio || "https://storage.googleapis.com/echoes-unto-him.appspot.com/assets/peaceful_meditation.mp3";
+      }
+    }
+    
+    const typingDuration = Math.min(15, Math.max(3, item.verse.length * 0.15));
+
+    const payload = {
+      assets: { audioUrl, audioStartTime: 0, imageUrl: item.bgImage },
+      settings: {
+        koreanTitle: item.verse,
+        lyrics: item.content,
+        timedLyrics: [{ start: 0, end: 60, text: `${item.verse}\n\n${item.content}` }],
+        type: 'shorts',
+        duration: 60,
+        titleSettings: {
+          animation: 'typing', titlePosition: 'middle', titleFade: typingDuration,
+          lyricsDisplayMode: 'center', lyricsStartTime: typingDuration + 1,
+          showVisualizer: true, particleSystem: 'dust',
+          interpretation: item.interpretation,
+          timeline: { verseEnd: 35, interpretationStart: 35, interpretationEnd: 50, verseResume: 50 }
+        }
+      },
+      metadata: {
+        description: `${item.cardNews?.hook || ''}\n\n${item.cardNews?.body || ''}\n\n${item.cardNews?.cta || ''}`,
+        tags: item.keywords,
+        scheduledTime: `${item.date}T${item.time}:00`
+      }
+    };
+    console.log("🚀 [Render] Individual Payload:", payload);
+    addLog(`🎬 [Day ${index + 1}] 렌더링 준비 중...`);
+
+    try {
+      addToRenderQueue({
+        label: `[Day ${index + 1}] ${item.verse}`,
+        payload,
+        onComplete: (res: any) => {
+          console.log(`🎬 [Day ${index + 1}] Render Result:`, res);
+          if (res.videoUrl) {
+            const videoUrl = res.videoUrl + (res.videoUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+            updateMeditation(index, { videoUrl: videoUrl });
+
+            if (setWorkflow) {
+              setWorkflow(prev => ({
+                ...prev,
+                results: {
+                  ...prev.results,
+                  videos: [
+                    ...(prev.results.videos || []),
+                    {
+                      id: `med-video-${Date.now()}`,
+                      url: videoUrl,
+                      type: 'shorts',
+                      label: `[Day ${index + 1}] ${item.verse.slice(0, 20)}...`,
+                      metadata: {
+                        verse: item.verse,
+                        content: item.content,
+                        keywords: item.keywords,
+                        source: 'meditation-factory'
+                      }
+                    }
+                  ]
+                }
+              }));
+            }
+
+            addLog(`✅ [Day ${index + 1}] 렌더링 완료! 비디오가 라이브러리에 등록되었습니다.`);
+
+            // 자동 다운로드 트리거 주석 처리 (앱 이탈 방지용)
+            // const a = document.createElement('a');
+            // a.href = videoUrl;
+            // a.download = `Meditation_Day_${index + 1}.mp4`;
+            // a.click();
+          }
+        }
+      });
+      addLog(`📥 [Day ${index + 1}] 렌더링 대기열에 추가되었습니다.`);
+    } catch (err: any) {
+      console.error("Queue Add Error:", err);
+      addLog(`❌ [Queue] 대기열 추가 실패: ${err.message}`);
+    }
+  };
+
+  const currentMeditation = activeIndex >= 0 && activeIndex < meditations.length ? meditations[activeIndex] : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -889,7 +1389,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
       className="max-w-6xl mx-auto space-y-8 pb-20"
     >
       {/* Header Area */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-white/5 pb-6">
         <div>
           <h2 className="text-3xl font-black tracking-tighter flex items-center gap-3">
             <Sparkles className="text-primary w-8 h-8" />
@@ -898,188 +1398,250 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           <p className="text-gray-400 mt-1 text-sm italic">"일주일 치 묵상을 한 번에!"</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={bulkTheme}
-            onChange={(e) => setBulkTheme(e.target.value)}
-            placeholder="주제 입력 (예: 감사)"
-            className="w-40 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none focus:border-indigo-500 transition-all"
-          />
-          <button onClick={handleGenerateFullPlan} className="px-4 py-2 bg-indigo-500 text-white rounded-xl font-bold text-sm flex items-center gap-2"><Sparkles className="w-4 h-4" /> 자동 생산</button>
-          <button onClick={handleBulkDateSet} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl font-bold text-sm flex items-center gap-2"><Calendar className="w-4 h-4" /> 날짜 설정</button>
-          <button onClick={handleGenerateAllImages} className="px-4 py-2 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-xl font-bold text-sm flex items-center gap-2"><ImageIcon className="w-4 h-4" /> 배경 생성</button>
-          <button
-            onClick={handleBulkRender}
-            disabled={isRendering || meditations.every(m => !m.bgImage)}
-            className={cn(
-              "px-6 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg transition-all",
-              isRendering
-                ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                : "bg-primary text-background hover:scale-105 active:scale-95"
-            )}
-          >
-            {isRendering ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                처리 중...
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4" />
-                대량 렌더링
-              </>
-            )}
-          </button>
+        <div className="flex flex-col gap-2 w-full md:w-auto">
+          <div className="flex items-center justify-end gap-2 w-full">
+            <input
+              type="text"
+              value={bulkTheme}
+              onChange={(e) => setBulkTheme(e.target.value)}
+              placeholder="주제 입력 (예: 감사)"
+              className="w-32 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-indigo-500 transition-all"
+            />
+            <button onClick={handleGenerateFullPlan} className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"><Sparkles className="w-3.5 h-3.5" /> 자동 생산</button>
+            <button
+              onClick={handleBulkGenerateAI}
+              className="px-4 py-1.5 bg-primary text-background rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-lg hover:scale-105 transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> AI 분석 및 최적화
+            </button>
+            <button onClick={handleGenerateAllImages} className="px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/20 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"><ImageIcon className="w-3.5 h-3.5" /> 배경 생성</button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 w-full">
+            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5">
+              <input
+                type="date"
+                value={scheduleStartDate}
+                onChange={(e) => setScheduleStartDate(e.target.value)}
+                className="bg-transparent text-xs text-gray-300 outline-none px-2 py-1"
+              />
+              <select
+                value={schedulePeriod}
+                onChange={(e) => setSchedulePeriod(Number(e.target.value) as 7 | 14 | 28)}
+                className="bg-black/50 text-xs text-gray-300 outline-none px-2 py-1 rounded border border-white/10 appearance-none cursor-pointer"
+              >
+                <option value={7}>1주일 (7일)</option>
+                <option value={14}>2주일 (14일)</option>
+                <option value={28}>한 달 (28일)</option>
+              </select>
+              <button onClick={handleBulkDateSet} className="px-3 py-1 hover:bg-white/10 rounded font-bold text-xs flex items-center gap-1 transition-colors"><Calendar className="w-3.5 h-3.5" /> 적용</button>
+            </div>
+
+            <button
+              onClick={handleBulkRender}
+              disabled={isRendering || meditations.every(m => !m.bgImage)}
+              className={cn(
+                "px-5 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-lg transition-all",
+                isRendering
+                  ? "bg-gray-700 text-gray-400 cursor-not-allowed"
+                  : "bg-primary text-background hover:scale-105 active:scale-95"
+              )}
+            >
+              {isRendering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              {isRendering ? "처리 중..." : "대량 렌더링"}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Sidebar */}
-        <div className="lg:col-span-3 space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-4">
+        <div className="lg:col-span-6 flex flex-col gap-2 h-fit">
           {meditations.map((item, idx) => (
-            <button
+            <div
               key={item.id}
-              onClick={() => setActiveIndex(idx)}
               className={cn(
-                "w-full p-4 rounded-2xl border transition-all text-left relative overflow-hidden group",
-                activeIndex === idx ? "bg-primary/10 border-primary/40 shadow-xl" : "bg-white/5 border-white/5"
+                "w-full px-4 py-3 rounded-xl border transition-all text-left relative overflow-hidden group flex flex-col",
+                activeIndex === idx ? "bg-primary/5 border-primary/40 shadow-xl" : "bg-white/5 border-white/5"
               )}
             >
-              <div className="flex justify-between items-center mb-1">
-                <span className={cn("text-[9px] font-black tracking-widest", activeIndex === idx ? "text-primary" : "text-gray-500")}>DAY {idx + 1}</span>
-                <div className="flex gap-1">
-                  {item.bgImage && <ImageIcon className="w-3 h-3 text-pink-400" />}
-                  {item.keywords.length > 0 && <CheckCircle className="w-3 h-3 text-primary" />}
+              {activeIndex === idx && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
+
+              <div
+                className="flex items-center justify-between cursor-pointer pl-2"
+                onClick={() => setActiveIndex(activeIndex === idx ? -1 : idx)}
+              >
+                <div className="flex items-center gap-4">
+                  <span className={cn("text-[10px] font-black tracking-widest", activeIndex === idx ? "text-primary" : "text-gray-500")}>DAY {idx + 1}</span>
+                  <span className="text-white font-bold text-sm truncate max-w-[200px]">{new Date(item.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5 items-center mr-2">
+                    {item.bgImage && <ImageIcon className="w-3.5 h-3.5 text-pink-400" />}
+                    {item.keywords.length > 0 && <CheckCircle className="w-3.5 h-3.5 text-primary" />}
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleGenerateAI(idx); }}
+                      className="p-1.5 hover:bg-primary/20 text-primary/60 hover:text-primary rounded-md transition-all"
+                      title="AI 분석"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSingleRender(idx); }}
+                      className="p-1.5 hover:bg-indigo-500/20 text-indigo-400/60 hover:text-indigo-400 rounded-md transition-all"
+                      title="개별 렌더링"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <p className="text-white font-bold text-sm">{new Date(item.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}</p>
-              <p className="text-[10px] text-gray-500 truncate mt-1 italic">{item.verse || "준비 전"}</p>
-              {activeIndex === idx && <div className="absolute right-0 top-0 bottom-0 w-1 bg-primary" />}
-            </button>
+
+              {activeIndex === idx && (
+                <div className="mt-4 pt-4 border-t border-white/10 pl-2 pr-1 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                  <div className="bg-black/20 p-4 rounded-xl border border-white/5 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase">게시 일자</label>
+                        <input type="date" value={item.date} onChange={(e) => updateMeditation(idx, { date: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-primary transition-all color-scheme-dark" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase">게시 시간</label>
+                        <input type="time" value={item.time} onChange={(e) => updateMeditation(idx, { time: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-primary transition-all color-scheme-dark" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">말씀 (Verse)</label>
+                      <textarea value={item.verse} onChange={(e) => updateMeditation(idx, { verse: e.target.value })} className="w-full h-16 bg-black/40 border border-white/10 rounded-lg p-2 text-xs focus:border-primary outline-none transition-all resize-none leading-relaxed" placeholder="성경 말씀과 장절" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">묵상 (Content)</label>
+                      <textarea value={item.content} onChange={(e) => updateMeditation(idx, { content: e.target.value })} className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs focus:border-primary outline-none transition-all resize-none leading-relaxed" placeholder="짧고 깊은 묵상 내용" />
+                    </div>
+                  </div>
+
+                  {Array.isArray(item.keywords) && item.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {item.keywords.map((kw, i) => (
+                        <span key={i} className="px-2 py-1 bg-white/10 text-white/70 border border-white/5 rounded-md text-[9px] font-bold">{kw}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
-        {/* Editor Area */}
-        <div className="lg:col-span-9 space-y-6">
+        <div className="lg:col-span-6 space-y-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeIndex}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="w-full"
             >
-              {/* Vertical Shorts Preview Mockup */}
-              <div className="flex flex-col items-center gap-6">
-                <div className="w-full max-w-[320px] space-y-2">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <ImageIcon className="w-3 h-3" /> 숏츠 9:16 미리보기
+                    <Layout className="w-3 h-3" /> 숏츠 레이아웃 디자인 (Static)
                   </label>
-                  <div className="relative aspect-[9/16] w-full bg-black rounded-[3rem] border-[8px] border-white/5 overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] group ring-1 ring-white/10">
-                    {meditations[activeIndex].bgImage ? (
+                  <div className="relative aspect-[9/16] w-full bg-black rounded-[3rem] border-[8px] border-white/5 overflow-hidden shadow-2xl group ring-1 ring-white/10">
+                    {activeIndex !== -1 && meditations[activeIndex] && meditations[activeIndex].bgImage ? (
                       <>
                         <img src={meditations[activeIndex].bgImage} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt="Preview" />
-                        {/* Deep Cinematic Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/90" />
-
-                        {/* Typewriter Preview Overlay - Clean & Simple */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center overflow-hidden">
-                          <motion.p
-                            key={meditations[activeIndex].verse}
-                            initial={{ opacity: 0, scale: 0.98 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8 }}
-                            className="text-white text-xl md:text-2xl font-bold italic tracking-tight leading-[1.6] whitespace-pre-wrap break-keep"
-                            style={{
-                              textShadow: '0 4px 20px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.5)',
-                              fontFamily: "'Outfit', sans-serif"
-                            }}
-                          >
-                            {meditations[activeIndex].verse || "말씀을 입력하세요"}
-                          </motion.p>
-                        </div>
-
-                        {meditations[activeIndex].bgAudio && (
-                          <div className="absolute top-8 left-8 px-4 py-2 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center gap-3 text-[10px] text-emerald-400 font-black shadow-2xl">
-                            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                            {meditations[activeIndex].audioName || "배경음악 재생 중"}
+                        <div className="absolute inset-0 flex flex-col pt-[15%] text-center">
+                          <div className="h-[45%] w-full flex items-center justify-center p-4">
+                            <motion.p
+                              key={meditations[activeIndex]?.verse}
+                              initial={{ opacity: 0, scale: 0.98 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="text-white text-xl font-bold italic tracking-tight leading-[1.6] whitespace-pre-wrap break-keep"
+                              style={{ textShadow: '0 4px 20px rgba(0,0,0,0.9)', fontFamily: "'Outfit', sans-serif" }}
+                            >
+                              {meditations[activeIndex]?.verse || "말씀을 입력하세요"}
+                            </motion.p>
                           </div>
-                        )}
-
-                        <button
-                          onClick={() => handleGenerateSingleImage(activeIndex)}
-                          className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-full text-white opacity-0 group-hover:opacity-100 transition-all border border-white/10"
-                        >
-                          <RefreshCw className="w-5 h-5" />
-                        </button>
+                          <div className="h-[40%] w-full flex flex-col items-center justify-center p-4 border-t border-dashed border-white/10">
+                            <p className="text-white/80 text-xs font-medium leading-[1.6] whitespace-pre-wrap break-keep text-center">
+                              {meditations[activeIndex]?.content || "묵상 내용을 입력하세요"}
+                            </p>
+                          </div>
+                          <div className="absolute bottom-0 h-[10%] w-full flex items-center justify-center border-t border-dashed border-white/10 bg-black/40">
+                            <span className="text-[8px] font-black text-white/30 tracking-widest uppercase">Safety Margin</span>
+                          </div>
+                        </div>
                       </>
                     ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/10">
-                        <ImageIcon className="w-16 h-16" />
-                        <button onClick={() => handleGenerateSingleImage(activeIndex)} className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl text-xs font-bold text-white border border-white/10 transition-all">배경 생성</button>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/10 p-8 text-center bg-[#111]">
+                        <ImageIcon className="w-16 h-16 opacity-20" />
+                        <p className="text-white/40 text-sm font-bold">항목을 선택해주세요</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Video className="w-3 h-3" /> 최종 렌더링 영상 결과 (Live)</span>
+                    {activeIndex !== -1 && meditations[activeIndex]?.videoUrl && (
+                      <button
+                        onClick={() => setShowFullPreview(true)}
+                        className="flex items-center gap-2 px-3 py-1 bg-primary text-background rounded-full font-black text-[10px] hover:scale-105 transition-all shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]"
+                      >
+                        <Maximize2 className="w-3 h-3" /> 전체화면 보기
+                      </button>
+                    )}
+                  </label>
+                  <div className="relative aspect-[9/16] w-full bg-black rounded-[3rem] border-[8px] border-white/5 overflow-hidden shadow-2xl group ring-1 ring-white/10">
+                    {activeIndex !== -1 && meditations[activeIndex]?.videoUrl ? (
+                      <video
+                        key={meditations[activeIndex].videoUrl}
+                        src={meditations[activeIndex].videoUrl}
+                        className="w-full h-full object-cover"
+                        controls
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        onLoadedData={() => console.log("🎥 Video Loaded:", meditations[activeIndex].videoUrl)}
+                        onError={(e) => {
+                          console.error("🎥 Video Error:", e);
+                          addLog("❌ 미리보기 영상을 불러올 수 없습니다. 경로를 확인해주세요.");
+                        }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/10 p-8 text-center bg-[#111]">
+                        <div className={cn(
+                          "w-16 h-16 rounded-full flex items-center justify-center border-2 border-dashed border-white/5",
+                          isRendering && "animate-spin border-primary/30 border-t-primary"
+                        )}>
+                          {isRendering ? <RefreshCw className="w-8 h-8 text-primary/40" /> : <Play className="w-8 h-8 opacity-20" />}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-white/40 text-sm font-bold">
+                            {isRendering ? "영상을 생성하는 중입니다..." : "렌더링 전입니다"}
+                          </p>
+                          <p className="text-[10px] text-white/20">
+                            {isRendering ? "잠시만 기다려주시면 영상이 자동 로드됩니다" : "렌더링 버튼을 누르면 영상이 로드됩니다"}
+                          </p>
+                        </div>
+                        {activeIndex !== -1 && !isRendering && (
+                          <button
+                            onClick={() => handleSingleRender(activeIndex)}
+                            className="mt-4 px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black text-white transition-all"
+                          >
+                            현재 항목 렌더링 시작
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-
-              {/* Data Card */}
-              <GlassCard className="p-8 space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">게시 일자</label>
-                      <input type="date" value={meditations[activeIndex].date} onChange={(e) => updateMeditation(activeIndex, { date: e.target.value })} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary transition-all color-scheme-dark" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">게시 시간</label>
-                      <input type="time" value={meditations[activeIndex].time} onChange={(e) => updateMeditation(activeIndex, { time: e.target.value })} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-primary transition-all color-scheme-dark" />
-                    </div>
-                  </div>
-                  <button onClick={() => handleGenerateAI(activeIndex)} className="px-6 py-3 bg-primary text-background rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg hover:scale-105 transition-all"><Sparkles className="w-4 h-4" /> AI 분석 및 최적화</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-gray-500 uppercase flex items-center gap-2"><BookOpen className="w-3 h-3" /> 말씀 (Verse)</label>
-                    <textarea value={meditations[activeIndex].verse} onChange={(e) => updateMeditation(activeIndex, { verse: e.target.value })} className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-primary outline-none transition-all resize-none leading-relaxed" placeholder="성경 말씀과 장절을 입력하세요..." />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-gray-500 uppercase flex items-center gap-2"><Type className="w-3 h-3" /> 묵상 (Content)</label>
-                    <textarea value={meditations[activeIndex].content} onChange={(e) => updateMeditation(activeIndex, { content: e.target.value })} className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:border-primary outline-none transition-all resize-none leading-relaxed" placeholder="짧고 깊은 묵상 내용을 입력하세요..." />
-                  </div>
-                </div>
-              </GlassCard>
-
-              {/* Minimalist AI Results */}
-              {meditations[activeIndex].keywords.length > 0 && (
-                <div className="pt-8 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="space-y-3">
-                    <h3 className="text-amber-500/60 font-black text-[10px] tracking-[0.3em] uppercase flex items-center gap-2">
-                      <Youtube className="w-3 h-3" /> Keywords
-                    </h3>
-                    <div className="text-gray-400 text-sm leading-relaxed flex flex-wrap gap-x-4 gap-y-1">
-                      {meditations[activeIndex].keywords.map((kw, i) => (
-                        <span key={i} className="hover:text-amber-500/80 transition-colors cursor-default">{kw}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="text-indigo-400/60 font-black text-[10px] tracking-[0.3em] uppercase flex items-center gap-2">
-                      <Instagram className="w-3 h-3" /> SNS Concept
-                    </h3>
-                    <div className="space-y-2 border-l border-white/10 pl-4">
-                      <p className="text-white text-sm font-bold leading-snug italic">
-                        "{meditations[activeIndex].cardNews.hook}"
-                      </p>
-                      <p className="text-gray-500 text-xs leading-relaxed">
-                        {meditations[activeIndex].cardNews.body}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1103,17 +1665,25 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
               onClick={() => setActiveLibraryTab('audio')}
               className={cn(
                 "px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2",
-                activeLibraryTab === 'audio' ? "bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]" : "text-gray-500 hover:text-white"
+                activeLibraryTab === 'audio' ? "bg-white text-background shadow-[0_0_20px_rgba(255,255,255,0.1)]" : "text-gray-500 hover:text-white"
               )}
             >
               <Music className="w-4 h-4" /> 배경음악 도서관
+            </button>
+            <button
+              onClick={() => setActiveLibraryTab('theme')}
+              className={cn(
+                "px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2",
+                activeLibraryTab === 'theme' ? "bg-amber-500 text-background shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "text-gray-500 hover:text-white"
+              )}
+            >
+              <Sparkles className="w-4 h-4" /> 주제 도서관
             </button>
           </div>
 
           <div className="flex items-center gap-4">
             {activeLibraryTab === 'image' ? (
               <div className="flex items-center gap-2">
-                {/* 선택 모드 토글 */}
                 <button
                   onClick={() => { setIsSelectMode(!isSelectMode); setSelectedImages(new Set()); }}
                   className={cn(
@@ -1158,12 +1728,33 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+            ) : activeLibraryTab === 'audio' ? (
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer px-5 py-2.5 bg-white/10 text-white border border-white/10 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-white/20 transition-all group">
+                  <Upload className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+                  내 음악 업로드 (MP3)
+                  <input type="file" accept="audio/*" multiple className="hidden" onChange={handleAudioUpload} />
+                </label>
+                <button
+                  onClick={renameAudiosChronologically}
+                  className="px-4 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-white/10 transition-all"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  이름 순서대로 통일
+                </button>
+                <button
+                  onClick={scanAudioOrphans}
+                  disabled={isScanningAudioOrphans}
+                  className="px-4 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-white/10 transition-all"
+                >
+                  <Database className="w-3 h-3" />
+                  {isScanningAudioOrphans ? '동기화 중...' : '유령 동기화'}
+                </button>
+              </div>
             ) : (
-              <label className="cursor-pointer px-5 py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl text-xs font-black flex items-center gap-2 hover:bg-emerald-500/20 transition-all group">
-                <Upload className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
-                내 음악 업로드 (MP3)
-                <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} />
-              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-amber-500/50 uppercase tracking-widest mr-4">분석된 주제 보관함</span>
+              </div>
             )}
           </div>
         </div>
@@ -1179,12 +1770,11 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
                 className={cn(
                   "relative group aspect-[9/16] rounded-xl overflow-hidden border transition-all cursor-pointer",
                   selectedImages.has(img.id) ? "border-red-500 ring-2 ring-red-500/30 scale-105 z-10" :
-                  meditations[activeIndex].bgImage === img.url ? "border-primary ring-2 ring-primary/20 scale-105 z-10" : "border-white/5 bg-black/40 hover:border-white/20"
+                    activeIndex !== -1 && meditations[activeIndex]?.bgImage === img.url ? "border-primary ring-2 ring-primary/20 scale-105 z-10" : "border-white/5 bg-black/40 hover:border-white/20"
                 )}
                 onClick={() => isSelectMode ? toggleImageSelection(img.id) : updateMeditation(activeIndex, { bgImage: img.url })}
               >
                 <img src={img.url} className="w-full h-full object-cover" alt="Library Item" />
-                {/* 체크박스 (선택 모드) */}
                 {isSelectMode && (
                   <div className={cn(
                     "absolute top-1.5 left-1.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all z-20",
@@ -1215,55 +1805,46 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
               </div>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {audioLibrary.map((aud) => (
-              <motion.div
-                key={aud.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  "p-5 rounded-3xl border transition-all flex items-center justify-between group relative overflow-hidden",
-                  meditations[activeIndex].bgAudio === aud.url ? "bg-emerald-500/10 border-emerald-500/40 shadow-xl" : "bg-white/5 border-white/5 hover:bg-white/10"
-                )}
-              >
-                <div className="flex items-center gap-4 overflow-hidden relative z-10">
-                  <button
-                    onClick={() => togglePlayAudio(aud.url, aud.id)}
+        ) : activeLibraryTab === 'audio' ? (
+          <div className="grid grid-cols-7 gap-2">
+            {[...audioLibrary]
+              .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true }))
+              .map((aud, idx) => {
+                const seqDisplay = String(idx + 1).padStart(3, '0');
+                const isActive = activeIndex !== -1 && meditations[activeIndex]?.bgAudio === aud.url;
+
+                return (
+                  <motion.div
+                    key={aud.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     className={cn(
-                      "p-4 rounded-2xl transition-all",
-                      playingAudioId === aud.id ? "bg-emerald-500 text-white scale-95" : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white"
+                      "group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 transition-all relative overflow-hidden h-[36px]",
+                      isActive ? "border-primary bg-white/5" : "border-transparent hover:border-primary/50"
                     )}
+                    onClick={() => activeIndex !== -1 && updateMeditation(activeIndex, { bgAudio: aud.url, audioName: aud.name })}
                   >
-                    {playingAudioId === aud.id ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  </button>
-                  <div className="overflow-hidden">
-                    <p className="text-sm font-black text-white truncate">{aud.name}</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Personal Audio</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 relative z-10">
-                  <button
-                    onClick={() => updateMeditation(activeIndex, { bgAudio: aud.url, audioName: aud.name })}
-                    className={cn(
-                      "px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all",
-                      meditations[activeIndex].bgAudio === aud.url ? "bg-emerald-500 text-white shadow-lg" : "bg-white/10 text-gray-400 hover:bg-white/20"
-                    )}
-                  >
-                    {meditations[activeIndex].bgAudio === aud.url ? "선택됨" : "선택"}
-                  </button>
-                  <button
-                    onClick={() => deleteFromLibrary(aud.id, 'audio')}
-                    className="p-2.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded-xl transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                {meditations[activeIndex].bgAudio === aud.url && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
-                )}
-              </motion.div>
-            ))}
+                    <div className="flex items-center justify-start flex-1 min-w-0 py-1.5 px-2">
+                      <p className={cn(
+                        "text-[10px] font-bold truncate tracking-tight transition-colors",
+                        isActive ? "text-primary" : "text-white/90 group-hover:text-white"
+                      )}>
+                        1분 묵상 {seqDisplay}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteFromLibrary(aud.id, 'audio');
+                      }}
+                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 h-full aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </motion.div>
+                );
+              })}
             {audioLibrary.length === 0 && (
               <div className="col-span-full py-20 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-[2rem] bg-white/5 opacity-30">
                 <Music className="w-12 h-12 mb-4" />
@@ -1271,10 +1852,60 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
               </div>
             )}
           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {themeLibrary.map((theme) => {
+              const isActive = bulkTheme === theme.title;
+              return (
+                <motion.div
+                  key={theme.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={cn(
+                    "group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 transition-all relative overflow-hidden h-[36px]",
+                    isActive ? "border-amber-500 bg-white/5" : "border-transparent hover:border-amber-500/50"
+                  )}
+                  onClick={() => {
+                    if (theme.meditations && theme.meditations.length > 0) {
+                      setBulkTheme(theme.title.split(' (')[0]);
+                      setMeditations(theme.meditations);
+                      addLog(`📂 주제 [${theme.title}] 전체 플랜을 불러왔습니다.`);
+                    } else if (theme.raw) {
+                      handleLoadFromHistory(theme.raw);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-start flex-1 min-w-0 py-1.5 px-2">
+                    <p className={cn(
+                      "text-[10px] font-bold truncate tracking-tight transition-colors",
+                      isActive ? "text-amber-500" : "text-white/90 group-hover:text-white"
+                    )}>
+                      {theme.title}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteFromLibrary(theme.id, 'theme');
+                    }}
+                    className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 h-full aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </motion.div>
+              );
+            })}
+            {themeLibrary.length === 0 && (
+              <div className="col-span-full py-20 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-[2rem] bg-white/5 opacity-30">
+                <Sparkles className="w-12 h-12 mb-4" />
+                <p className="text-sm font-black uppercase tracking-[0.2em]">주제 도서관이 비어있습니다.</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* [v1.15.30] 유령 이미지 결과 */}
+      {/* [v1.15.34] 유령 이미지 결과 */}
       {orphanedImages.length > 0 && (
         <div className="pt-6 border-t border-amber-500/20 space-y-4">
           <div className="flex items-center justify-between">
@@ -1324,7 +1955,7 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
         <Terminal logs={logs} />
       </div>
 
-      {/* History List (v1.12.1: Slimmed) */}
+      {/* History List */}
       {(sunoTracks || []).some(t => t && t.title && t.title.includes('묵상 배경') && t.generatedImages && t.generatedImages.length > 0) && (
         <div className="space-y-4 mt-10">
           <div className="flex flex-col gap-4">
@@ -1386,7 +2017,46 @@ export const MeditationTab: React.FC<MeditationTabProps> = ({
           </div>
         </div>
       )}
+      {/* Full Screen Preview Modal */}
+      <AnimatePresence>
+        {showFullPreview && activeIndex !== -1 && meditations[activeIndex]?.videoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-12"
+            onClick={() => setShowFullPreview(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="relative aspect-[9/16] h-full max-h-[90vh] bg-black rounded-[2rem] border-8 border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <video
+                src={meditations[activeIndex].videoUrl}
+                className="w-full h-full object-contain"
+                controls
+                loop
+                playsInline
+                ref={(el) => {
+                  if (el) {
+                    el.volume = 0.5; // 소리를 중간으로 켜기
+                    el.play().catch(e => console.log("자동 재생이 브라우저에 의해 차단되었습니다.", e));
+                  }
+                }}
+              />
+              <button
+                onClick={() => setShowFullPreview(false)}
+                className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all border border-white/10 group z-50"
+              >
+                <X className="w-6 h-6 group-hover:scale-110 transition-transform" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
-

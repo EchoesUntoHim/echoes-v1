@@ -3,7 +3,7 @@ import { WorkflowState, createDefaultSettings } from '../types';
 import { saveAudioToDB, saveVoiceToDB } from '../utils/db';
 import { uploadImageToStorage, db } from '../firebase';
 import { GoogleGenAI, Type } from "@google/genai";
-import { DEFAULT_IMAGE_ENGINE } from '../constants';
+import { DEFAULT_IMAGE_ENGINE, RENDER_API_URL } from '../constants';
 import { User } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, doc, setDoc, arrayUnion } from 'firebase/firestore';
 
@@ -22,7 +22,9 @@ export const useMediaLogic = (
   resetSubsequentSteps: (step: string) => void,
   parsePromptSection: (content: string, sectionName: string) => string,
   imagePrompts: string,
-  user: User | null
+  user: User | null,
+  shortsHighlights: any[],
+  setShortsHighlights: React.Dispatch<React.SetStateAction<any[]>>
 ) => {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [uploadedAudio, setUploadedAudio] = useState<string | null>(null);
@@ -31,10 +33,6 @@ export const useMediaLogic = (
   const [isShortsGenerating, setIsShortsGenerating] = useState(false);
   const [renderQueue, setRenderQueue] = useState<any[]>([]);
   const [renderedVideos, setRenderedVideos] = useState<Record<string, Blob>>({});
-  const [shortsHighlights, setShortsHighlights] = useState<any[]>(() => {
-    const saved = localStorage.getItem('echoesuntohim_shortsHighlights');
-    return saved ? JSON.parse(saved) : [];
-  });
 
   React.useEffect(() => {
     const processQueue = async () => {
@@ -44,26 +42,26 @@ export const useMediaLogic = (
       setIsVideoRendering(true);
       addLog(`🚀 [Queue] 다음 작업 시작: ${nextTask.label}`);
       try {
-        const response = await fetch("http://localhost:3001/render", {
+        const response = await fetch(RENDER_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(nextTask.payload)
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const result = await response.json();
         addLog(`✅ [Queue] ${nextTask.label} 요청 성공.`);
-        setTimeout(() => {
-          setIsVideoRendering(false);
-          if (nextTask.onComplete) nextTask.onComplete();
-        }, 3000);
+        setIsVideoRendering(false);
+        if (nextTask.onComplete) nextTask.onComplete(result);
       } catch (err: any) {
-        addLog(`❌ [Queue] ${nextTask.label} 처리 오류: ${err.message}`);
+        addLog(`❌ [Queue] ${nextTask.label} 처리 오류 (${RENDER_API_URL}): ${err.message}`);
         setIsVideoRendering(false);
       }
     };
     processQueue();
   }, [renderQueue, isVideoRendering, addLog]);
 
-  const addToRenderQueue = useCallback((task: { label: string, payload: any, onComplete?: () => void }) => {
+  const addToRenderQueue = useCallback((task: { label: string, payload: any, onComplete?: (res: any) => void }) => {
     setRenderQueue(prev => [...prev, task]);
     addLog(`📥 [Queue] 대기열에 추가됨: ${task.label}`);
   }, [addLog]);
@@ -76,7 +74,7 @@ export const useMediaLogic = (
     if (!file) return;
     try {
       addLog(`📁 음원 파일 분석 시작: ${file.name}`);
-      const rawName = file.name.replace(/\.[^/.]+$/, "");
+      const rawName = file.name.replace(/\.[^/.]+$/, "").replace(/^\[.*?\]\s*/, "");
       const [parsedK, parsedE] = rawName.includes('_') ? rawName.split('_') : [rawName, ""];
       const cleanTitle = rawName.trim();
 
@@ -133,7 +131,17 @@ export const useMediaLogic = (
 
       if (matchedTrack) {
         addLog(`🎯 히스토리 자동 매칭 성공: ${matchedTrack.koreanTitle || matchedTrack.title}`);
-        await analyzeAudioComprehensively(file, { referenceLyrics: matchedTrack.lyrics });
+        const shouldAnalyze = window.confirm("이미 분석 데이터가 존재하는 곡입니다. 다시 정밀 분석을 진행할까요?\n(취소 시 기존 데이터를 유지합니다.)");
+
+        if (shouldAnalyze) {
+          await analyzeAudioComprehensively(file, { referenceLyrics: matchedTrack.lyrics });
+        } else {
+          addLog("ℹ️ 기존 데이터를 유지합니다. 정밀 분석을 건너뜜.");
+          // 기존 하이라이트 정보가 있다면 복구
+          if (matchedTrack.audioAnalysis?.highlights) {
+            setShortsHighlights(matchedTrack.audioAnalysis.highlights);
+          }
+        }
       } else {
         addLog(`❓ 일치하는 히스토리가 없습니다. 음원에서 직접 가사를 추출합니다.`);
         await analyzeAudioComprehensively(file, { referenceLyrics: "" });
@@ -311,15 +319,42 @@ export const useMediaLogic = (
         koreanTitle: workflow.params.koreanTitle,
         englishTitle: workflow.params.englishTitle,
         lyrics: workflow.results.lyrics,
-        type: type === 'main' ? 'horizontal' : 'vertical'
+        timedLyrics: workflow.results.timedLyrics || [],
+        type: type, // Pass the specific label (main, tiktok, shorts)
+        category: workflow.params.target === 'CCM' ? 'CCM' : 'Pop'
       }
     };
     addToRenderQueue({ label: `${workflow.params.title} (${type})`, payload });
   }, [workflow, uploadedAudio, addToRenderQueue]);
 
+  const downloadVideo = useCallback((url: string, type: string) => {
+    // 🚀 파일명 표준화 (Naming Rule) 적용: [분류] 한글제목_영어제목_타입.mp4
+    const kTitle = workflow.params.koreanTitle || '제목없음';
+    const eTitle = workflow.params.englishTitle || 'Untitled';
+    const category = workflow.params.target === 'CCM' ? 'CCM' : 'Pop';
+    const safeType = type || 'shorts';
+
+    // [CCM] 한글 제목_English Title_main.mp4 형식 (공백 유지)
+    const fileName = `[${category}] ${kTitle}_${eTitle}_${safeType}.mp4`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [workflow.params.koreanTitle, workflow.params.englishTitle, workflow.params.target]);
+
   const handleDownloadAll = useCallback(async () => {
     addLog("📥 일괄 다운로드 실행...");
-  }, [addLog]);
+    // 렌더링된 비디오가 있다면 모두 다운로드
+    const results = workflow.results.videos || [];
+    if (results.length === 0) {
+      addLog("⚠️ 다운로드할 영상이 없습니다.");
+      return;
+    }
+    results.forEach((v: any) => downloadVideo(v.url, v.type));
+  }, [workflow.results.videos, downloadVideo, addLog]);
 
   const downloadBlogImage = useCallback((imgUrl: string, text: string, label: string) => {
     addLog(`📥 블로그 이미지 합성 중: ${label}`);

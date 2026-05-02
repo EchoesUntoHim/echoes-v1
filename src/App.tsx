@@ -57,6 +57,7 @@ import { VideoPreviewCard } from './components/VideoPreviewCard';
 import { MetadataCard } from './components/MetadataCard';
 import { StepCard } from './components/StepCard';
 import { MeditationTab } from './components/MeditationTab';
+import { GrowthPlanTab } from './components/GrowthPlanTab';
 
 import { TimeInput, formatTime, parseTime } from './components/TimeInput';
 import {
@@ -165,13 +166,10 @@ export default function App() {
   const [shortsCount, setShortsCount] = useState(() => parseInt(localStorage.getItem('echoesuntohim_shortsCount') || '3'));
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [renderQueue, setRenderQueue] = useState<any[]>([]);
-  const [isQueueProcessing, setIsQueueProcessing] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [aiEngine, setAiEngine] = useState(() => {
     const saved = localStorage.getItem('ai_engine');
-    if (saved === 'gemini-1.5-flash' || saved === 'gemini-1.5-pro' || !saved) return DEFAULT_AI_ENGINE;
-    return AI_ENGINES.some(eng => eng.value === saved) ? saved! : DEFAULT_AI_ENGINE;
+    return (saved && AI_ENGINES.some(eng => eng.value === saved)) ? saved : DEFAULT_AI_ENGINE;
   });
   const [imageEngine, setImageEngine] = useState(() => {
     const saved = localStorage.getItem('image_engine');
@@ -188,6 +186,10 @@ export default function App() {
   const [videoLyrics, setVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_videoLyrics') || "");
   const [englishVideoLyrics, setEnglishVideoLyrics] = useState<string>(() => localStorage.getItem('echoesuntohim_englishVideoLyrics') || "");
   const [isRestoring, setIsRestoring] = useState(true);
+  const [shortsHighlights, setShortsHighlights] = useState<any[]>(() => {
+    const saved = localStorage.getItem('echoesuntohim_shortsHighlights');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // --- 2. Workflow State ---
   const [workflow, setWorkflow] = useState<WorkflowState>(() => {
@@ -253,19 +255,21 @@ export default function App() {
     generateLyrics, translateLyrics, analyzeAudioComprehensively, generatePromptOnly, regenerateTitles,
     fetchAvailableModels, availableModels, isGenerating, isTranslating, instrumentDescription
   } = useLyricsLogic({
-    apiKey, aiEngine, setAiEngine, workflow, setWorkflow, addLog, setSunoTracks, setVideoLyrics, setEnglishVideoLyrics, shortsCount, lyricsPrompts, user
+    apiKey, aiEngine, setAiEngine, workflow, setWorkflow, addLog, setSunoTracks, setVideoLyrics, setEnglishVideoLyrics, shortsCount, lyricsPrompts, user,
+    setShortsHighlights
   });
 
   const {
     audioBuffer, setAudioBuffer, uploadedAudio, setUploadedAudio, uploadedAudioName, setUploadedAudioName,
-    isVideoRendering, isShortsGenerating, shortsHighlights, setShortsHighlights,
+    isVideoRendering, isShortsGenerating,
     mainVideoRef, tiktokVideoRef, shortsVideoRefs, handleAudioUpload, handleSingleImageUpload,
     generateImages, regenerateSpecificImage, regenerateShorts, startVideoRender,
     handleDownloadAll, downloadImageWithTitle, downloadBlogImage, renderedVideos, onRenderComplete,
     saveCurrentImagesToCloud, addToRenderQueue
   } = useMediaLogic(
     workflow, setWorkflow, addLog, apiKey, aiEngine, imageEngine, shortsCount, setShortsCount, setSunoTracks, sunoTracks,
-    analyzeAudioComprehensively, resetSubsequentSteps, parsePromptSection, imagePrompts, user
+    analyzeAudioComprehensively, resetSubsequentSteps, parsePromptSection, imagePrompts, user,
+    shortsHighlights, setShortsHighlights
   );
 
   const {
@@ -449,62 +453,11 @@ export default function App() {
     }
   }, [workflow.results.videos, isRestoring]);
 
-  // [v1.15.29] Render Queue Processor
-  useEffect(() => {
-    const processQueue = async () => {
-      if (isQueueProcessing || renderQueue.length === 0) return;
-
-      setIsQueueProcessing(true);
-      const task = renderQueue[0];
-      addLog(`🎬 [큐 처리] '${task.label}' 렌더링 시작...`);
-
-      try {
-        const response = await fetch(RENDER_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(task.payload)
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const result = await response.json();
-        addLog(`✅ [큐 완료] '${task.label}' 렌더링 요청 성공!`);
-        if (task.onComplete) task.onComplete(result);
-      } catch (err: any) {
-        addLog(`❌ [큐 오류] '${task.label}': ${err.message}`);
-      } finally {
-        setRenderQueue(prev => prev.slice(1));
-        setIsQueueProcessing(false);
-      }
-    };
-
-    processQueue();
-  }, [renderQueue, isQueueProcessing, addLog]);
   // Targets: LyricsTab and VideoTab
   const lastTranslatedLyricsRef = useRef<string | null>(localStorage.getItem('echoesuntohim_lastTranslated'));
 
-  useEffect(() => {
-    // 1. 복구 중이거나, 가사 내용이 없거나, API 키가 없거나, 이미 번역 중이면 중단
-    if (isRestoring || !videoLyrics || videoLyrics.trim().length < 5 || !apiKey || isTranslating) return;
-
-    // 2. 새로고침 시 이전에 번역했던 내용과 동일하면 중단 (Redundancy Check)
-    if (videoLyrics === lastTranslatedLyricsRef.current) return;
-
-    // 3. 10초 디바운싱 로직 (키보드 입력이 멈춘 후 10초 뒤 실행)
-    const timeoutId = setTimeout(async () => {
-      addLog("⏳ 가사 수정 감지: 10초간 입력이 없어 자동 번역을 시작합니다...");
-
-      try {
-        await translateLyrics(videoLyrics);
-        lastTranslatedLyricsRef.current = videoLyrics;
-        localStorage.setItem('echoesuntohim_lastTranslated', videoLyrics);
-      } catch (err) {
-        console.error("Auto-translation failed:", err);
-      }
-    }, 10000);
-
-    return () => clearTimeout(timeoutId);
-  }, [videoLyrics, apiKey, isTranslating]);
+  // v1.15.35: Auto-translation logic moved to VideoTab.tsx for better responsiveness and control.
+  // The 10s debounced effect here is removed to prevent redundant API calls.
 
   const copyToClipboard = (text: string) => {
     if (!text) return;
@@ -588,7 +541,7 @@ export default function App() {
               <span className="text-[7px] font-black text-primary tracking-[0.2em] uppercase opacity-80">AI Vision</span>
               <div className="px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-full flex items-center gap-0.5 shadow-[0_0_10px_rgba(0,255,163,0.1)]">
                 <div className="w-0.5 h-0.5 bg-primary rounded-full animate-pulse" />
-                <span className="text-[7px] font-black text-primary uppercase">v1.15.28 PREMIUM</span>
+                <span className="text-[7px] font-black text-primary uppercase">v1.15.34</span>
               </div>
             </div>
           </div>
@@ -622,7 +575,7 @@ export default function App() {
             <span className="text-xl font-black tracking-tighter group-hover:text-primary transition-colors leading-none bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 whitespace-nowrap">
               Echoes Unto Him
             </span>
-            <span className="text-[10px] font-bold text-primary/60 mt-1">{`v1.15.28 PREMIUM`}</span>
+            <span className="text-[10px] font-bold text-primary/60 mt-1">{`v1.15.34`}</span>
           </div>
         </div>
 
@@ -642,6 +595,7 @@ export default function App() {
           <SidebarItem small={true} icon={Send} label="영상 업로드" active={activeTab === 'publish'} onClick={() => handleTabChange('publish')} />
           <SidebarItem small={true} icon={FileText} label="블로그 생성" active={activeTab === 'blog'} onClick={() => handleTabChange('blog')} />
           <SidebarItem small={true} icon={Sparkles} label="1분 묵상(Factory)" active={activeTab === 'meditation'} onClick={() => handleTabChange('meditation')} />
+          <SidebarItem small={true} icon={TrendingUp} label="성장플랜" active={activeTab === 'growth'} onClick={() => handleTabChange('growth')} />
 
 
           <div className="mt-2 pt-2 border-t border-white/5">
@@ -778,6 +732,7 @@ export default function App() {
               apiKey={apiKey}
               aiEngine={aiEngine}
               isTranslating={isTranslating}
+              translateLyrics={translateLyrics}
             />
           )}
 
@@ -860,6 +815,9 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'growth' && (
+            <GrowthPlanTab addLog={addLog} />
+          )}
 
           {activeTab === 'settings' && (
             <SettingsPage

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { uploadToYouTube, uploadToTikTok } from '../services/uploadService';
 import { WorkflowState } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_AI_ENGINE } from '../constants';
 
 export const useContentLogic = (
   workflow: WorkflowState,
@@ -18,12 +19,12 @@ export const useContentLogic = (
       addLog("⚠️ API 키가 설정되지 않았습니다.");
       return;
     }
-    const selectedEngine = aiEngine || 'gemini-1.5-flash';
+    const selectedEngine = aiEngine || DEFAULT_AI_ENGINE;
     addLog(`✨ [${selectedEngine}] 플랫폼 메타데이터(유튜브/틱톡) 생성을 시작합니다...`);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey });
-      
+
       const prompt = `
         당신은 최고의 SNS 마케팅 전문가이자 카피라이터입니다. 
         제공된 가사와 해석을 바탕으로 유튜브와 틱톡에 즉시 업로드 가능한 최적의 메타데이터를 생성하세요.
@@ -57,12 +58,15 @@ export const useContentLogic = (
         contents: [{ role: "user", parts: [{ text: prompt }] }]
       });
       let text = response.text || "";
-      
-      const youtubeTitle = text.match(/\[YOUTUBE_TITLE\](.*)/)?.[1]?.trim() || "";
+
+      let youtubeTitle = text.match(/\[YOUTUBE_TITLE\](.*)/)?.[1]?.trim() || "";
+      // [v1.15.36] 업로드 제목 파싱 시 분류태그([CCM], [Pop] 등) 강제 제거
+      youtubeTitle = youtubeTitle.replace(/\[.*?\]/g, '').trim();
+
       let youtubeDesc = text.match(/\[YOUTUBE_DESCRIPTION\]([\s\S]*?)(?=\[YOUTUBE_TAGS\]|\[TIKTOK_CAPTION\]|$)/)?.[1]?.trim() || "";
       const youtubeTags = text.match(/\[YOUTUBE_TAGS\](.*)/)?.[1]?.trim() || "";
       let tiktokCaption = text.match(/\[TIKTOK_CAPTION\]([\s\S]*?)$/)?.[1]?.trim() || "";
-      
+
       // [v1.15.28] 규칙 강제 집행 (후처리 정밀화)
       // 1. 유튜브 설명란: 섹션 간 줄바꿈 2번(\n\n) 강제 적용
       youtubeDesc = youtubeDesc
@@ -70,7 +74,7 @@ export const useContentLogic = (
         .map(line => line.trim())
         .filter(line => line !== "")
         .join('\n\n'); // 모든 문장/섹션 사이에 2번의 줄바꿈 강제
-      
+
       // 2. 틱톡 캡션: 캡션과 해시태그 사이 3줄 이상의 빈 행(\n\n\n\n) 강제 삽입
       if (tiktokCaption.includes('#')) {
         const hashIndex = tiktokCaption.indexOf('#');
@@ -101,9 +105,9 @@ export const useContentLogic = (
   // 블로그 포스팅 생성
   const generateBlogPost = useCallback(async () => {
     if (!apiKey) return;
-    const selectedEngine = aiEngine || 'gemini-1.5-flash';
+    const selectedEngine = aiEngine || DEFAULT_AI_ENGINE;
     addLog(`✨ [${selectedEngine}] 블로그 포스팅 생성을 시작합니다...`);
-    
+
     try {
       const genAI = new GoogleGenAI({ apiKey });
       const prompt = `가사: ${workflow.results.lyrics}\n해석: ${workflow.results.interpretation}\n위 내용을 바탕으로 네이버 블로그에 올릴 정성스러운 포스팅 내용을 HTML 형식으로 작성해줘.`;
@@ -114,12 +118,13 @@ export const useContentLogic = (
       });
       const text = response.text || "";
 
+      const cleanTitle = (workflow.params.koreanTitle || '새 찬양').replace(/\[.*?\]/g, '').trim();
       setWorkflow(prev => ({
         ...prev,
         results: {
           ...prev.results,
           blogPost: {
-            title: `${workflow.params.koreanTitle || '새 찬양'} - 감동적인 CCM 찬양 리뷰`,
+            title: `${cleanTitle} - 감동적인 CCM 찬양 리뷰`,
             content: text,
             rawContent: text,
             tags: "CCM, 찬양, 은혜, 찬양리뷰",

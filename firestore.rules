@@ -70,8 +70,16 @@ service cloud.firestore {
         isAdmin() || (incoming().role == existing().role && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time)
       );
 
-      // Allow access to sub-collections like settings/sunoTracks
-      match /{allPaths=**} {
+      match /settings/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /sunoTracks/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /audio_library/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /meditation_library/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
@@ -134,10 +142,6 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // [v1.15.30] users 서브컬렉션 (meditation_library, audio_library)
-    match /users/{userId}/{subcollection}/{docId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-    }
   }
 }
 

@@ -85,8 +85,12 @@ export const uploadAudioToStorageSafe = async (blob: Blob, pathPrefix: string = 
   }
 };
 
-// Background Image Upload from URL to Firebase Storage
-export const uploadImageToStorage = async (source: string | Blob, pathPrefix: string = 'images'): Promise<string | null> => {
+// Background Image/Audio Upload from URL/Blob to Firebase Storage
+export const uploadImageToStorage = async (
+  source: string | Blob, 
+  pathPrefix: string = 'images',
+  customFileName?: string // [v1.15.32] 사용자 정의 파일명 추가
+): Promise<string | null> => {
   const user = auth.currentUser;
   if (!user) return null;
 
@@ -110,7 +114,18 @@ export const uploadImageToStorage = async (source: string | Blob, pathPrefix: st
       blob = source;
     }
 
-    const fileName = `img_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+    // [v1.15.32] 확장자 및 접두어 자동 감지 또는 사용자 정의 이름 사용
+    let fileName = customFileName;
+    if (!fileName) {
+      let ext = 'png';
+      let prefix = 'img';
+      if (blob.type) {
+        if (blob.type.includes('audio')) { ext = 'mp3'; prefix = 'aud'; }
+        else if (blob.type.includes('video')) { ext = 'mp4'; prefix = 'vid'; }
+      }
+      fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+    }
+
     const storageRef = ref(storage, `users/${user.uid}/${pathPrefix}/${fileName}`);
     await uploadBytesResumable(storageRef, blob);
     return await getDownloadURL(storageRef);

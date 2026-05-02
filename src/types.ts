@@ -1,4 +1,4 @@
-export type Step = 'lyrics' | 'music' | 'image' | 'video' | 'publish' | 'blog' | 'settings' | 'audio-separation' | 'meditation';
+export type Step = 'lyrics' | 'music' | 'image' | 'video' | 'publish' | 'blog' | 'settings' | 'audio-separation' | 'meditation' | 'growth';
 
 export type Target = '대중음악' | 'CCM';
 export type Tempo = string;
@@ -191,7 +191,14 @@ export interface WorkflowState {
     audioAnalysis?: { bpm: number; key: string; energy: number; mood: string };
     prompts: { text: string; label: string }[];
     images: { url: string; type: 'horizontal' | 'vertical' | string; label: string; prompt?: string }[];
-    videos: { url: string; type: 'main' | 'tiktok' | 'shorts'; duration?: number }[];
+    videos: { 
+      id?: string;
+      url: string; 
+      type: 'main' | 'tiktok' | 'shorts'; 
+      duration?: number;
+      label?: string;
+      metadata?: any;
+    }[];
     videoUrl?: string; // Added for compatibility
     description?: string; // Added for compatibility
     tags?: string; // Added for compatibility

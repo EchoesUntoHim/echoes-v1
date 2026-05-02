@@ -463,7 +463,7 @@ export const ImageTab = ({
           {/* Compact Single Row Layout (Optimized Width & Height) */}
           <div className="flex items-stretch gap-2 h-[38px]">
             {/* Audio Upload (Optimized Width) */}
-            <div className="relative group w-[110px] shrink-0">
+            <div className="relative group w-[220px] shrink-0">
               <input
                 type="file"
                 accept="audio/*"
@@ -613,20 +613,6 @@ export const ImageTab = ({
               {workflow.progress.image > 0 && workflow.progress.image < 100
                 ? "이미지 엔진 가동 중..."
                 : "AI 최적화 이미지 전체 생성"}
-            </button>
-
-            <button
-              onClick={() => saveCurrentImagesToCloud(setSunoTracks)}
-              disabled={workflow.results.images.length === 0}
-              className={cn(
-                "w-full py-2.5 rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-2 border",
-                workflow.results.images.length > 0
-                  ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
-                  : "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed"
-              )}
-            >
-              <Database className="w-3.5 h-3.5" />
-              현재 생성된 이미지 클라우드 DB 저장
             </button>
 
             <div className="flex justify-center pt-2">
@@ -798,7 +784,20 @@ export const ImageTab = ({
               />
             </div>
           )}
-          <div className="flex justify-center">
+          <div className="flex justify-center items-center gap-4">
+            <button
+              onClick={() => saveCurrentImagesToCloud(setSunoTracks)}
+              disabled={workflow.results.images.length === 0}
+              className={cn(
+                "px-8 py-3 rounded-full font-bold transition-all text-sm flex items-center gap-2 border",
+                workflow.results.images.length > 0
+                  ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                  : "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed"
+              )}
+            >
+              <Database className="w-5 h-5" />
+              현재 생성된 이미지 클라우드 DB 저장
+            </button>
             <button onClick={() => handleTabChange('video')} className="bg-white text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform">
               다음 단계: 영상 렌더링 <ChevronRight className="w-5 h-5" />
             </button>

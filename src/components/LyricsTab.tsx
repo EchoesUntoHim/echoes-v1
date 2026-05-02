@@ -138,8 +138,8 @@ export const LyricsTab = ({
 
     try {
       addLog(`🗑️ [${track.title || track.koreanTitle}] 삭제 중...`);
-      await deleteDoc(doc(db, 'sunoTracks', track.id)).catch(() => {});
-      await deleteDoc(doc(db, 'generated_lyrics', track.id)).catch(() => {});
+      await deleteDoc(doc(db, 'sunoTracks', track.id)).catch(() => { });
+      await deleteDoc(doc(db, 'generated_lyrics', track.id)).catch(() => { });
       if (setSunoTracks) {
         setSunoTracks(prev => prev.filter(t => t.id !== track.id));
       }
@@ -229,6 +229,19 @@ export const LyricsTab = ({
             </div>
           </div>
         </header>
+
+        <GlassCard className="border-secondary/30 bg-secondary/10 mb-[-8px]">
+          <div className="flex items-center gap-2 text-secondary mb-2">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-xs font-black uppercase tracking-widest">사용자 전용 우선적용 (곡 해석/분위기)</span>
+          </div>
+          <textarea
+            placeholder="곡에 대한 해석이나 강조하고 싶은 가사/분위기, 기타 지시사항을 자유롭게 입력하세요. AI가 이를 최우선으로 반영합니다."
+            value={workflow.params.userInput || ''}
+            onChange={(e) => setWorkflow(prev => ({ ...prev, params: { ...prev.params, userInput: e.target.value } }))}
+            className="w-full h-20 bg-black/60 border border-secondary/40 rounded-xl px-4 py-3 text-sm text-white focus:border-secondary outline-none transition-all resize-none shadow-inner placeholder:text-white/30"
+          />
+        </GlassCard>
 
         <GlassCard className="grid grid-cols-1 md:grid-cols-2 gap-6 border-primary/20">
           <div className="space-y-3">
@@ -688,44 +701,44 @@ export const LyricsTab = ({
             </h4>
             <span className="text-[9px] text-gray-600 font-medium">통합 히스토리</span>
           </div>
-          
+
           {sunoTracks.filter(t => t.lyrics || t.koreanLyrics || t.content).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
               {sunoTracks
                 .filter(t => t.lyrics || t.koreanLyrics || t.content)
                 .slice(0, 20)
                 .map((track, idx) => (
-                <div 
-                  key={track.id || `track-${idx}`} 
-                  onClick={() => {
-                    handleLoadFromHistory(track);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 border-transparent hover:border-primary transition-all pr-0"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0 py-1.5 pl-3">
-                    <span className="text-[9px] font-bold text-primary/40 group-hover:text-primary transition-colors w-3">{idx + 1}</span>
-                    <p className="text-[11px] font-bold text-white/90 truncate tracking-tight">
-                      {(track.title || track.koreanTitle || '무제')
-                        .replace(/#\S+/g, '') // 해시태그 제거
-                        .replace(/\[.*?\]/g, '') // [CCM] 등 분류 태그 제거
-                        .trim()}
-                    </p>
+                  <div
+                    key={track.id || `track-${idx}`}
+                    onClick={() => {
+                      handleLoadFromHistory(track);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="group cursor-pointer flex items-center justify-between bg-black/20 hover:bg-white/5 border-l-2 border-transparent hover:border-primary transition-all pr-0"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0 py-1.5 pl-3">
+                      <span className="text-[9px] font-bold text-primary/40 group-hover:text-primary transition-colors w-3">{idx + 1}</span>
+                      <p className="text-[11px] font-bold text-white/90 truncate tracking-tight">
+                        {(track.title || track.koreanTitle || '무제')
+                          .replace(/#\S+/g, '') // 해시태그 제거
+                          .replace(/\[.*?\]/g, '') // [CCM] 등 분류 태그 제거
+                          .trim()}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0 h-full">
+                      <span className="text-[8px] text-gray-600 font-medium">
+                        {new Date(track.createdAt || track.created_at || Date.now()).toLocaleDateString().replace(/\. /g, '.')}
+                      </span>
+                      <button
+                        onClick={(e) => deleteTrackHistory(e, track)}
+                        className="opacity-0 group-hover:opacity-100 h-[32px] aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-4 shrink-0 h-full">
-                    <span className="text-[8px] text-gray-600 font-medium">
-                      {new Date(track.createdAt || track.created_at || Date.now()).toLocaleDateString().replace(/\. /g, '.')}
-                    </span>
-                    <button 
-                      onClick={(e) => deleteTrackHistory(e, track)}
-                      className="opacity-0 group-hover:opacity-100 h-[32px] aspect-square flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 transition-all border-l border-white/5"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           ) : (
             <div className="py-8 bg-white/5 border border-dashed border-white/10 rounded-2xl text-center">
@@ -740,7 +753,7 @@ export const LyricsTab = ({
           </button>
         </div>
 
-      <Terminal logs={logs} />
+        <Terminal logs={logs} />
       </motion.div>
     </>
   );
